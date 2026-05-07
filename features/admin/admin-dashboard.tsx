@@ -4,8 +4,9 @@ import { BarChart3, Edit3, FileText, FolderTree, Package, Plus, ReceiptText, Sav
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { categories as seedCategories, posts as seedPosts, products as seedProducts } from "@/data/products";
+import { posts as seedPosts } from "@/data/products";
 import { formatEuro } from "@/lib/utils";
+import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
 
 type AdminProduct = {
   slug: string;
@@ -63,7 +64,7 @@ type AdminState = {
 const emptyProduct: AdminProduct = {
   slug: "",
   name: "",
-  category: "flyer-drucken",
+  category: "druckprodukte",
   priceFrom: 0,
   active: true,
   stockMode: "Verkauf aktiv",
@@ -86,16 +87,8 @@ const emptyPost: AdminPost = {
 };
 
 const seedState: AdminState = {
-  products: seedProducts.map((product) => ({
-    slug: product.slug,
-    name: product.name,
-    category: product.category,
-    priceFrom: product.priceFrom,
-    active: true,
-    stockMode: "Verkauf aktiv",
-    image: product.image
-  })),
-  categories: seedCategories.map((category) => ({ ...category, active: true })),
+  products: [],
+  categories: [],
   posts: seedPosts.map((post) => ({ slug: post.slug, title: post.title, category: post.category, status: "Veröffentlicht", excerpt: post.excerpt })),
   orders: [
     { id: "ORD-2026-1042", customer: "Muster GmbH", total: 248.9, status: "In Prüfung" },
@@ -132,36 +125,34 @@ export function AdminDashboard() {
   const [postDraft, setPostDraft] = useState<AdminPost>(emptyPost);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("dud-admin-state");
-    if (saved) setState(JSON.parse(saved) as AdminState);
+    void loadBackendState();
   }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("dud-admin-state", JSON.stringify(state));
-  }, [state]);
 
   const revenue = useMemo(() => state.orders.reduce((sum, order) => sum + order.total, 0), [state.orders]);
   const openInvoices = useMemo(() => state.invoices.filter((invoice) => invoice.status !== "Bezahlt").length, [state.invoices]);
 
-  function upsertProduct() {
-    if (!productDraft.slug || !productDraft.name) return;
+  async function loadBackendState() {
+    const [productsRes, categoriesRes] = await Promise.all([fetch("/api/catalog/products"), fetch("/api/catalog/categories")]);
+    const products = await productsRes.json() as ProductCatalogItem[];
+    const categories = await categoriesRes.json() as ProductCategory[];
     setState((current) => ({
       ...current,
-      products: current.products.some((item) => item.slug === productDraft.slug)
-        ? current.products.map((item) => (item.slug === productDraft.slug ? productDraft : item))
-        : [productDraft, ...current.products]
+      products: products.map((product) => ({ slug: product.slug, name: product.name, category: product.category, priceFrom: product.basePrice, active: true, stockMode: "Verkauf aktiv", image: product.heroImage })),
+      categories: categories.map((category) => ({ ...category, active: true }))
     }));
+  }
+
+  async function upsertProduct() {
+    if (!productDraft.slug || !productDraft.name) return;
+    await fetch("/api/catalog/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toCatalogProduct(productDraft)) });
+    await loadBackendState();
     setProductDraft(emptyProduct);
   }
 
-  function upsertCategory() {
+  async function upsertCategory() {
     if (!categoryDraft.slug || !categoryDraft.name) return;
-    setState((current) => ({
-      ...current,
-      categories: current.categories.some((item) => item.slug === categoryDraft.slug)
-        ? current.categories.map((item) => (item.slug === categoryDraft.slug ? categoryDraft : item))
-        : [categoryDraft, ...current.categories]
-    }));
+    await fetch("/api/catalog/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug: categoryDraft.slug, name: categoryDraft.name, description: categoryDraft.description }) });
+    await loadBackendState();
     setCategoryDraft(emptyCategory);
   }
 
@@ -185,7 +176,7 @@ export function AdminDashboard() {
             <h1 className="mt-2 text-4xl font-black">Shop-Steuerung</h1>
             <p className="mt-2 max-w-2xl text-muted-foreground">Demo-Backend für Katalog, Gruppen, News, Verkauf, Bestellungen, Rechnungen und globale Shop-Regeln.</p>
           </div>
-          <Button onClick={() => setState(seedState)} variant="outline">Demo zurücksetzen</Button>
+          <Button onClick={() => void loadBackendState()} variant="outline">Neu laden</Button>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[260px_1fr]">
@@ -221,10 +212,10 @@ export function AdminDashboard() {
                   <Input placeholder="Produktname" value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} />
                   <Input placeholder="Kategorie" value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} />
                   <Input placeholder="Preis ab" type="number" value={productDraft.priceFrom} onChange={(event) => setProductDraft({ ...productDraft, priceFrom: Number(event.target.value) })} />
-                  <Button onClick={upsertProduct}><Plus className="h-4 w-4" /> Speichern</Button>
+                  <Button onClick={() => void upsertProduct()}><Plus className="h-4 w-4" /> Speichern</Button>
                 </div>
                 <Input className="mt-3" placeholder="Bild-URL von Unsplash/Pexels" value={productDraft.image} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} />
-                <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={(index) => setProductDraft(state.products[index])} onDelete={(index) => setState({ ...state, products: state.products.filter((_, itemIndex) => itemIndex !== index) })} />
+                <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={(index) => setProductDraft(state.products[index])} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
 
@@ -234,9 +225,9 @@ export function AdminDashboard() {
                   <Input placeholder="Slug" value={categoryDraft.slug} onChange={(event) => setCategoryDraft({ ...categoryDraft, slug: event.target.value })} />
                   <Input placeholder="Name" value={categoryDraft.name} onChange={(event) => setCategoryDraft({ ...categoryDraft, name: event.target.value })} />
                   <Input placeholder="SEO-Beschreibung" value={categoryDraft.description} onChange={(event) => setCategoryDraft({ ...categoryDraft, description: event.target.value })} />
-                  <Button onClick={upsertCategory}><Save className="h-4 w-4" /> Speichern</Button>
+                  <Button onClick={() => void upsertCategory()}><Save className="h-4 w-4" /> Speichern</Button>
                 </div>
-                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.active ? "Aktiv" : "Inaktiv", item.description])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => setState({ ...state, categories: state.categories.filter((_, itemIndex) => itemIndex !== index) })} />
+                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.active ? "Aktiv" : "Inaktiv", item.description])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => void deleteCategory(state.categories[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
 
@@ -286,6 +277,44 @@ export function AdminDashboard() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return <div className="rounded-lg border bg-white p-5 shadow-soft"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-black">{value}</p></div>;
+}
+
+async function deleteProduct(slug: string, onDone: () => Promise<void>) {
+  await fetch(`/api/catalog/products/${slug}`, { method: "DELETE" });
+  await onDone();
+}
+
+async function deleteCategory(slug: string, onDone: () => Promise<void>) {
+  await fetch(`/api/catalog/categories/${slug}`, { method: "DELETE" });
+  await onDone();
+}
+
+function toCatalogProduct(input: AdminProduct): ProductCatalogItem {
+  return {
+    slug: input.slug,
+    name: input.name,
+    category: input.category as ProductCatalogItem["category"],
+    short: `${input.name} für professionelle Printproduktion.`,
+    description: `${input.name} mit konfigurierbaren Optionen und Produktionsworkflow.`,
+    seo: `${input.name} online konfigurieren, prüfen und drucken lassen.`,
+    heroImage: input.image,
+    gallery: [input.image],
+    rating: 4.8,
+    basePrice: input.priceFrom,
+    deliveryText: "2-5 Werktage",
+    tags: ["Neu"],
+    variants: [
+      {
+        id: `${input.slug}-standard`,
+        name: "Standard",
+        skuPrefix: input.slug.toUpperCase().slice(0, 8),
+        attributes: [{ key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 19 }] }],
+        quantityRule: { min: 1, max: 10000, step: 1 },
+        priceRules: [{ key: "basis", label: "Basispreis", type: "fixed", amount: input.priceFrom }, { key: "auflage", label: "Auflagenfaktor", type: "per-unit", amount: 0.1 }]
+      }
+    ],
+    production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" }
+  };
 }
 
 function AdminPanel({ title, children }: { title: string; children: React.ReactNode }) {

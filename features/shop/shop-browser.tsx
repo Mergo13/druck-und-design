@@ -3,21 +3,21 @@
 import { Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ProductCard } from "@/components/product/product-card";
-import { platformCategories, productCatalog } from "@/data/product-catalog";
+import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
 
-export function ShopBrowser({ initialCategory }: { initialCategory?: string }) {
+export function ShopBrowser({ initialCategory, categories, products }: { initialCategory?: string; categories: ProductCategory[]; products: ProductCatalogItem[] }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory ?? "alle");
   const [sort, setSort] = useState("beliebt");
 
   const filtered = useMemo(() => {
-    const result = productCatalog.filter((product) => {
+    const result = products.filter((product) => {
       const matchesCategory = category === "alle" || product.category === category || category === "same-day" && product.production.expressAvailable;
       const matchesQuery = [product.name, product.short, product.seo].join(" ").toLowerCase().includes(query.toLowerCase());
       return matchesCategory && matchesQuery;
     });
     return result.sort((a, b) => sort === "preis" ? a.basePrice - b.basePrice : b.rating - a.rating);
-  }, [category, query, sort]);
+  }, [category, products, query, sort]);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
@@ -25,7 +25,7 @@ export function ShopBrowser({ initialCategory }: { initialCategory?: string }) {
         <div className="flex items-center gap-2 font-black"><SlidersHorizontal className="h-5 w-5" /> Filter</div>
         <div className="mt-5 grid gap-2">
           <button onClick={() => setCategory("alle")} className={category === "alle" ? "rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-bold text-white" : "rounded-md px-3 py-2 text-left text-sm font-bold hover:bg-muted"}>Alle Produkte</button>
-          {platformCategories.map((item) => (
+          {categories.map((item) => (
             <button onClick={() => setCategory(item.slug)} key={item.slug} className={category === item.slug ? "rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-bold text-white" : "rounded-md px-3 py-2 text-left text-sm font-bold hover:bg-muted"}>{item.name}</button>
           ))}
         </div>

@@ -2,20 +2,25 @@
 
 import Link from "next/link";
 import { Menu, Search, ShoppingCart, User, Heart, Sparkles, ChevronDown, PhoneCall } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { navigationItems } from "@/data/navigation";
-import { platformCategories } from "@/data/product-catalog";
 import { useCartStore } from "@/store/cart-store";
+import type { ProductCategory } from "@/types/print-platform";
 
 export function Header() {
   const [open, setOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const items = useCartStore((state) => state.items);
   const wishlist = useCartStore((state) => state.wishlist);
   const primaryItem = navigationItems.find((item) => item.featured);
   const secondaryItems = navigationItems.filter((item) => !item.featured);
+
+  useEffect(() => {
+    fetch("/api/catalog/categories").then((res) => res.json()).then((data: ProductCategory[]) => setCategories(data)).catch(() => setCategories([]));
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/78 text-brand-ink shadow-[0_16px_55px_rgba(15,23,42,.08)] backdrop-blur-2xl">
@@ -72,7 +77,7 @@ export function Header() {
               <Button asChild className="mt-6 bg-brand-blue text-white hover:bg-[#2c70b8]"><Link href="/ki-design-assistent">AI Design Assistant</Link></Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {platformCategories.map((category) => (
+              {categories.map((category) => (
                 <Link key={category.slug} href={`/${category.slug}`} className="rounded-xl border border-slate-200 bg-white p-5 text-brand-ink transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-soft">
                   <strong>{category.name}</strong>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
@@ -101,7 +106,7 @@ export function Header() {
               ))}
             </nav>
             <div className="grid gap-3 sm:grid-cols-2">
-              {platformCategories.map((category) => (
+              {categories.map((category) => (
                 <Link
                   key={category.slug}
                   href={`/${category.slug}`}

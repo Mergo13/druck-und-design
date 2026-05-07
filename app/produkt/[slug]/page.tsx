@@ -3,21 +3,17 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Star } from "lucide-react";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
-import { productCatalog } from "@/data/product-catalog";
-
-export function generateStaticParams() {
-  return productCatalog.map((product) => ({ slug: product.slug }));
-}
+import { getProductBySlug } from "@/lib/catalog-repository";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const product = productCatalog.find((item) => item.slug === slug);
+  const product = await getProductBySlug(slug);
   return { title: product?.name ?? "Produkt", description: product?.seo };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = productCatalog.find((item) => item.slug === slug);
+  const product = await getProductBySlug(slug);
   if (!product) notFound();
 
   const schema = {

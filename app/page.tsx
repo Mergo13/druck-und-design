@@ -4,9 +4,10 @@ import { HeroSlideshow } from "@/components/home/hero-slideshow";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { platformCategories, productCatalog } from "@/data/product-catalog";
+import { getCategories, getProducts } from "@/lib/catalog-repository";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const [platformCategories, productCatalog] = await Promise.all([getCategories(), getProducts()]);
   const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }> = [
     { icon: Layers3, title: "Konfiguration", text: "Varianten, Attribute, Auflage und Preislogik live berechnen." },
     { icon: ShieldCheck, title: "Druckdatenprüfung", text: "Preflight-Regeln für Format, Auflösung, Beschnitt und Exportprofil." },
