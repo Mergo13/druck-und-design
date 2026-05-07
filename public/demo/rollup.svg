@@ -1,0 +1,10 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" rx="48" fill="#F7FBFD"/>
+  <rect x="430" y="110" width="340" height="650" rx="26" fill="white"/>
+  <rect x="470" y="170" width="170" height="18" rx="9" fill="#101217"/>
+  <rect x="470" y="260" width="240" height="200" rx="28" fill="#235C99"/>
+  <rect x="470" y="520" width="230" height="16" rx="8" fill="#1EB2C4"/>
+  <rect x="470" y="558" width="180" height="16" rx="8" fill="#CBD5E1"/>
+  <rect x="390" y="760" width="420" height="46" rx="23" fill="#101217"/>
+  <text x="488" y="665" fill="#235C99" font-family="Arial" font-size="34" font-weight="700">Demo Roll-up</text>
+</svg>

@@ -1,0 +1,10 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" rx="48" fill="#F7FBFD"/>
+  <rect x="215" y="230" width="760" height="440" rx="34" fill="#101217"/>
+  <rect x="255" y="270" width="680" height="360" rx="26" fill="#151922"/>
+  <path d="M705 630H935V270H705C635 352 635 548 705 630Z" fill="#235C99"/>
+  <text x="310" y="430" fill="white" font-family="Arial" font-size="54" font-weight="700">druck&amp;design</text>
+  <text x="314" y="484" fill="#94A3B8" font-family="Arial" font-size="28" letter-spacing="18">STUDIO</text>
+  <rect x="315" y="540" width="270" height="14" rx="7" fill="#1EB2C4"/>
+  <text x="315" y="596" fill="#CBD5E1" font-family="Arial" font-size="26">Demo Visitenkarte</text>
+</svg>

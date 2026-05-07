@@ -1,0 +1,9 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" rx="48" fill="#EEF4F8"/>
+  <circle cx="610" cy="450" r="255" fill="white"/>
+  <circle cx="610" cy="450" r="220" fill="#101217"/>
+  <path d="M820 450C820 566 726 660 610 660C494 660 400 566 400 450C400 334 494 240 610 240C726 240 820 334 820 450Z" fill="#235C99"/>
+  <circle cx="610" cy="450" r="120" fill="#1EB2C4"/>
+  <text x="493" y="462" fill="white" font-family="Arial" font-size="42" font-weight="700">STICKER</text>
+  <text x="478" y="522" fill="#DFF7FB" font-family="Arial" font-size="24">Demo Aufkleber</text>
+</svg>

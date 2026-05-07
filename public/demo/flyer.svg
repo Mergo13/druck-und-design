@@ -1,0 +1,15 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" rx="48" fill="#EEF4F8"/>
+  <circle cx="930" cy="180" r="220" fill="#235C99" fill-opacity=".18"/>
+  <circle cx="190" cy="760" r="190" fill="#1EB2C4" fill-opacity=".20"/>
+  <g filter="url(#s)">
+    <rect x="360" y="130" width="420" height="620" rx="28" fill="white"/>
+    <rect x="410" y="205" width="180" height="20" rx="10" fill="#101217"/>
+    <rect x="410" y="300" width="280" height="18" rx="9" fill="#235C99"/>
+    <rect x="410" y="340" width="220" height="18" rx="9" fill="#CBD5E1"/>
+    <rect x="410" y="380" width="150" height="18" rx="9" fill="#1EB2C4"/>
+    <rect x="410" y="510" width="300" height="150" rx="24" fill="#101217"/>
+  </g>
+  <text x="420" y="702" fill="#235C99" font-family="Arial" font-size="34" font-weight="700">Demo Flyer</text>
+  <defs><filter id="s" x="300" y="90" width="540" height="740" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="30" stdDeviation="30" flood-color="#0F172A" flood-opacity=".18"/></filter></defs>
+</svg>

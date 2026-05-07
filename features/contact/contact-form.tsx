@@ -1,0 +1,34 @@
+"use client";
+
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
+const schema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  topic: z.string().min(2),
+  message: z.string().min(10)
+});
+
+type FormData = z.infer<typeof schema>;
+
+export function ContactForm() {
+  const { register, handleSubmit, formState: { errors, isSubmitSuccessful } } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  return (
+    <form onSubmit={handleSubmit(() => undefined)} className="rounded-lg border bg-white p-6 shadow-premium">
+      <h2 className="text-2xl font-black">Anfrage senden</h2>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <label className="grid gap-2 text-sm font-bold">Name<Input {...register("name")} />{errors.name && <span className="text-xs text-red-600">Bitte Namen eingeben.</span>}</label>
+        <label className="grid gap-2 text-sm font-bold">E-Mail<Input {...register("email")} />{errors.email && <span className="text-xs text-red-600">Bitte gültige E-Mail eingeben.</span>}</label>
+      </div>
+      <label className="mt-4 grid gap-2 text-sm font-bold">Thema<Input {...register("topic")} placeholder="z. B. Broschüre, Textildruck oder Rahmenvertrag" />{errors.topic && <span className="text-xs text-red-600">Bitte Thema eingeben.</span>}</label>
+      <label className="mt-4 grid gap-2 text-sm font-bold">Nachricht<textarea {...register("message")} className="min-h-36 rounded-md border p-3 outline-none focus:ring-2 focus:ring-ring" />{errors.message && <span className="text-xs text-red-600">Bitte Nachricht ergänzen.</span>}</label>
+      {isSubmitSuccessful && <p className="mt-4 rounded-md bg-teal-50 p-3 text-sm font-bold text-teal-900">Danke, Ihre Anfrage wurde vorbereitet.</p>}
+      <Button className="mt-6">Absenden</Button>
+    </form>
+  );
+}

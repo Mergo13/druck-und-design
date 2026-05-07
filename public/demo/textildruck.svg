@@ -1,0 +1,8 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" rx="48" fill="#F7FBFD"/>
+  <path d="M418 186L510 150C552 198 648 198 690 150L782 186L910 330L810 430V720H390V430L290 330L418 186Z" fill="#101217"/>
+  <path d="M510 150C552 198 648 198 690 150C674 238 526 238 510 150Z" fill="#235C99"/>
+  <rect x="486" y="390" width="228" height="34" rx="17" fill="#1EB2C4"/>
+  <text x="493" y="485" fill="white" font-family="Arial" font-size="46" font-weight="700">STUDIO</text>
+  <text x="480" y="555" fill="#94A3B8" font-family="Arial" font-size="26">Demo Textildruck</text>
+</svg>
