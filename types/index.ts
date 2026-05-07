@@ -37,6 +37,15 @@ export type CartItem = {
   quantity: number;
   price: number;
   config: Record<string, string>;
+  mockupUrl?: string;
+  preflightPassed?: boolean;
+};
+
+export type Order = {
+  id: string;
+  createdAt: string;
+  items: CartItem[];
+  total: number;
 };
 
 export type NavItem = {

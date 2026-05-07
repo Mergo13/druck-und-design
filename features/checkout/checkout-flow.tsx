@@ -1,12 +1,16 @@
 "use client";
 
 import { CreditCard, FileCheck, Package, Truck, type LucideIcon } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/store/cart-store";
 import { formatEuro } from "@/lib/utils";
 
 export function CheckoutFlow() {
+  const items = useCartStore((state) => state.items);
   const total = useCartStore((state) => state.total);
+  const placeOrder = useCartStore((state) => state.placeOrder);
+  const [orderResult, setOrderResult] = useState<string>("");
   const steps: Array<[LucideIcon, string]> = [[Package, "Warenkorb"], [Truck, "Versand"], [CreditCard, "Zahlung"], [FileCheck, "Prüfung"]];
 
   return (
@@ -26,8 +30,13 @@ export function CheckoutFlow() {
         <aside className="h-fit rounded-lg border p-6 shadow-premium">
           <h2 className="text-xl font-black">Zusammenfassung</h2>
           <div className="mt-5 flex justify-between font-bold"><span>Produkte</span><span>{formatEuro(total())}</span></div>
+          <div className="mt-2 flex justify-between text-sm"><span>Preflight bestanden</span><span>{items.filter((item) => item.preflightPassed).length}/{items.length}</span></div>
           <div className="mt-2 flex justify-between text-sm"><span>Datencheck</span><span>inklusive</span></div>
-          <Button className="mt-6 w-full" size="lg">Zahlungspflichtig bestellen</Button>
+          <Button className="mt-6 w-full" size="lg" onClick={() => {
+            const orderId = placeOrder();
+            if (orderId) setOrderResult(`Bestellung erfolgreich: ${orderId}`);
+          }}>Zahlungspflichtig bestellen</Button>
+          {orderResult ? <p className="mt-3 text-sm font-bold text-emerald-700">{orderResult}</p> : null}
         </aside>
       </div>
     </section>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarCheck, CheckCircle2, FileCheck, UploadCloud, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
@@ -35,11 +35,20 @@ export function ProductConfigurator({ product }: { product: Product | ProductCat
     Lieferzeit: "Standard"
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [mockupUrl, setMockupUrl] = useState<string>("");
   const [uploadError, setUploadError] = useState("");
+  const [preflightStatus, setPreflightStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
+  const [preflightMessage, setPreflightMessage] = useState("Live-Vorschau und Datencheck starten nach dem Upload.");
   const [isDragging, setIsDragging] = useState(false);
   const addItem = useCartStore((state) => state.addItem);
 
-  function validateAndSetFile(file?: File) {
+  useEffect(() => {
+    return () => {
+      if (mockupUrl) URL.revokeObjectURL(mockupUrl);
+    };
+  }, [mockupUrl]);
+
+  async function validateAndSetFile(file?: File) {
     setUploadError("");
     if (!file) return;
 
@@ -59,6 +68,27 @@ export function ProductConfigurator({ product }: { product: Product | ProductCat
     }
 
     setUploadedFile(file);
+    if (file.type.startsWith("image/")) {
+      setMockupUrl(URL.createObjectURL(file));
+    } else {
+      setMockupUrl("");
+    }
+
+    setPreflightStatus("running");
+    setPreflightMessage("Preflight läuft...");
+    const response = await fetch("/api/preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename: file.name })
+    });
+    const result = await response.json() as { valid: boolean; checks: Array<{ label: string; passed: boolean }> };
+    if (result.valid) {
+      setPreflightStatus("ok");
+      setPreflightMessage(`Preflight bestanden: ${result.checks.filter((item) => item.passed).length}/${result.checks.length} Checks OK.`);
+    } else {
+      setPreflightStatus("error");
+      setPreflightMessage("Preflight fehlgeschlagen. Bitte Datei prüfen.");
+    }
   }
 
   const price = useMemo(() => {
@@ -129,14 +159,25 @@ export function ProductConfigurator({ product }: { product: Product | ProductCat
           <XCircle className="h-4 w-4" /> {uploadError}
         </div>
       )}
-      <div className={uploadedFile ? "mt-4 flex items-center gap-2 rounded-md bg-teal-50 p-3 text-sm text-teal-900" : "mt-4 flex items-center gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700"}>
-        {uploadedFile ? <CheckCircle2 className="h-4 w-4" /> : <FileCheck className="h-4 w-4" />}
-        {uploadedFile ? "Demo-Preflight bestanden: Dateityp und Größe sehen gut aus." : "Live-Vorschau und Datencheck starten nach dem Upload."}
+      {mockupUrl ? (
+        <div className="mt-4 overflow-hidden rounded-md border bg-slate-50">
+          <img src={mockupUrl} alt="Live Mockup Vorschau" className="h-44 w-full object-cover" />
+          <div className="border-t p-2 text-xs font-semibold text-slate-700">Live Mockup Vorschau</div>
+        </div>
+      ) : uploadedFile ? (
+        <div className="mt-4 flex items-center gap-2 rounded-md border bg-slate-50 p-3 text-sm text-slate-700">
+          <FileImage className="h-4 w-4" />
+          Dateityp ohne Bildvorschau ({uploadedFile.name})
+        </div>
+      ) : null}
+      <div className={preflightStatus === "ok" ? "mt-4 flex items-center gap-2 rounded-md bg-teal-50 p-3 text-sm text-teal-900" : preflightStatus === "error" ? "mt-4 flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-800" : "mt-4 flex items-center gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700"}>
+        {preflightStatus === "ok" ? <CheckCircle2 className="h-4 w-4" /> : preflightStatus === "error" ? <XCircle className="h-4 w-4" /> : <FileCheck className="h-4 w-4" />}
+        {preflightMessage}
       </div>
       <Button
         className="mt-6 w-full"
         size="lg"
-        onClick={() => addItem({ id: crypto.randomUUID(), productSlug: product.slug, name: product.name, quantity: 1, price, config: { ...config, Druckdaten: uploadedFile?.name ?? "Upload folgt später" } })}
+        onClick={() => addItem({ id: crypto.randomUUID(), productSlug: product.slug, name: product.name, quantity: 1, price, config: { ...config, Druckdaten: uploadedFile?.name ?? "Upload folgt später" }, mockupUrl: mockupUrl || undefined, preflightPassed: preflightStatus === "ok" })}
       >
         In den Warenkorb
       </Button>

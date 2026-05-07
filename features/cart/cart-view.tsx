@@ -16,7 +16,14 @@ export function CartView() {
           {items.length === 0 && <div className="rounded-lg border p-8 text-muted-foreground">Ihr Warenkorb ist aktuell leer.</div>}
           {items.map((item) => (
             <div className="flex items-center justify-between gap-4 rounded-lg border p-5 shadow-soft" key={item.id}>
-              <div><h2 className="font-black">{item.name}</h2><p className="mt-1 text-sm text-muted-foreground">{Object.entries(item.config).map(([key, value]) => `${key}: ${value}`).join(" · ")}</p></div>
+              <div>
+                <h2 className="font-black">{item.name}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{Object.entries(item.config).map(([key, value]) => `${key}: ${value}`).join(" · ")}</p>
+                <p className={item.preflightPassed ? "mt-1 text-xs font-bold text-emerald-700" : "mt-1 text-xs font-bold text-amber-700"}>
+                  {item.preflightPassed ? "Preflight: bestanden" : "Preflight: ausstehend"}
+                </p>
+              </div>
+              {item.mockupUrl ? <img src={item.mockupUrl} alt="Mockup" className="h-16 w-16 rounded-md border object-cover" /> : null}
               <div className="text-right"><p className="font-black">{formatEuro(item.price)}</p><button onClick={() => removeItem(item.id)} className="mt-2 text-sm text-red-600"><Trash2 className="inline h-4 w-4" /> Entfernen</button></div>
             </div>
           ))}
