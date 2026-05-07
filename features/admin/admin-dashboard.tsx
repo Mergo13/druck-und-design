@@ -123,6 +123,7 @@ export function AdminDashboard() {
   const [productDraft, setProductDraft] = useState<AdminProduct>(emptyProduct);
   const [categoryDraft, setCategoryDraft] = useState<AdminCategory>(emptyCategory);
   const [postDraft, setPostDraft] = useState<AdminPost>(emptyPost);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   useEffect(() => {
     void loadBackendState();
@@ -165,6 +166,21 @@ export function AdminDashboard() {
         : [postDraft, ...current.posts]
     }));
     setPostDraft(emptyPost);
+  }
+
+  async function uploadProductImage(file?: File) {
+    if (!file) return;
+    setUploadingImage(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/uploads/product-image", { method: "POST", body: form });
+      if (!res.ok) return;
+      const data = await res.json() as { url: string };
+      setProductDraft((current) => ({ ...current, image: data.url }));
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
   return (
@@ -215,6 +231,13 @@ export function AdminDashboard() {
                   <Button onClick={() => void upsertProduct()}><Plus className="h-4 w-4" /> Speichern</Button>
                 </div>
                 <Input className="mt-3" placeholder="Bild-URL von Unsplash/Pexels" value={productDraft.image} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} />
+                <div className="mt-3 rounded-lg border bg-slate-50 p-4">
+                  <label className="grid gap-2 text-sm font-bold">
+                    Produktbild hochladen
+                    <input type="file" accept="image/*" onChange={(event) => void uploadProductImage(event.target.files?.[0])} className="block w-full text-sm font-normal" />
+                  </label>
+                  <p className="mt-2 text-xs text-muted-foreground">{uploadingImage ? "Upload läuft..." : "Nach Upload wird die Bild-URL automatisch ins Produkt übernommen."}</p>
+                </div>
                 <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={(index) => setProductDraft(state.products[index])} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
