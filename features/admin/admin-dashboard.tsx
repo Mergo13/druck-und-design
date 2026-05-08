@@ -124,6 +124,9 @@ export function AdminDashboard() {
   const [categoryDraft, setCategoryDraft] = useState<AdminCategory>(emptyCategory);
   const [postDraft, setPostDraft] = useState<AdminPost>(emptyPost);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [productStatus, setProductStatus] = useState<string>("");
+  const [productError, setProductError] = useState<string>("");
+  const [previewNonce, setPreviewNonce] = useState(0);
 
   useEffect(() => {
     void loadBackendState();
@@ -144,9 +147,24 @@ export function AdminDashboard() {
   }
 
   async function upsertProduct() {
-    if (!productDraft.slug || !productDraft.name) return;
-    await fetch("/api/catalog/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toCatalogProduct(productDraft)) });
+    if (uploadingImage) {
+      setProductError("Bitte warten Sie, bis der Bild-Upload abgeschlossen ist.");
+      return;
+    }
+    if (!productDraft.slug || !productDraft.name) {
+      setProductError("Slug und Produktname sind Pflichtfelder.");
+      return;
+    }
+    setProductError("");
+    setProductStatus("");
+    const response = await fetch("/api/catalog/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toCatalogProduct(productDraft)) });
+    if (!response.ok) {
+      setProductError("Produkt konnte nicht gespeichert werden.");
+      return;
+    }
     await loadBackendState();
+    setProductStatus(`Produkt gespeichert: ${productDraft.slug}`);
+    setPreviewNonce((current) => current + 1);
     setProductDraft(emptyProduct);
   }
 
@@ -170,17 +188,31 @@ export function AdminDashboard() {
 
   async function uploadProductImage(file?: File) {
     if (!file) return;
+    setProductError("");
+    setProductStatus("");
     setUploadingImage(true);
     try {
       const form = new FormData();
       form.append("file", file);
       const res = await fetch("/api/uploads/product-image", { method: "POST", body: form });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setProductError("Upload fehlgeschlagen. Bitte versuchen Sie es erneut.");
+        return;
+      }
       const data = await res.json() as { url: string };
       setProductDraft((current) => ({ ...current, image: data.url }));
+      setPreviewNonce((current) => current + 1);
+      setProductStatus("Bild hochgeladen. Bitte auf Speichern klicken.");
     } finally {
       setUploadingImage(false);
     }
+  }
+
+  function handleEditProduct(index: number) {
+    setProductError("");
+    setProductStatus("");
+    setProductDraft(state.products[index]);
+    setPreviewNonce((current) => current + 1);
   }
 
   return (
@@ -228,9 +260,14 @@ export function AdminDashboard() {
                   <Input placeholder="Produktname" value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} />
                   <Input placeholder="Kategorie" value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} />
                   <Input placeholder="Preis ab" type="number" value={productDraft.priceFrom} onChange={(event) => setProductDraft({ ...productDraft, priceFrom: Number(event.target.value) })} />
-                  <Button onClick={() => void upsertProduct()}><Plus className="h-4 w-4" /> Speichern</Button>
+                  <Button onClick={() => void upsertProduct()} disabled={uploadingImage}><Plus className="h-4 w-4" /> Speichern</Button>
                 </div>
                 <Input className="mt-3" placeholder="Bild-URL von Unsplash/Pexels" value={productDraft.image} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} />
+                {productDraft.image ? (
+                  <div className="mt-3 overflow-hidden rounded-lg border bg-white">
+                    <img src={`${productDraft.image}${productDraft.image.startsWith("/uploads/") ? `?v=${previewNonce}` : ""}`} alt="Produktbild Vorschau" className="h-40 w-full object-cover" />
+                  </div>
+                ) : null}
                 <div className="mt-3 rounded-lg border bg-slate-50 p-4">
                   <label className="grid gap-2 text-sm font-bold">
                     Produktbild hochladen
@@ -238,7 +275,9 @@ export function AdminDashboard() {
                   </label>
                   <p className="mt-2 text-xs text-muted-foreground">{uploadingImage ? "Upload läuft..." : "Nach Upload wird die Bild-URL automatisch ins Produkt übernommen."}</p>
                 </div>
-                <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={(index) => setProductDraft(state.products[index])} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
+                {productStatus ? <p className="mt-3 text-sm font-bold text-emerald-700">{productStatus}</p> : null}
+                {productError ? <p className="mt-3 text-sm font-bold text-red-700">{productError}</p> : null}
+                <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={handleEditProduct} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
 
