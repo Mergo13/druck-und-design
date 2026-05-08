@@ -1,0 +1,19 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dud-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+
+  nats:
+    image: nats:2-alpine
+    container_name: dud-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+volumes:
+  redis_data:
