@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, ShoppingBag, Star } from "lucide-react";
+import { Heart, ShoppingBag } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,7 +39,6 @@ export function ProductCard({ product }: { product: CardProduct }) {
               <p className="text-xs text-muted-foreground">ab</p>
               <p className="text-lg font-black">{formatEuro(priceFrom)}</p>
             </div>
-            <div className="flex items-center gap-1 text-sm font-semibold"><Star className="h-4 w-4 fill-amber-400 text-amber-400" />{product.rating}</div>
           </div>
           <Button asChild className="mt-5 w-full"><Link href={`/produkt/${product.slug}`}><ShoppingBag className="h-4 w-4" /> Konfigurieren</Link></Button>
         </CardContent>

@@ -12,7 +12,11 @@ type AdminProduct = {
   slug: string;
   name: string;
   category: string;
+  short: string;
+  description: string;
   priceFrom: number;
+  quantityStepsCsv: string;
+  propertyTemplate: string;
   active: boolean;
   stockMode: "Verkauf aktiv" | "Pausiert" | "Nur Anfrage";
   image: string;
@@ -22,6 +26,8 @@ type AdminCategory = {
   slug: string;
   name: string;
   description: string;
+  quantityStepsCsv: string;
+  defaultPropertyTemplate: string;
   active: boolean;
 };
 
@@ -65,7 +71,11 @@ const emptyProduct: AdminProduct = {
   slug: "",
   name: "",
   category: "druckprodukte",
+  short: "",
+  description: "",
   priceFrom: 0,
+  quantityStepsCsv: "1, 10, 25, 50, 100, 1000, 2000, 5000",
+  propertyTemplate: "print-basic",
   active: true,
   stockMode: "Verkauf aktiv",
   image: "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80"
@@ -75,8 +85,20 @@ const emptyCategory: AdminCategory = {
   slug: "",
   name: "",
   description: "",
+  quantityStepsCsv: "1, 10, 25, 50, 100, 1000, 2000, 5000",
+  defaultPropertyTemplate: "print-basic",
   active: true
 };
+
+const defaultQuantitySteps = [1, 10, 25, 50, 100, 1000, 2000, 5000];
+
+const propertyTemplates: Array<{ key: string; label: string }> = [
+  { key: "print-basic", label: "Print Standard (Material, Grammatur, Veredelung, Lieferzeit)" },
+  { key: "large-format", label: "Werbetechnik (Material, Größe, Konfektion, Lieferzeit)" },
+  { key: "textile", label: "Textil (Verfahren, Farbe, Größe, Lieferzeit)" },
+  { key: "sticker", label: "Aufkleber (Material, Form, Haltbarkeit, Lieferzeit)" },
+  { key: "marketing-service", label: "Marketing Service (Paket, Laufzeit, Kanal)" }
+];
 
 const emptyPost: AdminPost = {
   slug: "",
@@ -127,6 +149,8 @@ export function AdminDashboard() {
   const [productStatus, setProductStatus] = useState<string>("");
   const [productError, setProductError] = useState<string>("");
   const [previewNonce, setPreviewNonce] = useState(0);
+  const categoryOptions = useMemo(() => state.categories.map((item) => item.slug), [state.categories]);
+  const autoCategory = useMemo(() => suggestCategory(productDraft.name, categoryOptions), [categoryOptions, productDraft.name]);
 
   useEffect(() => {
     void loadBackendState();
@@ -141,8 +165,25 @@ export function AdminDashboard() {
     const categories = await categoriesRes.json() as ProductCategory[];
     setState((current) => ({
       ...current,
-      products: products.map((product) => ({ slug: product.slug, name: product.name, category: product.category, priceFrom: product.basePrice, active: true, stockMode: "Verkauf aktiv", image: product.heroImage })),
-      categories: categories.map((category) => ({ ...category, active: true }))
+      products: products.map((product) => ({
+        slug: product.slug,
+        name: product.name,
+        category: product.category,
+        short: product.short,
+        description: product.description,
+        priceFrom: product.basePrice,
+        quantityStepsCsv: toStepsCsv(product.quantitySteps ?? [product.variants[0]?.quantityRule.min ?? 1]),
+        propertyTemplate: product.propertyTemplate ?? "print-basic",
+        active: true,
+        stockMode: "Verkauf aktiv",
+        image: product.heroImage
+      })),
+      categories: categories.map((category) => ({
+        ...category,
+        quantityStepsCsv: toStepsCsv(category.quantitySteps ?? defaultQuantitySteps),
+        defaultPropertyTemplate: category.defaultPropertyTemplate ?? "print-basic",
+        active: true
+      }))
     }));
   }
 
@@ -155,9 +196,18 @@ export function AdminDashboard() {
       setProductError("Slug und Produktname sind Pflichtfelder.");
       return;
     }
+    if (!categoryOptions.includes(productDraft.category)) {
+      setProductError("Bitte eine gültige Kategorie auswählen.");
+      return;
+    }
     setProductError("");
     setProductStatus("");
-    const response = await fetch("/api/catalog/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toCatalogProduct(productDraft)) });
+    const steps = parseStepsCsv(productDraft.quantityStepsCsv);
+    if (!steps.length) {
+      setProductError("Bitte gültige Mengenstufen angeben, z.B. 1, 10, 25, 50.");
+      return;
+    }
+    const response = await fetch("/api/catalog/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toCatalogProduct(productDraft, steps)) });
     if (!response.ok) {
       setProductError("Produkt konnte nicht gespeichert werden.");
       return;
@@ -170,7 +220,19 @@ export function AdminDashboard() {
 
   async function upsertCategory() {
     if (!categoryDraft.slug || !categoryDraft.name) return;
-    await fetch("/api/catalog/categories", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug: categoryDraft.slug, name: categoryDraft.name, description: categoryDraft.description }) });
+    const steps = parseStepsCsv(categoryDraft.quantityStepsCsv);
+    if (!steps.length) return;
+    await fetch("/api/catalog/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slug: categoryDraft.slug,
+        name: categoryDraft.name,
+        description: categoryDraft.description,
+        quantitySteps: steps,
+        defaultPropertyTemplate: categoryDraft.defaultPropertyTemplate
+      })
+    });
     await loadBackendState();
     setCategoryDraft(emptyCategory);
   }
@@ -213,6 +275,16 @@ export function AdminDashboard() {
     setProductStatus("");
     setProductDraft(state.products[index]);
     setPreviewNonce((current) => current + 1);
+  }
+
+  function applyCategoryDefaults() {
+    const selectedCategory = state.categories.find((item) => item.slug === productDraft.category);
+    if (!selectedCategory) return;
+    setProductDraft((current) => ({
+      ...current,
+      quantityStepsCsv: selectedCategory.quantityStepsCsv,
+      propertyTemplate: selectedCategory.defaultPropertyTemplate
+    }));
   }
 
   return (
@@ -258,9 +330,45 @@ export function AdminDashboard() {
                 <div className="grid gap-3 lg:grid-cols-5">
                   <Input placeholder="Slug" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
                   <Input placeholder="Produktname" value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} />
-                  <Input placeholder="Kategorie" value={productDraft.category} onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })} />
+                  <select
+                    suppressHydrationWarning
+                    className="h-11 rounded-md border bg-white px-3 text-sm"
+                    value={productDraft.category}
+                    onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })}
+                  >
+                    {state.categories.map((category) => (
+                      <option key={category.slug} value={category.slug}>{category.name} ({category.slug})</option>
+                    ))}
+                  </select>
                   <Input placeholder="Preis ab" type="number" value={productDraft.priceFrom} onChange={(event) => setProductDraft({ ...productDraft, priceFrom: Number(event.target.value) })} />
                   <Button onClick={() => void upsertProduct()} disabled={uploadingImage}><Plus className="h-4 w-4" /> Speichern</Button>
+                </div>
+                <Input className="mt-3" placeholder="Kurzbeschreibung" value={productDraft.short} onChange={(event) => setProductDraft({ ...productDraft, short: event.target.value })} />
+                <textarea
+                  className="mt-3 min-h-24 w-full rounded-md border p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Produktbeschreibung"
+                  value={productDraft.description}
+                  onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })}
+                />
+                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                  <Input placeholder="Mengenstufen (z.B. 1,10,25,50,100,1000)" value={productDraft.quantityStepsCsv} onChange={(event) => setProductDraft({ ...productDraft, quantityStepsCsv: event.target.value })} />
+                  <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={productDraft.propertyTemplate} onChange={(event) => setProductDraft({ ...productDraft, propertyTemplate: event.target.value })}>
+                    {propertyTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
+                  </select>
+                  <Button type="button" variant="outline" onClick={applyCategoryDefaults}>Kategorie-Standard übernehmen</Button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-4 py-3 text-sm">
+                  <span className="font-bold">Auto-Kategorie:</span>
+                  <span className="rounded-full bg-white px-3 py-1">{autoCategory ?? "Keine klare Zuordnung"}</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!autoCategory}
+                    onClick={() => autoCategory && setProductDraft({ ...productDraft, category: autoCategory })}
+                  >
+                    Automatisch übernehmen
+                  </Button>
                 </div>
                 <Input className="mt-3" placeholder="Bild-URL von Unsplash/Pexels" value={productDraft.image} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} />
                 {productDraft.image ? (
@@ -271,7 +379,7 @@ export function AdminDashboard() {
                 <div className="mt-3 rounded-lg border bg-slate-50 p-4">
                   <label className="grid gap-2 text-sm font-bold">
                     Produktbild hochladen
-                    <input type="file" accept="image/*" onChange={(event) => void uploadProductImage(event.target.files?.[0])} className="block w-full text-sm font-normal" />
+                    <input suppressHydrationWarning type="file" accept="image/*" onChange={(event) => void uploadProductImage(event.target.files?.[0])} className="block w-full text-sm font-normal" />
                   </label>
                   <p className="mt-2 text-xs text-muted-foreground">{uploadingImage ? "Upload läuft..." : "Nach Upload wird die Bild-URL automatisch ins Produkt übernommen."}</p>
                 </div>
@@ -283,13 +391,17 @@ export function AdminDashboard() {
 
             {activeTab === "Gruppen" && (
               <AdminPanel title="Produktgruppen und Kategorien">
-                <div className="grid gap-3 md:grid-cols-[1fr_1fr_2fr_auto]">
+                <div className="grid gap-3 md:grid-cols-2">
                   <Input placeholder="Slug" value={categoryDraft.slug} onChange={(event) => setCategoryDraft({ ...categoryDraft, slug: event.target.value })} />
                   <Input placeholder="Name" value={categoryDraft.name} onChange={(event) => setCategoryDraft({ ...categoryDraft, name: event.target.value })} />
                   <Input placeholder="SEO-Beschreibung" value={categoryDraft.description} onChange={(event) => setCategoryDraft({ ...categoryDraft, description: event.target.value })} />
+                  <Input placeholder="Kategorie-Mengenstufen (z.B. 1,10,25,50...)" value={categoryDraft.quantityStepsCsv} onChange={(event) => setCategoryDraft({ ...categoryDraft, quantityStepsCsv: event.target.value })} />
+                  <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={categoryDraft.defaultPropertyTemplate} onChange={(event) => setCategoryDraft({ ...categoryDraft, defaultPropertyTemplate: event.target.value })}>
+                    {propertyTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
+                  </select>
                   <Button onClick={() => void upsertCategory()}><Save className="h-4 w-4" /> Speichern</Button>
                 </div>
-                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.active ? "Aktiv" : "Inaktiv", item.description])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => void deleteCategory(state.categories[index].slug, loadBackendState)} />
+                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.quantityStepsCsv, item.defaultPropertyTemplate])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => void deleteCategory(state.categories[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
 
@@ -299,7 +411,7 @@ export function AdminDashboard() {
                   <Input placeholder="Slug" value={postDraft.slug} onChange={(event) => setPostDraft({ ...postDraft, slug: event.target.value })} />
                   <Input placeholder="Titel" value={postDraft.title} onChange={(event) => setPostDraft({ ...postDraft, title: event.target.value })} />
                   <Input placeholder="Kategorie" value={postDraft.category} onChange={(event) => setPostDraft({ ...postDraft, category: event.target.value })} />
-                  <select className="h-11 rounded-md border bg-white px-3 text-sm" value={postDraft.status} onChange={(event) => setPostDraft({ ...postDraft, status: event.target.value as AdminPost["status"] })}><option>Entwurf</option><option>Geplant</option><option>Veröffentlicht</option></select>
+                  <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={postDraft.status} onChange={(event) => setPostDraft({ ...postDraft, status: event.target.value as AdminPost["status"] })}><option>Entwurf</option><option>Geplant</option><option>Veröffentlicht</option></select>
                 </div>
                 <textarea className="mt-3 min-h-28 w-full rounded-md border p-3 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Kurztext oder Teaser" value={postDraft.excerpt} onChange={(event) => setPostDraft({ ...postDraft, excerpt: event.target.value })} />
                 <Button className="mt-3" onClick={upsertPost}><Plus className="h-4 w-4" /> Beitrag speichern</Button>
@@ -351,13 +463,16 @@ async function deleteCategory(slug: string, onDone: () => Promise<void>) {
   await onDone();
 }
 
-function toCatalogProduct(input: AdminProduct): ProductCatalogItem {
+function toCatalogProduct(input: AdminProduct, quantitySteps: number[]): ProductCatalogItem {
+  const minStep = quantitySteps[0] ?? 1;
+  const maxStep = quantitySteps[quantitySteps.length - 1] ?? 10000;
+  const normalizedMax = maxStep < minStep ? minStep : maxStep;
   return {
     slug: input.slug,
     name: input.name,
     category: input.category as ProductCatalogItem["category"],
-    short: `${input.name} für professionelle Printproduktion.`,
-    description: `${input.name} mit konfigurierbaren Optionen und Produktionsworkflow.`,
+    short: input.short || `${input.name} für professionelle Printproduktion.`,
+    description: input.description || `${input.name} mit konfigurierbaren Optionen und Produktionsworkflow.`,
     seo: `${input.name} online konfigurieren, prüfen und drucken lassen.`,
     heroImage: input.image,
     gallery: [input.image],
@@ -365,18 +480,96 @@ function toCatalogProduct(input: AdminProduct): ProductCatalogItem {
     basePrice: input.priceFrom,
     deliveryText: "2-5 Werktage",
     tags: ["Neu"],
+    quantitySteps,
+    propertyTemplate: input.propertyTemplate,
     variants: [
       {
         id: `${input.slug}-standard`,
         name: "Standard",
         skuPrefix: input.slug.toUpperCase().slice(0, 8),
-        attributes: [{ key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 19 }] }],
-        quantityRule: { min: 1, max: 10000, step: 1 },
+        attributes: buildAttributesByTemplate(input.propertyTemplate),
+        quantityRule: { min: minStep, max: normalizedMax, step: minStep },
         priceRules: [{ key: "basis", label: "Basispreis", type: "fixed", amount: input.priceFrom }, { key: "auflage", label: "Auflagenfaktor", type: "per-unit", amount: 0.1 }]
       }
     ],
     production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" }
   };
+}
+
+function suggestCategory(name: string, categories: string[]) {
+  const lowerName = name.toLowerCase();
+  const checks: Array<{ slug: string; keywords: string[] }> = [
+    { slug: "druckprodukte", keywords: ["flyer", "visitenkarte", "brosch", "karte", "druck", "plakat", "folder"] },
+    { slug: "werbetechnik", keywords: ["roll-up", "rollup", "banner", "display", "schild", "messe", "werbe"] },
+    { slug: "kleidung-textilien", keywords: ["textil", "shirt", "hoodie", "polo", "jacke", "workwear", "stick"] },
+    { slug: "aufkleber", keywords: ["aufkleber", "sticker", "etikett", "folie", "label"] },
+    { slug: "digitales-marketing", keywords: ["social", "seo", "ads", "google", "meta", "kampagne", "marketing"] },
+    { slug: "same-day", keywords: ["same day", "sameday", "heute", "24h", "express heute"] },
+    { slug: "direct-mailings", keywords: ["mailing", "brief", "postwurf", "adressiert", "kuvert"] }
+  ];
+
+  for (const entry of checks) {
+    if (!categories.includes(entry.slug)) continue;
+    if (entry.keywords.some((keyword) => lowerName.includes(keyword))) return entry.slug;
+  }
+
+  return categories.includes("druckprodukte") ? "druckprodukte" : categories[0];
+}
+
+function parseStepsCsv(value: string) {
+  const steps = value
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item > 0);
+  return Array.from(new Set(steps)).sort((a, b) => a - b);
+}
+
+function toStepsCsv(steps: number[]) {
+  return steps.join(", ");
+}
+
+function buildAttributesByTemplate(template: string): ProductCatalogItem["variants"][number]["attributes"] {
+  if (template === "large-format") {
+    return [
+      { key: "material", label: "Material", type: "select", required: true, defaultValue: "pvc", options: [{ value: "pvc", label: "PVC 510 g/m²" }, { value: "mesh", label: "Mesh", priceModifier: 12 }] },
+      { key: "groesse", label: "Größe", type: "select", required: true, defaultValue: "85x200", options: [{ value: "85x200", label: "85x200 cm" }, { value: "100x220", label: "100x220 cm", priceModifier: 15 }] },
+      { key: "konfektion", label: "Konfektion", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "oese", label: "Ösen", priceModifier: 8 }] },
+      { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 29 }] }
+    ];
+  }
+
+  if (template === "textile") {
+    return [
+      { key: "verfahren", label: "Druckverfahren", type: "select", required: true, defaultValue: "dtf", options: [{ value: "dtf", label: "DTF" }, { value: "siebdruck", label: "Siebdruck", priceModifier: 22 }] },
+      { key: "farbe", label: "Textilfarbe", type: "select", required: true, defaultValue: "schwarz", options: [{ value: "schwarz", label: "Schwarz" }, { value: "weiss", label: "Weiß" }, { value: "navy", label: "Navy" }] },
+      { key: "groesse", label: "Größe", type: "select", required: true, defaultValue: "m", options: [{ value: "s", label: "S" }, { value: "m", label: "M" }, { value: "l", label: "L" }, { value: "xl", label: "XL", priceModifier: 2 }] },
+      { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 25 }] }
+    ];
+  }
+
+  if (template === "sticker") {
+    return [
+      { key: "material", label: "Material", type: "select", required: true, defaultValue: "weiss", options: [{ value: "weiss", label: "Weißfolie" }, { value: "transparent", label: "Transparente Folie", priceModifier: 5 }] },
+      { key: "form", label: "Form", type: "select", required: true, defaultValue: "rund", options: [{ value: "rund", label: "Rund" }, { value: "kontur", label: "Kontur", priceModifier: 7 }] },
+      { key: "haltbarkeit", label: "Haltbarkeit", type: "select", required: true, defaultValue: "innen", options: [{ value: "innen", label: "Innen" }, { value: "aussen", label: "Außen", priceModifier: 6 }] },
+      { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 19 }] }
+    ];
+  }
+
+  if (template === "marketing-service") {
+    return [
+      { key: "paket", label: "Paket", type: "select", required: true, defaultValue: "starter", options: [{ value: "starter", label: "Starter" }, { value: "pro", label: "Pro", priceModifier: 250 }] },
+      { key: "laufzeit", label: "Laufzeit", type: "select", required: true, defaultValue: "1", options: [{ value: "1", label: "1 Monat" }, { value: "3", label: "3 Monate", priceModifier: 500 }] },
+      { key: "kanal", label: "Kanal", type: "select", required: true, defaultValue: "social", options: [{ value: "social", label: "Social Media" }, { value: "seo", label: "SEO + Content", priceModifier: 180 }] }
+    ];
+  }
+
+  return [
+    { key: "material", label: "Material", type: "select", required: true, defaultValue: "bd-matt", options: [{ value: "bd-matt", label: "Bilderdruck matt" }, { value: "bd-glanz", label: "Bilderdruck glänzend" }, { value: "recycling", label: "Recyclingpapier", priceModifier: 3 }] },
+    { key: "grammatur", label: "Grammatur", type: "select", required: true, defaultValue: "170", options: [{ value: "135", label: "135 g/m²" }, { value: "170", label: "170 g/m²" }, { value: "250", label: "250 g/m²", priceModifier: 5 }] },
+    { key: "veredelung", label: "Veredelung", type: "select", required: true, defaultValue: "keine", options: [{ value: "keine", label: "Keine" }, { value: "softtouch", label: "Softtouch", priceModifier: 12 }, { value: "heissfolie", label: "Heißfolie Gold", priceModifier: 39 }] },
+    { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 19 }, { value: "sameday", label: "Same Day", priceModifier: 45 }] }
+  ];
 }
 
 function AdminPanel({ title, children }: { title: string; children: React.ReactNode }) {

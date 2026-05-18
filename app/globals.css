@@ -52,8 +52,14 @@ body {
 }
 
 .container-page {
-  width: min(1240px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 40px));
   margin-inline: auto;
+}
+
+@media (max-width: 640px) {
+  .container-page {
+    width: calc(100% - 32px);
+  }
 }
 
 .surface {

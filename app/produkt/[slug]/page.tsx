@@ -47,7 +47,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">{product.description}</p>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {["Automatischer Preflight", "Live Mockup Vorschau", "Nachbestellung mit einem Klick"].map((feature) => <div className="rounded-lg border p-5 font-bold" key={feature}>{feature}</div>)}
+            {[
+              "Automatischer Preflight mit DPI-, Pixel-, Dateigrößen- und Farbmodell-Checks",
+              "Live Mockup Vorschau mit technischen Messwerten",
+              "Nachbestellung mit einem Klick inklusive gespeicherter Konfiguration"
+            ].map((feature) => <div className="rounded-lg border p-5 font-bold" key={feature}>{feature}</div>)}
           </div>
         </div>
         <ProductConfigurator product={product} />

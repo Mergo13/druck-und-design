@@ -1,14 +1,252 @@
 {
   "categories": [
-    { "slug": "druckprodukte", "name": "Druckprodukte", "description": "Flyer, Karten, Broschüren und Geschäftsausstattung." },
-    { "slug": "werbetechnik", "name": "Werbetechnik", "description": "Banner, Schilder, Displays und POS-Systeme." },
-    { "slug": "kleidung-textilien", "name": "Kleidung & Textilien", "description": "Workwear, Teamwear und Merch im Textildruck." },
-    { "slug": "aufkleber", "name": "Aufkleber", "description": "Etiketten, Sticker und Folienlösungen." },
-    { "slug": "digitales-marketing", "name": "Digitales Marketing", "description": "Crossmedia-Assets und Kampagnenbegleitung." },
-    { "slug": "same-day", "name": "Same Day", "description": "Produktion am gleichen Tag für ausgewählte Produkte." },
-    { "slug": "direct-mailings", "name": "Direct Mailings", "description": "Adressierte Werbepost mit Druck + Versandabwicklung." }
+    {
+      "slug": "druckprodukte",
+      "name": "Druckprodukte",
+      "description": "Flyer, Karten, Broschüren und Geschäftsausstattung."
+    },
+    {
+      "slug": "werbetechnik",
+      "name": "Werbetechnik",
+      "description": "Banner, Schilder, Displays und POS-Systeme."
+    },
+    {
+      "slug": "kleidung-textilien",
+      "name": "Kleidung & Textilien",
+      "description": "Workwear, Teamwear und Merch im Textildruck."
+    },
+    {
+      "slug": "aufkleber",
+      "name": "Aufkleber",
+      "description": "Etiketten, Sticker und Folienlösungen."
+    },
+    {
+      "slug": "digitales-marketing",
+      "name": "Digitales Marketing",
+      "description": "Crossmedia-Assets und Kampagnenbegleitung."
+    },
+    {
+      "slug": "same-day",
+      "name": "Same Day",
+      "description": "Produktion am gleichen Tag für ausgewählte Produkte."
+    },
+    {
+      "slug": "direct-mailings",
+      "name": "Direct Mailings",
+      "description": "Adressierte Werbepost mit Druck + Versandabwicklung."
+    }
   ],
   "products": [
+    {
+      "slug": "Flyer",
+      "name": "Flyer",
+      "category": "druckprodukte",
+      "short": "Flyer für professionelle Printproduktion.",
+      "description": "Flyer mit konfigurierbaren Optionen und Produktionsworkflow.",
+      "seo": "Flyer online konfigurieren, prüfen und drucken lassen.",
+      "heroImage": "/uploads/products/1778260823325-0aolxogw.jpeg",
+      "gallery": [
+        "/uploads/products/1778260823325-0aolxogw.jpeg"
+      ],
+      "rating": 4.8,
+      "basePrice": 19,
+      "deliveryText": "2-5 Werktage",
+      "tags": [
+        "Neu"
+      ],
+      "variants": [
+        {
+          "id": "Flyer-standard",
+          "name": "Standard",
+          "skuPrefix": "FLYER",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [
+                {
+                  "value": "standard",
+                  "label": "Standard"
+                },
+                {
+                  "value": "express",
+                  "label": "Express",
+                  "priceModifier": 19
+                }
+              ]
+            }
+          ],
+          "quantityRule": {
+            "min": 1,
+            "max": 10000,
+            "step": 1
+          },
+          "priceRules": [
+            {
+              "key": "basis",
+              "label": "Basispreis",
+              "type": "fixed",
+              "amount": 19
+            },
+            {
+              "key": "auflage",
+              "label": "Auflagenfaktor",
+              "type": "per-unit",
+              "amount": 0.1
+            }
+          ]
+        }
+      ],
+      "production": {
+        "baseProductionDays": 3,
+        "expressAvailable": true,
+        "preflightProfile": "standard-print",
+        "renderPipeline": "pdf-x4"
+      }
+    },
+    {
+      "slug": "social-media-marketing",
+      "name": "social-media-marketing",
+      "category": "digitales-marketing",
+      "short": "social-media-marketing für professionelle Printproduktion.",
+      "description": "social-media-marketing mit konfigurierbaren Optionen und Produktionsworkflow.",
+      "seo": "social-media-marketing online konfigurieren, prüfen und drucken lassen.",
+      "heroImage": "/uploads/products/1778257346403-tpmya7og.jpeg",
+      "gallery": [
+        "/uploads/products/1778257346403-tpmya7og.jpeg"
+      ],
+      "rating": 4.8,
+      "basePrice": 499,
+      "deliveryText": "2-5 Werktage",
+      "tags": [
+        "Neu"
+      ],
+      "variants": [
+        {
+          "id": "social-media-marketing-standard",
+          "name": "Standard",
+          "skuPrefix": "SOCIAL-M",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [
+                {
+                  "value": "standard",
+                  "label": "Standard"
+                },
+                {
+                  "value": "express",
+                  "label": "Express",
+                  "priceModifier": 19
+                }
+              ]
+            }
+          ],
+          "quantityRule": {
+            "min": 1,
+            "max": 10000,
+            "step": 1
+          },
+          "priceRules": [
+            {
+              "key": "basis",
+              "label": "Basispreis",
+              "type": "fixed",
+              "amount": 499
+            },
+            {
+              "key": "auflage",
+              "label": "Auflagenfaktor",
+              "type": "per-unit",
+              "amount": 0.1
+            }
+          ]
+        }
+      ],
+      "production": {
+        "baseProductionDays": 3,
+        "expressAvailable": true,
+        "preflightProfile": "standard-print",
+        "renderPipeline": "pdf-x4"
+      }
+    },
+    {
+      "slug": "test",
+      "name": "test",
+      "category": "druckprodukte",
+      "short": "test für professionelle Printproduktion.",
+      "description": "test mit konfigurierbaren Optionen und Produktionsworkflow.",
+      "seo": "test online konfigurieren, prüfen und drucken lassen.",
+      "heroImage": "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80",
+      "gallery": [
+        "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "rating": 4.8,
+      "basePrice": 19,
+      "deliveryText": "2-5 Werktage",
+      "tags": [
+        "Neu"
+      ],
+      "variants": [
+        {
+          "id": "test-standard",
+          "name": "Standard",
+          "skuPrefix": "TEST",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [
+                {
+                  "value": "standard",
+                  "label": "Standard"
+                },
+                {
+                  "value": "express",
+                  "label": "Express",
+                  "priceModifier": 19
+                }
+              ]
+            }
+          ],
+          "quantityRule": {
+            "min": 1,
+            "max": 10000,
+            "step": 1
+          },
+          "priceRules": [
+            {
+              "key": "basis",
+              "label": "Basispreis",
+              "type": "fixed",
+              "amount": 19
+            },
+            {
+              "key": "auflage",
+              "label": "Auflagenfaktor",
+              "type": "per-unit",
+              "amount": 0.1
+            }
+          ]
+        }
+      ],
+      "production": {
+        "baseProductionDays": 3,
+        "expressAvailable": true,
+        "preflightProfile": "standard-print",
+        "renderPipeline": "pdf-x4"
+      }
+    },
     {
       "slug": "premium-flyer-a5",
       "name": "Premium Flyer DIN A5",
@@ -24,20 +262,518 @@
       "rating": 4.9,
       "basePrice": 24.9,
       "deliveryText": "ab morgen",
-      "tags": ["Bestseller", "Same Day"],
+      "tags": [
+        "Bestseller",
+        "Same Day"
+      ],
       "variants": [
         {
           "id": "flyer-standard",
           "name": "Standard Flyer",
           "skuPrefix": "FLY-A5",
           "attributes": [
-            { "key": "material", "label": "Material", "type": "select", "required": true, "defaultValue": "bd-matt", "options": [{ "value": "bd-matt", "label": "Bilderdruck matt" }] }
+            {
+              "key": "material",
+              "label": "Material",
+              "type": "select",
+              "required": true,
+              "defaultValue": "bd-matt",
+              "options": [
+                {
+                  "value": "bd-matt",
+                  "label": "Bilderdruck matt"
+                }
+              ]
+            }
           ],
-          "quantityRule": { "min": 100, "max": 10000, "step": 50 },
-          "priceRules": [{ "key": "basis", "label": "Basispreis", "type": "fixed", "amount": 24.9 }, { "key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.045 }]
+          "quantityRule": {
+            "min": 100,
+            "max": 10000,
+            "step": 50
+          },
+          "priceRules": [
+            {
+              "key": "basis",
+              "label": "Basispreis",
+              "type": "fixed",
+              "amount": 24.9
+            },
+            {
+              "key": "auflage",
+              "label": "Auflagenfaktor",
+              "type": "per-unit",
+              "amount": 0.045
+            }
+          ]
         }
       ],
-      "production": { "baseProductionDays": 3, "expressAvailable": true, "sameDayCutoff": "11:00", "preflightProfile": "standard-print", "renderPipeline": "pdf-x4" }
+      "production": {
+        "baseProductionDays": 3,
+        "expressAvailable": true,
+        "sameDayCutoff": "11:00",
+        "preflightProfile": "standard-print",
+        "renderPipeline": "pdf-x4"
+      }
+    },
+    {
+      "slug": "briefpapier",
+      "name": "Briefpapier",
+      "category": "druckprodukte",
+      "short": "Geschäftsbriefpapier mit sauberem Markenauftritt.",
+      "description": "Briefpapier in professioneller Qualität für Unternehmen, Kanzleien und Agenturen.",
+      "seo": "Briefpapier drucken mit professioneller Papierauswahl und schneller Lieferung.",
+      "heroImage": "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80",
+      "gallery": [
+        "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "rating": 4.8,
+      "basePrice": 29,
+      "deliveryText": "2-4 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "print-basic",
+      "variants": [
+        {
+          "id": "briefpapier-standard",
+          "name": "Standard",
+          "skuPrefix": "BRIEF",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 19}]
+            }
+          ],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 29}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.05}]
+        }
+      ],
+      "production": {"baseProductionDays": 3, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "faltblaetter",
+      "name": "Faltblätter",
+      "category": "druckprodukte",
+      "short": "Klassische Faltblätter für Aktionen und Produktinfos.",
+      "description": "Faltblätter in verschiedenen Formaten und Falzarten, ideal für Kampagnen und Messen.",
+      "seo": "Faltblätter drucken mit klarer Falz, brillantem Druck und schneller Produktion.",
+      "heroImage": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+      "gallery": [
+        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "rating": 4.8,
+      "basePrice": 34,
+      "deliveryText": "2-5 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "print-basic",
+      "variants": [
+        {
+          "id": "faltblaetter-standard",
+          "name": "Standard",
+          "skuPrefix": "FALT",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 19}]
+            }
+          ],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 34}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.06}]
+        }
+      ],
+      "production": {"baseProductionDays": 3, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "plakate",
+      "name": "Plakate",
+      "category": "druckprodukte",
+      "short": "Plakate für Event-, City- und POS-Kommunikation.",
+      "description": "Plakate in gängigen DIN-Formaten mit hoher Farbbrillanz für Innen und Außen.",
+      "seo": "Plakate drucken in Top-Qualität mit flexiblen Auflagen und Expressoption.",
+      "heroImage": "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80",
+      "gallery": [
+        "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "rating": 4.7,
+      "basePrice": 22,
+      "deliveryText": "2-4 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "print-basic",
+      "variants": [
+        {
+          "id": "plakate-standard",
+          "name": "Standard",
+          "skuPrefix": "PLAKAT",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 19}]
+            }
+          ],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 22}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.04}]
+        }
+      ],
+      "production": {"baseProductionDays": 2, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "visitenkarten",
+      "name": "Visitenkarten",
+      "category": "druckprodukte",
+      "short": "Premium-Visitenkarten für einen starken ersten Eindruck.",
+      "description": "Visitenkarten mit hochwertiger Haptik, Veredelung und sauberer Kantenqualität.",
+      "seo": "Visitenkarten drucken mit Premiumpapieren und optionaler Veredelung.",
+      "heroImage": "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80",
+      "gallery": [
+        "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "rating": 4.9,
+      "basePrice": 19,
+      "deliveryText": "2-4 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "print-basic",
+      "variants": [
+        {
+          "id": "visitenkarten-standard",
+          "name": "Standard",
+          "skuPrefix": "VISIT",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 19}]
+            }
+          ],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 19}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.03}]
+        }
+      ],
+      "production": {"baseProductionDays": 3, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "magazine",
+      "name": "Magazine",
+      "category": "druckprodukte",
+      "short": "Magazine und Periodika mit professioneller Bindung.",
+      "description": "Magazine in hochwertigem Druck für Corporate Publishing, Kundenmagazine und Reports.",
+      "seo": "Magazine drucken mit präzisem Druckbild und zuverlässiger Produktion.",
+      "heroImage": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1200&q=80",
+      "gallery": [
+        "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1200&q=80"
+      ],
+      "rating": 4.7,
+      "basePrice": 79,
+      "deliveryText": "4-6 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "print-basic",
+      "variants": [
+        {
+          "id": "magazine-standard",
+          "name": "Standard",
+          "skuPrefix": "MAGAZIN",
+          "attributes": [
+            {
+              "key": "lieferzeit",
+              "label": "Lieferzeit",
+              "type": "select",
+              "required": true,
+              "defaultValue": "standard",
+              "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 29}]
+            }
+          ],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 79}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.08}]
+        }
+      ],
+      "production": {"baseProductionDays": 5, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "messewand-system",
+      "name": "Messewand System",
+      "category": "werbetechnik",
+      "short": "Modulare Messewand für ein klares Markenbild.",
+      "description": "Leichtes und stabiles System für Messen, Showrooms und Roadshows mit schnellem Aufbau.",
+      "seo": "Messewand drucken und konfigurieren für Events mit professioneller Wirkung.",
+      "heroImage": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.8,
+      "basePrice": 249,
+      "deliveryText": "3-5 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "large-format",
+      "variants": [
+        {
+          "id": "messewand-standard",
+          "name": "Standard",
+          "skuPrefix": "MESSE",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 29}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 249}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 1.5}]
+        }
+      ],
+      "production": {"baseProductionDays": 4, "expressAvailable": true, "preflightProfile": "large-format", "renderPipeline": "vector-first"}
+    },
+    {
+      "slug": "leuchtrahmen-led",
+      "name": "Leuchtrahmen LED",
+      "category": "werbetechnik",
+      "short": "Beleuchtete Werbefläche mit hoher Sichtbarkeit.",
+      "description": "LED-Leuchtrahmen für Stores, Offices und Messeflächen im cleanen Zukunftslook.",
+      "seo": "Leuchtrahmen drucken und konfigurieren für moderne Werbetechnik.",
+      "heroImage": "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.7,
+      "basePrice": 319,
+      "deliveryText": "4-6 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "large-format",
+      "variants": [
+        {
+          "id": "leuchtrahmen-standard",
+          "name": "Standard",
+          "skuPrefix": "LED",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 29}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 319}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 1.8}]
+        }
+      ],
+      "production": {"baseProductionDays": 5, "expressAvailable": true, "preflightProfile": "large-format", "renderPipeline": "vector-first"}
+    },
+    {
+      "slug": "performance-shirt",
+      "name": "Performance Shirt",
+      "category": "kleidung-textilien",
+      "short": "Funktionales Teamshirt für aktive Einsätze.",
+      "description": "Leichtes, atmungsaktives Shirt mit langlebigem Druck für Teams, Events und Workwear.",
+      "seo": "Performance Shirts im Textildruck konfigurieren und bestellen.",
+      "heroImage": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.8,
+      "basePrice": 18,
+      "deliveryText": "4-7 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "textile",
+      "variants": [
+        {
+          "id": "performance-shirt-standard",
+          "name": "Standard",
+          "skuPrefix": "PSHIRT",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 25}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 18}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.2}]
+        }
+      ],
+      "production": {"baseProductionDays": 5, "expressAvailable": true, "preflightProfile": "textile", "renderPipeline": "dtf-textile"}
+    },
+    {
+      "slug": "team-hoodie",
+      "name": "Team Hoodie",
+      "category": "kleidung-textilien",
+      "short": "Premium Hoodie für Teams und Brandwear.",
+      "description": "Warmer Hoodie mit modernem Schnitt für Unternehmen, Creator-Merch und Corporate Teams.",
+      "seo": "Team Hoodie im Textildruck konfigurieren mit Größenmix und Expressoption.",
+      "heroImage": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.9,
+      "basePrice": 39,
+      "deliveryText": "5-8 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "textile",
+      "variants": [
+        {
+          "id": "team-hoodie-standard",
+          "name": "Standard",
+          "skuPrefix": "HOODIE",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 25}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 39}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.35}]
+        }
+      ],
+      "production": {"baseProductionDays": 6, "expressAvailable": true, "preflightProfile": "textile", "renderPipeline": "dtf-textile"}
+    },
+    {
+      "slug": "kontur-aufkleber-pro",
+      "name": "Kontur-Aufkleber Pro",
+      "category": "aufkleber",
+      "short": "Freiform-Sticker für Brand- und Produktflächen.",
+      "description": "Konturgeschnittene Aufkleber in robuster Qualität für Innen- und Außeneinsatz.",
+      "seo": "Kontur-Aufkleber drucken lassen mit flexiblen Mengen und schneller Lieferung.",
+      "heroImage": "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.8,
+      "basePrice": 29,
+      "deliveryText": "2-4 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "sticker",
+      "variants": [
+        {
+          "id": "kontur-aufkleber-pro-standard",
+          "name": "Standard",
+          "skuPrefix": "STICKER",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 19}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 29}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.05}]
+        }
+      ],
+      "production": {"baseProductionDays": 3, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "bodenaufkleber",
+      "name": "Bodenaufkleber",
+      "category": "aufkleber",
+      "short": "Rutschfeste Bodenaufkleber für Wegeführung und Aktionen.",
+      "description": "Strapazierfähige Bodenaufkleber für Retail, Messen und Leitsysteme.",
+      "seo": "Bodenaufkleber online konfigurieren mit robustem Material und Expressoption.",
+      "heroImage": "https://images.unsplash.com/photo-1556740738-b6a63e27c4df?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1556740738-b6a63e27c4df?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.7,
+      "basePrice": 36,
+      "deliveryText": "3-5 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "sticker",
+      "variants": [
+        {
+          "id": "bodenaufkleber-standard",
+          "name": "Standard",
+          "skuPrefix": "BODEN",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 19}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 36}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.06}]
+        }
+      ],
+      "production": {"baseProductionDays": 4, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "seo-content-paket",
+      "name": "SEO Content Paket",
+      "category": "digitales-marketing",
+      "short": "Content-Setup für Reichweite und saubere Struktur.",
+      "description": "SEO-Basispaket mit Seitenstruktur, Keywords und Conversion-orientierten Texten.",
+      "seo": "SEO Content Paket als digitales Marketingprodukt konfigurieren.",
+      "heroImage": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.8,
+      "basePrice": 690,
+      "deliveryText": "5-7 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "marketing-service",
+      "variants": [
+        {
+          "id": "seo-content-paket-standard",
+          "name": "Standard",
+          "skuPrefix": "SEO",
+          "attributes": [{"key": "paket", "label": "Paket", "type": "select", "required": true, "defaultValue": "starter", "options": [{"value": "starter", "label": "Starter"}, {"value": "pro", "label": "Pro", "priceModifier": 250}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 690}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0}]
+        }
+      ],
+      "production": {"baseProductionDays": 5, "expressAvailable": true, "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "same-day-flyer",
+      "name": "Same Day Flyer",
+      "category": "same-day",
+      "short": "Flyerproduktion am selben Tag.",
+      "description": "Für zeitkritische Kampagnen mit priorisierter Verarbeitung und schneller Bereitstellung.",
+      "seo": "Same Day Flyer online konfigurieren und am gleichen Tag produzieren.",
+      "heroImage": "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.9,
+      "basePrice": 59,
+      "deliveryText": "heute",
+      "tags": ["Same Day"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "print-basic",
+      "variants": [
+        {
+          "id": "same-day-flyer-standard",
+          "name": "Standard",
+          "skuPrefix": "SDAY",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "sameday", "options": [{"value": "sameday", "label": "Same Day"}, {"value": "express", "label": "Express", "priceModifier": 19}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 59}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.08}]
+        }
+      ],
+      "production": {"baseProductionDays": 1, "expressAvailable": true, "sameDayCutoff": "11:00", "preflightProfile": "standard-print", "renderPipeline": "pdf-x4"}
+    },
+    {
+      "slug": "postkarten-mailing",
+      "name": "Postkarten Mailing",
+      "category": "direct-mailings",
+      "short": "Adressierte Postkartenkampagne aus einer Hand.",
+      "description": "Druck, Adresshandling und Versand für effiziente Direktmarketing-Kampagnen.",
+      "seo": "Postkarten Mailing konfigurieren mit Druck und Versandprozess.",
+      "heroImage": "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.8,
+      "basePrice": 129,
+      "deliveryText": "3-6 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "marketing-service",
+      "variants": [
+        {
+          "id": "postkarten-mailing-standard",
+          "name": "Standard",
+          "skuPrefix": "MAIL",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 29}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 129}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.12}]
+        }
+      ],
+      "production": {"baseProductionDays": 4, "expressAvailable": true, "preflightProfile": "mailing", "renderPipeline": "mailing-batch"}
+    },
+    {
+      "slug": "selfmailer-kampagne",
+      "name": "Selfmailer Kampagne",
+      "category": "direct-mailings",
+      "short": "Gefaltete Mailings mit personalisiertem Versand.",
+      "description": "Selfmailer-Produktion inklusive Datenaufbereitung, Druck und postalischer Aussteuerung.",
+      "seo": "Selfmailer Kampagne für Direct Mailings online konfigurieren.",
+      "heroImage": "https://images.unsplash.com/photo-1474631245212-32dc3c8310c6?auto=format&fit=crop&w=1200&q=80",
+      "gallery": ["https://images.unsplash.com/photo-1474631245212-32dc3c8310c6?auto=format&fit=crop&w=1200&q=80"],
+      "rating": 4.7,
+      "basePrice": 149,
+      "deliveryText": "4-7 Werktage",
+      "tags": ["Neu"],
+      "quantitySteps": [1, 10, 25, 50, 100, 1000, 2000, 5000],
+      "propertyTemplate": "marketing-service",
+      "variants": [
+        {
+          "id": "selfmailer-kampagne-standard",
+          "name": "Standard",
+          "skuPrefix": "SELF",
+          "attributes": [{"key": "lieferzeit", "label": "Lieferzeit", "type": "select", "required": true, "defaultValue": "standard", "options": [{"value": "standard", "label": "Standard"}, {"value": "express", "label": "Express", "priceModifier": 29}]}],
+          "quantityRule": {"min": 1, "max": 5000, "step": 1},
+          "priceRules": [{"key": "basis", "label": "Basispreis", "type": "fixed", "amount": 149}, {"key": "auflage", "label": "Auflagenfaktor", "type": "per-unit", "amount": 0.14}]
+        }
+      ],
+      "production": {"baseProductionDays": 5, "expressAvailable": true, "preflightProfile": "mailing", "renderPipeline": "mailing-batch"}
     }
   ]
 }

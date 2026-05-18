@@ -38,9 +38,9 @@ export function ShopBrowser({ initialCategory, categories, products }: { initial
         <div className="flex flex-col gap-3 rounded-lg border bg-white p-4 shadow-soft md:flex-row md:items-center">
           <div className="flex flex-1 items-center gap-2 rounded-md border px-3">
             <Search className="h-4 w-4 text-muted-foreground" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 flex-1 text-sm outline-none" placeholder="Produkt, Material oder Anwendung suchen" />
+            <input suppressHydrationWarning value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 flex-1 text-sm outline-none" placeholder="Produkt, Material oder Anwendung suchen" />
           </div>
-          <select value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-md border bg-white px-3 text-sm">
+          <select suppressHydrationWarning value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-md border bg-white px-3 text-sm">
             <option value="beliebt">Beliebtheit</option>
             <option value="preis">Preis aufsteigend</option>
           </select>

@@ -1,10 +1,32 @@
 import Link from "next/link";
 
-const cols = [
-  ["Shop", "Flyer drucken", "Visitenkarten", "Broschüren", "Textildruck", "Aufkleber"],
-  ["Service", "Druckdatencheck", "Express Produktion", "Reorder System", "Versand & Lieferung", "FAQ"],
-  ["Unternehmen", "Über Uns", "Kontakt", "News", "Karriere", "Nachhaltigkeit"],
-  ["Rechtliches", "Impressum", "Datenschutz", "AGB", "Widerruf", "Zahlarten"]
+const cols: Array<Array<{ label: string; href: string }>> = [
+  [
+    { label: "Produkte", href: "/shop" },
+    { label: "Druckprodukte", href: "/shop" },
+    { label: "Werbetechnik", href: "/werbetechnik" },
+    { label: "Textildruck", href: "/textildruck" },
+    { label: "Aufkleber", href: "/aufkleber" }
+  ],
+  [
+    { label: "Service", href: "/faq" },
+    { label: "Druckdaten", href: "/faq" },
+    { label: "Express", href: "/shop?kategorie=same-day" },
+    { label: "Versand", href: "/versand-lieferung" },
+    { label: "FAQ", href: "/faq" }
+  ],
+  [
+    { label: "Studio", href: "/ueber-uns" },
+    { label: "Über Uns", href: "/ueber-uns" },
+    { label: "Kontakt", href: "/kontakt" },
+    { label: "News", href: "/news" }
+  ],
+  [
+    { label: "Rechtliches", href: "/impressum" },
+    { label: "Impressum", href: "/impressum" },
+    { label: "Datenschutz", href: "/datenschutz" },
+    { label: "AGB", href: "/agb" }
+  ]
 ];
 
 export function Footer() {
@@ -17,10 +39,10 @@ export function Footer() {
         </div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {cols.map((col) => (
-            <div key={col[0]}>
-              <h3 className="font-bold">{col[0]}</h3>
+            <div key={col[0].label}>
+              <h3 className="font-bold">{col[0].label}</h3>
               <div className="mt-4 grid gap-2">
-                {col.slice(1).map((item) => <Link className="text-sm text-white/65 hover:text-white" href={`/${item.toLowerCase().replaceAll(" ", "-")}`} key={item}>{item}</Link>)}
+                {col.slice(1).map((item) => <Link className="text-sm text-white/65 hover:text-white" href={item.href} key={`${item.label}-${item.href}`}>{item.label}</Link>)}
               </div>
             </div>
           ))}
