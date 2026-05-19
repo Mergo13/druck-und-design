@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, ArrowUpToLine, CheckCircle2, Copy, Download, FileCheck, ImagePlus, Layers3, Minus, Plus, Ruler, Sparkles, Trash2, Type, XCircle } from "lucide-react";
+import { ArrowDownToLine, ArrowUpToLine, CheckCircle2, Copy, Download, Expand, FileCheck, ImagePlus, Layers3, Minus, Plus, Ruler, Sparkles, Trash2, Type, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Layer, Rect, Stage, Text, Transformer, Image as KonvaImage } from "react-konva";
 import type Konva from "konva";
@@ -66,6 +66,16 @@ export function DesignAssistant() {
   const [preflightMessage, setPreflightMessage] = useState("Keine Datei geprüft.");
   const [preflightDetails, setPreflightDetails] = useState<Array<{ code: string; label: string; passed: boolean; hint?: string }>>([]);
   const [zoom, setZoom] = useState(0.7);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  function fitToScreen() {
+    if (!containerRef.current) return;
+    const padding = 40;
+    const containerWidth = containerRef.current.offsetWidth - padding;
+    const containerHeight = containerRef.current.offsetHeight - padding;
+    const scale = Math.min(containerWidth / canvasSize.width, containerHeight / canvasSize.height);
+    setZoom(Number(Math.min(1.2, scale).toFixed(2)));
+  }
   const [printFormat, setPrintFormat] = useState("DIN A5");
   const [bleedMm, setBleedMm] = useState(3);
   const [dpiTarget, setDpiTarget] = useState(300);
@@ -109,7 +119,7 @@ export function DesignAssistant() {
   function addImageFromFile(file?: File) {
     if (!file) return;
     const fileName = file.name.toLowerCase();
-    const isImage = file.type.startsWith("image/") || ["png", "jpg", "jpeg", "tif", "tiff", "webp"].some(ext => fileName.endsWith(ext));
+    const isImage = file.type.startsWith("image/") || ["png", "jpg", "jpeg", "tif", "tiff", "webp", "svg", "eps"].some(ext => fileName.endsWith(ext));
     if (!isImage) return;
 
     const reader = new FileReader();
@@ -202,8 +212,8 @@ export function DesignAssistant() {
           <h1 className="mt-2 text-4xl font-black">Web-to-Print Editor</h1>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[300px_1fr_320px]">
-          <aside className="h-fit rounded-lg border bg-white p-5 shadow-soft">
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px] xl:grid-cols-[300px_1fr_320px]">
+          <aside className="h-fit rounded-lg border bg-white p-5 shadow-soft lg:order-2 xl:order-1">
             <h2 className="text-lg font-black">Werkzeuge</h2>
             <div className="mt-4 grid gap-2">
               <Button variant="outline" onClick={addTextLayer}><Type className="h-4 w-4" /> Text hinzufügen</Button>
@@ -277,12 +287,13 @@ export function DesignAssistant() {
 
           </aside>
 
-          <div className="rounded-lg border bg-white p-4 shadow-premium">
+          <div ref={containerRef} className="rounded-lg border bg-white p-4 shadow-premium lg:order-1 xl:order-2">
             <div className="mb-3 flex items-center justify-between rounded-lg border bg-slate-50 px-3 py-2">
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setZoom((current) => Math.max(0.3, Number((current - 0.1).toFixed(2))))}><Minus className="h-4 w-4" /></Button>
                 <span className="w-14 text-center text-sm font-semibold">{Math.round(zoom * 100)}%</span>
                 <Button size="sm" variant="outline" onClick={() => setZoom((current) => Math.min(1.6, Number((current + 0.1).toFixed(2))))}><Plus className="h-4 w-4" /></Button>
+                <Button size="sm" variant="ghost" className="hidden sm:flex" onClick={fitToScreen}><Expand className="h-4 w-4" /> Einpassen</Button>
               </div>
               <p className="text-xs text-slate-500">Arbeitsfläche: {canvasSize.width} x {canvasSize.height} px</p>
             </div>
@@ -338,7 +349,7 @@ export function DesignAssistant() {
             </div>
           </div>
 
-          <aside className="h-fit rounded-lg border bg-white p-5 shadow-soft">
+          <aside className="h-fit rounded-lg border bg-white p-5 shadow-soft lg:order-3">
             <h2 className="text-lg font-black">Dokument</h2>
             <div className="mt-4 grid gap-2">
               <label className="text-sm font-bold">Format</label>

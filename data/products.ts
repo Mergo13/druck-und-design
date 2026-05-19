@@ -6,7 +6,8 @@ export const categories: Category[] = [
   { slug: "broschueren", name: "Broschüren", description: "Magazine, Kataloge und Preislisten für hochwertige Markenauftritte.", icon: "BookOpen" },
   { slug: "textildruck", name: "Textildruck", description: "Shirts, Hoodies und Arbeitskleidung mit langlebigem Druck.", icon: "Shirt" },
   { slug: "aufkleber", name: "Aufkleber", description: "Etiketten, Sticker und Folien für Innen und Außen.", icon: "Sticker" },
-  { slug: "werbetechnik", name: "Werbetechnik", description: "Roll-ups, Schilder, Banner und Displays für maximale Sichtbarkeit.", icon: "PanelTop" }
+  { slug: "werbetechnik", name: "Werbetechnik", description: "Roll-ups, Schilder, Banner und Displays für maximale Sichtbarkeit.", icon: "PanelTop" },
+  { slug: "copyshop", name: "Copyshop", description: "Bindungen, Laminierungen und Schnelldrucke für Dokumente.", icon: "Printer" }
 ];
 
 export const products: Product[] = [
@@ -16,7 +17,7 @@ export const products: Product[] = [
     category: "flyer-drucken",
     short: "Matte, glänzende oder recycelte Flyer ab 25 Stück.",
     description: "Ideal für Aktionen, Events und lokale Kampagnen. Wählbar mit Softtouch, partieller Lackierung und Express-Produktion.",
-    priceFrom: 24.9,
+    priceFrom: 26.15,
     rating: 4.9,
     delivery: "ab morgen",
     tags: ["Bestseller", "Same Day"],
@@ -34,7 +35,7 @@ export const products: Product[] = [
     category: "visitenkarten",
     short: "Stabile Karten mit optionaler Heißfolie oder Letterpress-Effekt.",
     description: "Für Teams, Gründer und Agenturen, die sich professionell und wiedererkennbar präsentieren möchten.",
-    priceFrom: 19.5,
+    priceFrom: 20.48,
     rating: 4.8,
     delivery: "2-4 Werktage",
     tags: ["Premium", "Veredelung"],
@@ -52,7 +53,7 @@ export const products: Product[] = [
     category: "broschueren",
     short: "Geklammerte oder klebegebundene Broschüren für Marken und Vertrieb.",
     description: "Präsentieren Sie Leistungen, Produkte und Referenzen in einer hochwertigen Broschüre mit sauberer Bindung.",
-    priceFrom: 89,
+    priceFrom: 93.45,
     rating: 4.7,
     delivery: "4-6 Werktage",
     tags: ["B2B", "Katalog"],
@@ -70,7 +71,7 @@ export const products: Product[] = [
     category: "textildruck",
     short: "Textildruck für Teams, Events und Workwear.",
     description: "Robuste Baumwoll- und Performance-Textilien mit Siebdruck, DTF oder Stick.",
-    priceFrom: 12.9,
+    priceFrom: 13.55,
     rating: 4.9,
     delivery: "5-8 Werktage",
     tags: ["Textil", "Teams"],
@@ -88,7 +89,7 @@ export const products: Product[] = [
     category: "aufkleber",
     short: "Freiform-Sticker auf Bogen oder Rolle, wetterfest und brillant.",
     description: "Perfekt für Verpackung, Aktionen, Branding und Produktkennzeichnung im Innen- und Außenbereich.",
-    priceFrom: 34.9,
+    priceFrom: 36.65,
     rating: 4.8,
     delivery: "3-5 Werktage",
     tags: ["Wetterfest", "Freiform"],
@@ -106,7 +107,7 @@ export const products: Product[] = [
     category: "werbetechnik",
     short: "Stabiles Displaysystem mit brillanter Druckbahn und Tragetasche.",
     description: "Für Messen, Empfangsbereiche und Präsentationen mit zuverlässiger Mechanik.",
-    priceFrom: 79,
+    priceFrom: 82.95,
     rating: 4.6,
     delivery: "2-3 Werktage",
     tags: ["Messe", "Express"],
@@ -117,6 +118,76 @@ export const products: Product[] = [
       "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=1200&q=80",
       "https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1200&q=80"
     ]
+  },
+  {
+    slug: "alu-dibond-schilder",
+    name: "Alu-Dibond Schilder",
+    category: "werbetechnik",
+    short: "Wetterfeste Verbundplatten für Firmenschilder und Fassaden.",
+    description: "Stabil, leicht und extrem langlebig. Ideal für den Außenbereich und hochwertige Präsentationen.",
+    priceFrom: 47.25,
+    rating: 4.9,
+    delivery: "3-4 Werktage",
+    tags: ["Outdoor", "Premium"],
+    seo: "Alu-Dibond Schilder drucken lassen für Firmen, Werbung und Fassaden.",
+    image: "https://images.unsplash.com/photo-1541462608141-ad60397d4574?auto=format&fit=crop&w=1200&q=80",
+    gallery: ["https://images.unsplash.com/photo-1541462608141-ad60397d4574?auto=format&fit=crop&w=1200&q=80"]
+  },
+  {
+    slug: "acrylglas-schilder",
+    name: "Acrylglas Schilder",
+    category: "werbetechnik",
+    short: "Edle Optik mit Tiefenwirkung für Kanzleien und Praxen.",
+    description: "Hochglänzendes Acrylglas with rückseitigem UV-Druck für brillante Farben und Schutz.",
+    priceFrom: 61.95,
+    rating: 4.8,
+    delivery: "4-5 Werktage",
+    tags: ["High-End", "Innenbereich"],
+    seo: "Acrylglas Schilder online bestellen mit polierten Kanten und Abstandshaltern.",
+    image: "https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=1200&q=80",
+    gallery: ["https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=1200&q=80"]
+  },
+  {
+    slug: "spiralbindung",
+    name: "Spiralbindung",
+    category: "copyshop",
+    short: "Professionelle Wire-O oder Plastikbindung für Skripte und Berichte.",
+    description: "Ideal für Handbücher, Präsentationen und Hausarbeiten. Wahlweise mit Deckfolie und Rückenkarton.",
+    priceFrom: 4.73,
+    rating: 4.9,
+    delivery: "Same Day möglich",
+    tags: ["Express", "Dokumente"],
+    seo: "Spiralbindung online bestellen für Skripte, Thesis und Berichte.",
+    image: "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1200&q=80",
+    gallery: ["https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1200&q=80"]
+  },
+  {
+    slug: "laminierung",
+    name: "Laminierung",
+    category: "copyshop",
+    short: "Heißlaminierung von A6 bis A3 für Schutz und Haltbarkeit.",
+    description: "Schützt Ihre Dokumente vor Schmutz, Feuchtigkeit und Abnutzung. Reißfest und abwischbar.",
+    priceFrom: 1.58,
+    rating: 4.7,
+    delivery: "Sofort",
+    tags: ["Schutz", "Schnell"],
+    seo: "Dokumente laminieren lassen in A4 und A3 für Gastro, Handwerk und Büro.",
+    image: "https://images.unsplash.com/photo-1586075010633-2a44ed67805a?auto=format&fit=crop&w=1200&q=80",
+    gallery: ["https://images.unsplash.com/photo-1586075010633-2a44ed67805a?auto=format&fit=crop&w=1200&q=80"]
+  },
+  {
+    slug: "hardcover-bindung",
+    name: "Hardcover-Bindung",
+    category: "copyshop",
+    short: "Edle Bindung für Abschlussarbeiten und Chroniken.",
+    description: "Hochwertige Klebebindung mit festem Einband, optional mit Gold- oder Silberprägung.",
+    priceFrom: 15.75,
+    rating: 4.9,
+    delivery: "1-2 Werktage",
+    tags: ["Premium", "Thesis"],
+    seo: "Bachelorarbeit oder Masterarbeit binden lassen mit Hardcover und Prägung.",
+    image: "https://images.unsplash.com/photo-1589998059171-988d887df646?auto=format&fit=crop&w=1200&q=80",
+    gallery: ["https://images.unsplash.com/photo-1589998059171-988d887df646?auto=format&fit=crop&w=1200&q=80"]
   }
 ];
 

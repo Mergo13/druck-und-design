@@ -3,23 +3,20 @@ import Link from "next/link";
 const cols: Array<Array<{ label: string; href: string }>> = [
   [
     { label: "Produkte", href: "/shop" },
-    { label: "Druckprodukte", href: "/shop" },
-    { label: "Werbetechnik", href: "/werbetechnik" },
-    { label: "Textildruck", href: "/textildruck" },
-    { label: "Aufkleber", href: "/aufkleber" }
+    { label: "Druckservice", href: "/druckservice" },
+    { label: "Werbeagentur", href: "/werbeagentur" },
+    { label: "Werbetechnik", href: "/werbetechnik" }
   ],
   [
     { label: "Service", href: "/faq" },
     { label: "Druckdaten", href: "/faq" },
-    { label: "Express", href: "/shop?kategorie=same-day" },
     { label: "Versand", href: "/versand-lieferung" },
     { label: "FAQ", href: "/faq" }
   ],
   [
     { label: "Studio", href: "/ueber-uns" },
     { label: "Über Uns", href: "/ueber-uns" },
-    { label: "Kontakt", href: "/kontakt" },
-    { label: "News", href: "/news" }
+    { label: "Kontakt", href: "/kontakt" }
   ],
   [
     { label: "Rechtliches", href: "/impressum" },
@@ -34,8 +31,8 @@ export function Footer() {
     <footer className="mt-20 border-t bg-slate-950 text-white">
       <div className="container-page grid gap-10 py-14 md:grid-cols-[1.2fr_2fr]">
         <div>
-          <div className="flex items-center gap-2 text-xl font-black"><span className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-950">D</span>DUD Studio Print</div>
-          <p className="mt-4 max-w-sm text-sm leading-6 text-white/65">Premium Online-Druckerei für Unternehmen, Agenturen und Teams mit smarter Konfiguration, Datenprüfung und zuverlässiger Produktion in Europa.</p>
+          <div className="flex items-center gap-2 text-xl font-black"><span className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-950">V</span>Vision L&T</div>
+          <p className="mt-4 max-w-sm text-sm leading-6 text-white/65">Ihr Partner für Druckproduktion, Werbetechnik und Design. Digital, präzise und zuverlässig aus Wels.</p>
         </div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {cols.map((col) => (

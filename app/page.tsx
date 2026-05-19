@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Factory, Layers3, ShieldCheck, Sparkles, Workflow } from "lucide-react";
+import { ArrowRight, CheckCircle2, Factory, Layers3, Printer, ShieldCheck, Sparkles, Workflow } from "lucide-react";
 import { HeroSlideshow } from "@/components/home/hero-slideshow";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,11 @@ import { getCategories, getProducts } from "@/lib/catalog-repository";
 
 export default async function HomePage() {
   const [platformCategories, productCatalog] = await Promise.all([getCategories(), getProducts()]);
-  const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }> = [
-    { icon: Layers3, title: "Konfiguration", text: "Varianten, Attribute, Auflage und Preislogik live berechnen." },
-    { icon: ShieldCheck, title: "Druckdatenprüfung", text: "Preflight-Regeln für Format, Auflösung, Beschnitt und Exportprofil." },
-    { icon: Factory, title: "Produktionspipeline", text: "Automations-Jobs für Render, ERP-Sync, Nextcloud und Versand." }
-  ];
+const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }> = [
+  { icon: Layers3, title: "Konfiguration", text: "Varianten, Attribute, Auflage und Preislogik live berechnen." },
+  { icon: ShieldCheck, title: "Druckdatenprüfung", text: "KI-gestützte Prüfung von Format, Auflösung und Beschnitt." },
+  { icon: Factory, title: "Produktionspipeline", text: "Automatisierte Fertigung in Wels mit modernster Technik." }
+];
 
   return (
     <>
@@ -21,10 +21,10 @@ export default async function HomePage() {
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-brand-blue/15 bg-white px-4 py-2 text-sm font-bold text-brand-blue shadow-soft">
               <Sparkles className="h-4 w-4 text-brand-cyan" />
-              AI Web-to-Print Plattform
+              Vision L&T – Druck & Design
             </span>
-            <h1 className="mt-7 text-5xl font-black leading-[1.03] text-brand-ink md:text-7xl">Druckproduktion neu gedacht. Digital, präzise, skalierbar.</h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Konfiguration, Datenprüfung, Design-Editor und Produktionsworkflow in einer modernen Plattform für professionelle Druckaufträge.</p>
+            <h1 className="mt-7 text-5xl font-black leading-[1.03] text-brand-ink md:text-7xl">Ihre Ideen in Bestform. Präzise, Schnell, Visionär.</h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Wir sind Ihre Full-Service Werbeagentur und Druckerei in Wels. Von der Corporate Identity bis zum fertigen Printprodukt – alles aus einer Hand.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-brand-blue hover:bg-[#2d70b6]">
                 <Link href="/shop">Jetzt konfigurieren <ArrowRight className="h-4 w-4" /></Link>
@@ -37,21 +37,53 @@ export default async function HomePage() {
       </section>
 
       <section className="container-page py-16">
-        <SectionHeading eyebrow="Kategorien" title="Alle Kernbereiche für Ihre Print- und Marketingprozesse" description="Von Druckprodukten über Werbetechnik bis Direct Mailings: modular aufgebaut für skalierbare Produktion." />
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {platformCategories.map((category) => (
-            <Link href={`/${category.slug}`} key={category.slug} className="rounded-lg border bg-white p-5 transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-premium">
-              <h3 className="text-lg font-black">{category.name}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
-            </Link>
-          ))}
+        <SectionHeading eyebrow="Dienstleistungen" title="Professionelle Lösungen für Ihren Erfolg" description="Vom ersten Entwurf bis zum fertigen Produkt – wir begleiten Sie mit Expertise und Leidenschaft." />
+        <div className="mt-8 grid gap-6 sm:grid-cols-3">
+          <Link href="/druckservice" className="group rounded-2xl border bg-white p-8 transition-all hover:border-brand-blue/30 hover:shadow-premium">
+            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-mist text-brand-blue transition-colors group-hover:bg-brand-blue group-hover:text-white">
+              <Printer className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-black">Druckservice</h3>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">High-End Printlösungen, Broschüren und Geschäftsausstattung in Spitzenqualität.</p>
+            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
+              Portfolio ansehen <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
+          <Link href="/werbetechnik" className="group rounded-2xl border bg-white p-8 transition-all hover:border-brand-blue/30 hover:shadow-premium">
+            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-mist text-brand-blue transition-colors group-hover:bg-brand-blue group-hover:text-white">
+              <Layers3 className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-black">Werbetechnik</h3>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">Sichtbarkeit auf jedem Format: Banner, Schilder und Fahrzeugbeklebung.</p>
+            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
+              Projekte entdecken <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
+          <Link href="/werbeagentur" className="group rounded-2xl border bg-white p-8 transition-all hover:border-brand-blue/30 hover:shadow-premium">
+            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-mist text-brand-blue transition-colors group-hover:bg-brand-blue group-hover:text-white">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <h3 className="text-xl font-black">Werbeagentur</h3>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">Kreative Konzepte, Logo-Design und strategisches Marketing für Ihre Marke.</p>
+            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
+              Referenzen ansehen <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
         </div>
       </section>
 
       <section className="bg-brand-mist py-16">
         <div className="container-page">
-          <SectionHeading eyebrow="Bestseller" title="Produkte für tägliche B2B-Aufträge" />
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
+          <SectionHeading eyebrow="Shop" title="Produkte direkt online konfigurieren" description="Wählen Sie aus unserem Standardsortiment und erhalten Sie sofort Preis und Lieferzeit." />
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {platformCategories.slice(0, 4).map((category) => (
+              <Link href={`/${category.slug}`} key={category.slug} className="rounded-lg border bg-white p-5 transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-premium">
+                <h3 className="text-lg font-black">{category.name}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
+              </Link>
+            ))}
+          </div>
+          <div className="mt-12 grid gap-6 md:grid-cols-2">
             {productCatalog.map((product) => <ProductCard key={product.slug} product={product} />)}
           </div>
         </div>

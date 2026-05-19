@@ -4,7 +4,7 @@ import { ContactForm } from "@/features/contact/contact-form";
 
 export default function ContactPage() {
   const supportCards: Array<[LucideIcon, string, string, string]> = [
-    [Phone, "Telefon", "+49 30 120 88 44", "Mo-Fr 8:00-18:00 Uhr"],
+    [Phone, "Telefon", "+43 (0) 7242 63 2 39", "Mo-Do 8:00-18:00, Fr 8:00-14:00 Uhr"],
     [Mail, "E-Mail", "service@dud-print.de", "Antwort meist am selben Werktag"],
     [MessageCircle, "WhatsApp", "Direktchat starten", "Für schnelle Rückfragen"],
     [MapPin, "Showroom", "Print Campus Berlin", "Termin nach Vereinbarung"]

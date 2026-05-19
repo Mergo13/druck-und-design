@@ -18,7 +18,7 @@ export function runMockPreflight(
 ): FileCheckResult {
   const lower = filename.toLowerCase();
   const extension = lower.includes(".") ? lower.split(".").pop() ?? "unknown" : "unknown";
-  const isSupported = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff"].some((suffix) => lower.endsWith(suffix));
+  const isSupported = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"].some((suffix) => lower.endsWith(suffix));
   const isPdf = lower.endsWith(".pdf");
   const fileSizeMb = Number((((input?.fileSizeBytes ?? 0) / (1024 * 1024)).toFixed(2)));
   const widthPx = input?.widthPx;
@@ -30,7 +30,7 @@ export function runMockPreflight(
   const estimatedDpi = widthPx && shortSideInches ? Math.round(widthPx / shortSideInches) : undefined;
 
   const checks = [
-    { code: "format", label: "Dateiformat unterstützt", passed: isSupported, hint: isSupported ? undefined : "Erlaubt: PDF, AI, PSD, PNG, JPG, TIFF." },
+    { code: "format", label: "Dateiformat unterstützt", passed: isSupported, hint: isSupported ? undefined : "Erlaubt: PDF, AI, PSD, EPS, PNG, JPG, TIFF, WebP, SVG." },
     { code: "pdf_x4", label: "PDF/X-4 Empfehlung", passed: isPdf, hint: isPdf ? undefined : "Für Produktion wird PDF/X-4 bevorzugt." },
     { code: "filesize", label: "Dateigröße innerhalb Limit (<= 50 MB)", passed: (input?.fileSizeBytes ?? 0) <= 50 * 1024 * 1024 },
     { code: "pixels", label: "Pixelmaße ausreichend", passed: totalPixels ? totalPixels >= 3_000_000 : isPdf, hint: totalPixels ? undefined : "Pixelmaße bei Vektor/PDF nicht direkt messbar." },
@@ -74,6 +74,12 @@ function generateAIAdvice(checks: Array<{ code: string; label: string; passed: b
   }
   if (failed.some((c) => c.code === "color")) {
     advice.push("Konvertieren Sie Ihr Dokument in den CMYK-Farbraum (z.B. ISO Coated v2), um Farbabweichungen zu vermeiden.");
+  }
+  if (failed.some((c) => c.code === "bleed")) {
+    advice.push("Fügen Sie einen Beschnittrand von 3 mm hinzu, um weiße Blitzer beim Schneiden zu verhindern.");
+  }
+  if (failed.some((c) => c.code === "pdf_x4")) {
+    advice.push("Wir empfehlen den Export als PDF/X-4 für maximale Kompatibilität und Farbtreue.");
   }
 
   if (advice.length === 0) {

@@ -24,17 +24,16 @@ export function Header() {
       <div className="hidden border-b border-slate-200/70 bg-white/55 lg:block">
         <div className="container-page flex h-9 items-center justify-between text-xs font-medium tracking-[0.01em] text-slate-500">
           <div className="flex items-center gap-6">
-            <span>Druck & Design Studio</span>
-            <span>Same-Day Produktion für ausgewählte Produkte</span>
+            <span>Vision L&T e.U. – Ihr Partner für Print & Werbeagentur</span>
+            <span>Fachberatung in Wels</span>
           </div>
-          <Link href="/kontakt" className="inline-flex items-center gap-2 font-semibold tracking-[0.01em] hover:text-brand-blue"><PhoneCall className="h-3.5 w-3.5 text-brand-blue" /> Beratung: +49 30 120 88 44</Link>
+          <Link href="/kontakt" className="inline-flex items-center gap-2 font-semibold tracking-[0.01em] hover:text-brand-blue"><PhoneCall className="h-3.5 w-3.5 text-brand-blue" /> Beratung: +43 (0) 7242 63 2 39</Link>
         </div>
       </div>
       <div className="container-page flex min-h-[82px] items-center justify-between gap-4 py-3">
         <Link href="/" className="flex items-center gap-3">
-          <span className="brand-text text-[1.03rem] font-extrabold uppercase leading-none tracking-[0.11em] text-brand-ink">
-            druck<span className="text-brand-blue">&</span>design
-            <span className="mt-1 block text-[0.66rem] font-semibold tracking-[0.34em] text-slate-500">studio</span>
+          <span className="brand-text text-[1.25rem] font-black uppercase leading-none tracking-[0.05em] text-brand-ink">
+            Vision<span className="text-brand-blue">L&T</span>
           </span>
         </Link>
         <nav className="hidden flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white/75 px-3 py-2 shadow-sm xl:flex">

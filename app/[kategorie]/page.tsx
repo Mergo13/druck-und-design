@@ -16,7 +16,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ kateg
   const { kategorie } = await params;
   const [categories, products] = await Promise.all([getCategories(), getProducts()]);
   const category = categories.find((item) => item.slug === kategorie);
-  if (!category) notFound();
+  if (!category || ["druckservice", "werbetechnik", "werbeagentur"].includes(kategorie)) notFound();
 
   return (
     <section className="container-page py-10">
