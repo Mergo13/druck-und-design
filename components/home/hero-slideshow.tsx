@@ -14,7 +14,7 @@ const slides = [
     icon: Truck
   },
   {
-    title: "Textildruck",
+    title: "Kleidung & Textilien",
     subtitle: "Workwear, Teams und Merch mit Live-Mockup",
     accent: "bg-brand-cyan",
     metric: "4.9",

@@ -48,9 +48,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
-              "Automatischer Preflight mit DPI-, Pixel-, Dateigrößen- und Farbmodell-Checks",
-              "Live Mockup Vorschau mit technischen Messwerten",
-              "Nachbestellung mit einem Klick inklusive gespeicherter Konfiguration"
+              "Automatischer Datencheck Ihrer Vorlagen",
+              "Fachliche Beratung zu Material und Veredelung",
+              "Sonderformate und individuelle Wünsche auf Anfrage"
             ].map((feature) => <div className="rounded-lg border p-5 font-bold" key={feature}>{feature}</div>)}
           </div>
         </div>

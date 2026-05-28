@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const cols: Array<Array<{ label: string; href: string }>> = [
   [
-    { label: "Produkte", href: "/shop" },
+    { label: "Leistungen", href: "/leistungen" },
     { label: "Druckservice", href: "/druckservice" },
     { label: "Werbeagentur", href: "/werbeagentur" },
     { label: "Werbetechnik", href: "/werbetechnik" }

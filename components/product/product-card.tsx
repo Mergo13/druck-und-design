@@ -2,31 +2,31 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Heart, ShoppingBag } from "lucide-react";
+import { Info } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatEuro } from "@/lib/utils";
-import { useCartStore } from "@/store/cart-store";
 import type { Product } from "@/types";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
 type CardProduct = Product | ProductCatalogItem;
 
-export function ProductCard({ product }: { product: CardProduct }) {
-  const toggleWishlist = useCartStore((state) => state.toggleWishlist);
-  const wishlist = useCartStore((state) => state.wishlist);
+export function ProductCard({
+  product,
+  isSelected = false,
+  onToggleSelect
+}: {
+  product: CardProduct;
+  isSelected?: boolean;
+  onToggleSelect?: (slug: string) => void;
+}) {
   const image = "heroImage" in product ? product.heroImage : product.image;
-  const priceFrom = "basePrice" in product ? product.basePrice : product.priceFrom;
 
   return (
     <motion.div whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
       <Card className="h-full overflow-hidden">
         <div className="relative aspect-[4/3] overflow-hidden bg-brand-mist">
           <Image src={image} alt={`${product.name} Demo-Bild`} fill className="object-cover transition duration-500 hover:scale-105" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" />
-          <button aria-label="Zur Wunschliste" onClick={() => toggleWishlist(product.slug)} className="absolute right-4 top-4 rounded-md bg-white p-2 shadow-soft">
-            <Heart className={wishlist.includes(product.slug) ? "h-4 w-4 fill-red-500 text-red-500" : "h-4 w-4"} />
-          </button>
         </div>
         <CardContent>
           <div className="flex flex-wrap gap-2">
@@ -35,12 +35,19 @@ export function ProductCard({ product }: { product: CardProduct }) {
           <Link href={`/produkt/${product.slug}`} className="mt-4 block text-xl font-black hover:text-primary">{product.name}</Link>
           <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">{product.short}</p>
           <div className="mt-5 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">ab</p>
-              <p className="text-lg font-black">{formatEuro(priceFrom)}</p>
-            </div>
+            <p className="text-sm font-bold text-muted-foreground">Preis auf Anfrage</p>
           </div>
-          <Button asChild className="mt-5 w-full"><Link href={`/produkt/${product.slug}`}><ShoppingBag className="h-4 w-4" /> Konfigurieren</Link></Button>
+          {onToggleSelect ? (
+            <Button
+              type="button"
+              variant={isSelected ? "default" : "outline"}
+              className="mt-3 w-full"
+              onClick={() => onToggleSelect(product.slug)}
+            >
+              {isSelected ? "Ausgewählt" : "Produkt auswählen"}
+            </Button>
+          ) : null}
+          <Button asChild variant="outline" className="mt-5 w-full hover:bg-brand-mist hover:text-brand-blue"><Link href={`/produkt/${product.slug}`}><Info className="h-4 w-4" /> Details ansehen</Link></Button>
         </CardContent>
       </Card>
     </motion.div>

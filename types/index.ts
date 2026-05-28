@@ -48,6 +48,20 @@ export type Order = {
   total: number;
 };
 
+export type UserAccount = {
+  id: string;
+  company?: string;
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+};
+
+export type SessionUser = {
+  id: string;
+  company?: string;
+  email: string;
+};
+
 export type NavItem = {
   label: string;
   href: string;

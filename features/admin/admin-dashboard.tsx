@@ -160,9 +160,15 @@ export function AdminDashboard() {
   const openInvoices = useMemo(() => state.invoices.filter((invoice) => invoice.status !== "Bezahlt").length, [state.invoices]);
 
   async function loadBackendState() {
-    const [productsRes, categoriesRes] = await Promise.all([fetch("/api/catalog/products"), fetch("/api/catalog/categories")]);
+    const [productsRes, categoriesRes, ordersRes] = await Promise.all([
+      fetch("/api/catalog/products"),
+      fetch("/api/catalog/categories"),
+      fetch("/api/orders")
+    ]);
     const products = await productsRes.json() as ProductCatalogItem[];
     const categories = await categoriesRes.json() as ProductCategory[];
+    const backendOrders = await ordersRes.json() as any[];
+
     setState((current) => ({
       ...current,
       products: products.map((product) => ({
@@ -183,7 +189,13 @@ export function AdminDashboard() {
         quantityStepsCsv: toStepsCsv(category.quantitySteps ?? defaultQuantitySteps),
         defaultPropertyTemplate: category.defaultPropertyTemplate ?? "print-basic",
         active: true
-      }))
+      })),
+      orders: backendOrders.length > 0 ? backendOrders.map(o => ({
+        ...o,
+        customer: o.customer || "Kunde " + o.id.split('-').pop(),
+        total: o.total,
+        status: o.status || "Neu"
+      })) : current.orders
     }));
   }
 
@@ -421,7 +433,29 @@ export function AdminDashboard() {
 
             {activeTab === "Bestellungen" && (
               <AdminPanel title="Bestellungen und Produktionsstatus">
-                <AdminTable rows={state.orders.map((item) => [item.id, item.customer, formatEuro(item.total), item.status])} onEdit={(index) => setState({ ...state, orders: state.orders.map((item, itemIndex) => itemIndex === index ? { ...item, status: nextOrderStatus(item.status) } : item) })} onDelete={(index) => setState({ ...state, orders: state.orders.filter((_, itemIndex) => itemIndex !== index) })} editLabel="Status weiter" />
+                <AdminTable 
+                  rows={state.orders.map((item) => [item.id, item.customer, formatEuro(item.total), item.status])} 
+                  onEdit={async (index) => {
+                    const order = state.orders[index];
+                    const nextStatus = nextOrderStatus(order.status);
+                    const updatedOrder = { ...order, status: nextStatus };
+                    
+                    // Sync update to backend
+                    await fetch("/api/orders", {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(updatedOrder)
+                    });
+                    
+                    setState({ ...state, orders: state.orders.map((item, itemIndex) => itemIndex === index ? updatedOrder : item) });
+                  }} 
+                  onDelete={async (index) => {
+                    const orderId = state.orders[index].id;
+                    await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
+                    setState({ ...state, orders: state.orders.filter((_, itemIndex) => itemIndex !== index) });
+                  }} 
+                  editLabel="Status weiter" 
+                />
               </AdminPanel>
             )}
 

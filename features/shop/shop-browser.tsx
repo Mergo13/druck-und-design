@@ -1,14 +1,27 @@
 "use client";
 
 import { Search, SlidersHorizontal } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { ProductCard } from "@/components/product/product-card";
+import { Button } from "@/components/ui/button";
 import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
 
 export function ShopBrowser({ initialCategory, categories, products }: { initialCategory?: string; categories: ProductCategory[]; products: ProductCatalogItem[] }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(initialCategory ?? "alle");
   const [sort, setSort] = useState("beliebt");
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [submitState, setSubmitState] = useState<"idle" | "ok" | "error">("idle");
+  const [submitMessage, setSubmitMessage] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data: { authenticated: boolean }) => setIsAuthenticated(Boolean(data.authenticated)))
+      .catch(() => setIsAuthenticated(false));
+  }, []);
 
   const filtered = useMemo(() => {
     const result = products.filter((product) => {
@@ -16,8 +29,42 @@ export function ShopBrowser({ initialCategory, categories, products }: { initial
       const matchesQuery = [product.name, product.short, product.seo].join(" ").toLowerCase().includes(query.toLowerCase());
       return matchesCategory && matchesQuery;
     });
-    return result.sort((a, b) => sort === "preis" ? a.basePrice - b.basePrice : b.rating - a.rating);
+    return result.sort((a, b) => b.rating - a.rating);
   }, [category, products, query, sort]);
+
+  function toggleSelected(slug: string) {
+    setSelectedProducts((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug]);
+  }
+
+  function submitSelection() {
+    if (!isAuthenticated) {
+      setSubmitState("error");
+      setSubmitMessage("Bitte zuerst einloggen.");
+      return;
+    }
+    if (selectedProducts.length === 0) {
+      setSubmitState("error");
+      setSubmitMessage("Bitte mindestens ein Produkt auswählen.");
+      return;
+    }
+    const selected = products
+      .filter((product) => selectedProducts.includes(product.slug))
+      .map((product) => ({ slug: product.slug, name: product.name, quantity: 1, category: product.category }));
+    const existing = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{ slug: string; name: string; quantity: number; category: string }> : [];
+    const merged = [...existing];
+    for (const item of selected) {
+      const found = merged.find((entry) => entry.slug === item.slug);
+      if (found) {
+        found.quantity += 1;
+      } else {
+        merged.push(item);
+      }
+    }
+    localStorage.setItem("dud_cart", JSON.stringify(merged));
+    setSubmitState("ok");
+    setSubmitMessage("Produkte wurden in den Warenkorb gelegt.");
+    setSelectedProducts([]);
+  }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
@@ -42,11 +89,43 @@ export function ShopBrowser({ initialCategory, categories, products }: { initial
           </div>
           <select suppressHydrationWarning value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-md border bg-white px-3 text-sm">
             <option value="beliebt">Beliebtheit</option>
-            <option value="preis">Preis aufsteigend</option>
           </select>
         </div>
         <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((product) => <ProductCard key={product.slug} product={product} />)}
+          {filtered.map((product) => (
+            <ProductCard
+              key={product.slug}
+              product={product}
+              isSelected={selectedProducts.includes(product.slug)}
+              onToggleSelect={isAuthenticated ? toggleSelected : undefined}
+            />
+          ))}
+        </div>
+        <div className="mt-8 rounded-lg border bg-white p-4 shadow-soft">
+          <p className="text-sm font-bold">Produkte auswählen</p>
+          <p className="mt-1 text-xs text-muted-foreground">{selectedProducts.length} Produkt(e) ausgewählt</p>
+          {isAuthenticated ? (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button type="button" onClick={submitSelection}>
+                In den Warenkorb
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/warenkorb">Zum Warenkorb</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Button asChild>
+                <Link href="/login">Einloggen</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/registrierung">Registrieren</Link>
+              </Button>
+            </div>
+          )}
+          {submitMessage ? (
+            <p className={submitState === "error" ? "mt-2 text-xs text-red-600" : "mt-2 text-xs text-emerald-700"}>{submitMessage}</p>
+          ) : null}
         </div>
         <div className="mt-8 flex justify-center gap-2">
           {[1, 2, 3].map((page) => <button className={page === 1 ? "h-10 w-10 rounded-md bg-slate-950 text-white" : "h-10 w-10 rounded-md border"} key={page}>{page}</button>)}
