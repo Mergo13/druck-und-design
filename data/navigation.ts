@@ -1,9 +1,10 @@
 import type { NavItem } from "@/types";
 
 export const navigationItems: NavItem[] = [
-  { label: "Shop", href: "/shop" },
+  { label: "Leistungen", href: "/leistungen" },
+  { label: "Warenkorb", href: "/warenkorb" },
   { label: "Werbetechnik", href: "/werbetechnik" },
-  { label: "Textildruck", href: "/textildruck" },
+  { label: "Kleidung & Textilien", href: "/kleidung-textilien" },
   { label: "Aufkleber", href: "/aufkleber" },
   { label: "News", href: "/news" },
   { label: "Kontakt", href: "/kontakt" }

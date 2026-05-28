@@ -6,7 +6,7 @@ export default async function SearchPage() {
   return (
     <section className="container-page py-10">
       <h1 className="text-4xl font-black">Suche</h1>
-      <p className="mt-3 text-muted-foreground">Finden Sie Produkte, Materialien und passende Drucklösungen.</p>
+      <p className="mt-3 text-muted-foreground">Finden Sie Produkte, Materialien und passende Leistungen.</p>
       <div className="mt-8"><ShopBrowser categories={categories} products={products} /></div>
     </section>
   );

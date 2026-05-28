@@ -1,4 +1,49 @@
 {
+  "orders": [
+    {
+      "id": "ORD-2026-7140",
+      "createdAt": "2026-05-24T15:19:05.455Z",
+      "items": [
+        {
+          "id": "fd76504b-cac8-43b0-a582-44193aa5e0b4",
+          "productSlug": "Flyer",
+          "name": "Flyer",
+          "quantity": 1,
+          "price": 20.06,
+          "config": {
+            "Lieferzeit": "Standard",
+            "Auflage": "1",
+            "Druckdaten": "Upload folgt später"
+          },
+          "preflightPassed": false
+        }
+      ],
+      "total": 20.06
+    },
+    {
+      "id": "ORD-2026-4658",
+      "createdAt": "2026-05-19T16:36:41.827Z",
+      "items": [
+        {
+          "id": "4f2a5ade-4542-40e0-931a-0a3304ea8be0",
+          "productSlug": "premium-flyer-a5",
+          "name": "Premium Flyer DIN A5",
+          "quantity": 1,
+          "price": 29.4,
+          "config": {
+            "Material": "Bilderdruck matt",
+            "Auflage": "100",
+            "Druckdaten": "Unbenannt 14.png"
+          },
+          "mockupUrl": "blob:http://localhost:3000/2c1ec9fd-3ffe-4aa7-8772-2e78b6c9c6d2",
+          "preflightPassed": false
+        }
+      ],
+      "total": 29.4,
+      "customer": "Kunde 4658",
+      "status": "Versendet"
+    }
+  ],
   "categories": [
     {
       "slug": "druckprodukte",
@@ -650,14 +695,14 @@
       "category": "druckprodukte",
       "short": "Magazine und Periodika mit professioneller Bindung.",
       "description": "Magazine in hochwertigem Druck für Corporate Publishing, Kundenmagazine und Reports.",
-      "seo": "Magazine drucken mit präzisem Druckbild und zuverlässiger Produktion.",
-      "heroImage": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1200&q=80",
+      "seo": "Magazine online konfigurieren, prüfen und drucken lassen.",
+      "heroImage": "/uploads/products/1779214995978-m428ru17.png",
       "gallery": [
-        "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1200&q=80"
+        "/uploads/products/1779214995978-m428ru17.png"
       ],
-      "rating": 4.7,
-      "basePrice": 82.95,
-      "deliveryText": "4-6 Werktage",
+      "rating": 4.8,
+      "basePrice": 7,
+      "deliveryText": "2-5 Werktage",
       "tags": [
         "Neu"
       ],
@@ -676,8 +721,75 @@
         {
           "id": "magazine-standard",
           "name": "Standard",
-          "skuPrefix": "MAGAZIN",
+          "skuPrefix": "MAGAZINE",
           "attributes": [
+            {
+              "key": "material",
+              "label": "Material",
+              "type": "select",
+              "required": true,
+              "defaultValue": "bd-matt",
+              "options": [
+                {
+                  "value": "bd-matt",
+                  "label": "Bilderdruck matt"
+                },
+                {
+                  "value": "bd-glanz",
+                  "label": "Bilderdruck glänzend"
+                },
+                {
+                  "value": "recycling",
+                  "label": "Recyclingpapier",
+                  "priceModifier": 3
+                }
+              ]
+            },
+            {
+              "key": "grammatur",
+              "label": "Grammatur",
+              "type": "select",
+              "required": true,
+              "defaultValue": "170",
+              "options": [
+                {
+                  "value": "135",
+                  "label": "135 g/m²"
+                },
+                {
+                  "value": "170",
+                  "label": "170 g/m²"
+                },
+                {
+                  "value": "250",
+                  "label": "250 g/m²",
+                  "priceModifier": 5
+                }
+              ]
+            },
+            {
+              "key": "veredelung",
+              "label": "Veredelung",
+              "type": "select",
+              "required": true,
+              "defaultValue": "keine",
+              "options": [
+                {
+                  "value": "keine",
+                  "label": "Keine"
+                },
+                {
+                  "value": "softtouch",
+                  "label": "Softtouch",
+                  "priceModifier": 12
+                },
+                {
+                  "value": "heissfolie",
+                  "label": "Heißfolie Gold",
+                  "priceModifier": 39
+                }
+              ]
+            },
             {
               "key": "lieferzeit",
               "label": "Lieferzeit",
@@ -692,7 +804,12 @@
                 {
                   "value": "express",
                   "label": "Express",
-                  "priceModifier": 30.45
+                  "priceModifier": 19
+                },
+                {
+                  "value": "sameday",
+                  "label": "Same Day",
+                  "priceModifier": 45
                 }
               ]
             }
@@ -707,19 +824,19 @@
               "key": "basis",
               "label": "Basispreis",
               "type": "fixed",
-              "amount": 82.95
+              "amount": 7
             },
             {
               "key": "auflage",
               "label": "Auflagenfaktor",
               "type": "per-unit",
-              "amount": 0.084
+              "amount": 0.1
             }
           ]
         }
       ],
       "production": {
-        "baseProductionDays": 5,
+        "baseProductionDays": 3,
         "expressAvailable": true,
         "preflightProfile": "standard-print",
         "renderPipeline": "pdf-x4"

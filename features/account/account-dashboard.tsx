@@ -1,28 +1,56 @@
 "use client";
 
-import { FileText, Heart, MapPin, Package, RotateCcw, Settings, Upload, Wand2, type LucideIcon } from "lucide-react";
+import { FileText, MapPin, Package, Settings, Upload, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { formatEuro } from "@/lib/utils";
-import { useCartStore } from "@/store/cart-store";
 
 const items: Array<[LucideIcon, string, string]> = [
-  [Package, "Bestellungen", "Status, Tracking und Nachbestellung"],
+  [Package, "Projekte", "Status Ihrer aktuellen Projekte"],
   [FileText, "Rechnungen", "Belege und Zahlungsstatus"],
-  [Upload, "Uploads", "Druckdaten und Preflight-Protokolle"],
-  [Wand2, "Gespeicherte Designs", "Vorlagen, Entwürfe und Mockups"],
+  [Upload, "Druckdaten", "Übermittelte Druckdaten und Freigaben"],
   [MapPin, "Adressen", "Liefer- und Rechnungsadressen"],
-  [Heart, "Wunschliste", "Gemerkte Produkte"],
   [Settings, "Kontoeinstellungen", "Team, Sicherheit und Benachrichtigungen"]
 ];
 
 export function AccountDashboard() {
-  const orders = useCartStore((state) => state.orders);
-  const reorder = useCartStore((state) => state.reorder);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data: { authenticated: boolean; user?: { email?: string } }) => {
+        setAuthenticated(Boolean(data.authenticated));
+        setEmail(data.user?.email ?? "");
+      })
+      .catch(() => setAuthenticated(false));
+  }, []);
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
+  if (!authenticated) {
+    return (
+      <section className="container-page py-10">
+        <p className="font-bold text-primary">Kundenkonto</p>
+        <h1 className="mt-2 text-4xl font-black">Bitte einloggen</h1>
+        <div className="mt-6 flex gap-3">
+          <Button asChild><Link href="/login">Einloggen</Link></Button>
+          <Button asChild variant="outline"><Link href="/registrierung">Registrieren</Link></Button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="container-page py-10">
       <p className="font-bold text-primary">Kundenkonto</p>
       <h1 className="mt-2 text-4xl font-black">Dashboard</h1>
+      <p className="mt-2 text-sm text-muted-foreground">Angemeldet als {email}</p>
+      <Button className="mt-4" variant="outline" onClick={() => void logout()}>Ausloggen</Button>
       <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {items.map(([Icon, title, text]) => (
           <div className="rounded-lg border p-6 shadow-soft" key={title}>
@@ -34,21 +62,9 @@ export function AccountDashboard() {
       </div>
 
       <div className="mt-10 rounded-lg border bg-white p-6 shadow-soft">
-        <h2 className="text-2xl font-black">Nachbestellung mit einem Klick</h2>
+        <h2 className="text-2xl font-black">Letzte Anfragen & Projekte</h2>
         <div className="mt-4 grid gap-3">
-          {orders.length === 0 ? <p className="text-sm text-muted-foreground">Noch keine Bestellungen vorhanden.</p> : null}
-          {orders.map((order) => (
-            <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-              <div>
-                <p className="font-bold">{order.id}</p>
-                <p className="text-sm text-muted-foreground">{new Date(order.createdAt).toLocaleString("de-DE")} · {order.items.length} Positionen</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-bold">{formatEuro(order.total)}</span>
-                <Button size="sm" onClick={() => reorder(order.id)}><RotateCcw className="h-4 w-4" /> Nachbestellen</Button>
-              </div>
-            </div>
-          ))}
+          <p className="text-sm text-muted-foreground">Aktuell sind keine Anfragen oder Projekte hinterlegt.</p>
         </div>
       </div>
     </section>

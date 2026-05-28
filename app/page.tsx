@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Factory, Layers3, Printer, ShieldCheck, Sparkles, Workflow } from "lucide-react";
+import { ArrowRight, CheckCircle2, Factory, Layers3, PhoneCall, Printer, ShieldCheck, Sparkles, Workflow } from "lucide-react";
 import { HeroSlideshow } from "@/components/home/hero-slideshow";
-import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { getCategories, getProducts } from "@/lib/catalog-repository";
+import { getCategories } from "@/lib/catalog-repository";
 
 export default async function HomePage() {
-  const [platformCategories, productCatalog] = await Promise.all([getCategories(), getProducts()]);
+  const platformCategories = await getCategories();
 const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }> = [
   { icon: Layers3, title: "Konfiguration", text: "Varianten, Attribute, Auflage und Preislogik live berechnen." },
   { icon: ShieldCheck, title: "Druckdatenprüfung", text: "KI-gestützte Prüfung von Format, Auflösung und Beschnitt." },
@@ -27,9 +26,9 @@ const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }
             <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Wir sind Ihre Full-Service Werbeagentur und Druckerei in Wels. Von der Corporate Identity bis zum fertigen Printprodukt – alles aus einer Hand.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg" className="bg-brand-blue hover:bg-[#2d70b6]">
-                <Link href="/shop">Jetzt konfigurieren <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/leistungen">Unsere Leistungen <ArrowRight className="h-4 w-4" /></Link>
               </Button>
-              <Button asChild variant="outline" size="lg"><Link href="/ki-design-assistent">Editor öffnen</Link></Button>
+              <Button asChild variant="outline" size="lg"><Link href="/referenzen">Referenzen ansehen</Link></Button>
             </div>
           </div>
           <HeroSlideshow />
@@ -74,17 +73,14 @@ const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }
 
       <section className="bg-brand-mist py-16">
         <div className="container-page">
-          <SectionHeading eyebrow="Shop" title="Produkte direkt online konfigurieren" description="Wählen Sie aus unserem Standardsortiment und erhalten Sie sofort Preis und Lieferzeit." />
+          <SectionHeading eyebrow="Kategorien" title="Unsere Kompetenzbereiche" description="Entdecken Sie unsere vielfältigen Lösungen für Ihre Werbemittel und Druckprodukte." />
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {platformCategories.slice(0, 4).map((category) => (
+            {platformCategories.slice(0, 8).map((category) => (
               <Link href={`/${category.slug}`} key={category.slug} className="rounded-lg border bg-white p-5 transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-premium">
                 <h3 className="text-lg font-black">{category.name}</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
               </Link>
             ))}
-          </div>
-          <div className="mt-12 grid gap-6 md:grid-cols-2">
-            {productCatalog.map((product) => <ProductCard key={product.slug} product={product} />)}
           </div>
         </div>
       </section>
@@ -121,11 +117,11 @@ const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }
 
       <section className="container-page py-16">
         <div className="rounded-lg bg-[linear-gradient(135deg,#0f172a,#115e59)] p-8 text-white md:p-12">
-          <p className="text-sm font-bold uppercase tracking-[0.12em] text-emerald-200">Nächster Schritt</p>
-          <h2 className="mt-2 max-w-3xl text-4xl font-black">Starten Sie mit einem Produkt oder bauen Sie Ihr Design direkt im Editor.</h2>
+          <p className="text-sm font-bold uppercase tracking-[0.12em] text-emerald-200">Bereit für Ihr Projekt?</p>
+          <h2 className="mt-2 max-w-3xl text-4xl font-black">Lassen Sie uns gemeinsam Ihre Vision realisieren. Kontaktieren Sie uns für ein unverbindliches Erstgespräch.</h2>
           <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Button asChild variant="accent"><Link href="/shop"><Workflow className="h-4 w-4" /> Shop öffnen</Link></Button>
-            <Button asChild variant="secondary"><Link href="/ki-design-assistent">Personalisierungs-Editor</Link></Button>
+            <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
+            <Button asChild variant="secondary"><Link href="/referenzen">Referenzen entdecken</Link></Button>
           </div>
         </div>
       </section>

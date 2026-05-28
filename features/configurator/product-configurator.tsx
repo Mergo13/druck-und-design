@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle } from "lucide-react";
+import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { calculateVariantPrice } from "@/lib/print-workflow";
-import { formatEuro } from "@/lib/utils";
-import { useCartStore } from "@/store/cart-store";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"];
@@ -64,7 +61,6 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
-  const addItem = useCartStore((state) => state.addItem);
 
   useEffect(() => {
     return () => {
@@ -155,28 +151,13 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
     }
   }
 
-  const price = useMemo(() => {
-    if (firstVariant) {
-      const quantity = Number(config.Auflage.replaceAll(".", "")) || firstVariant.quantityRule.min;
-      const selectedAttributes = firstVariant.attributes.reduce<Record<string, string>>((acc, attribute) => {
-        if (attribute.type !== "select") return acc;
-        const selectedLabel = config[attribute.label];
-        const selectedOption = (attribute.options ?? []).find((option) => option.label === selectedLabel);
-        if (selectedOption) acc[attribute.key] = selectedOption.value;
-        return acc;
-      }, {});
-      return calculateVariantPrice(product, firstVariant.id, quantity, selectedAttributes);
-    }
-    return product.basePrice;
-  }, [config, firstVariant, product]);
-
   return (
     <aside className="sticky top-24 rounded-lg border bg-white p-5 shadow-premium lg:block">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
-          <h2 className="text-2xl font-black">{formatEuro(price)}</h2>
-          <p className="text-sm text-muted-foreground">inkl. Datencheck, zzgl. Versand</p>
+          <h2 className="text-2xl font-black">Preis auf Anfrage</h2>
+          <p className="text-sm text-muted-foreground">Konfiguration inkl. Datencheck</p>
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
           <CalendarCheck className="ml-auto h-4 w-4 text-primary" />
@@ -329,13 +310,15 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         </div>
       )}
       <Button
-        className="mt-6 w-full"
+        className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]"
         size="lg"
-        onClick={() => addItem({ id: crypto.randomUUID(), productSlug: product.slug, name: product.name, quantity: 1, price, config: { ...config, Druckdaten: uploadedFile?.name ?? "Upload folgt später" }, mockupUrl: mockupUrl || undefined, preflightPassed: preflightStatus === "ok" })}
+        asChild
       >
-        In den Warenkorb
+        <a href="/kontakt">
+          <PhoneCall className="h-4 w-4 mr-2" /> Jetzt unverbindlich anfragen
+        </a>
       </Button>
-      <Button variant="outline" className="mt-3 w-full">Konfiguration speichern</Button>
+      <p className="mt-3 text-center text-xs text-muted-foreground">Wir beraten Sie gerne zu Materialien und Veredelungen.</p>
     </aside>
   );
 }
