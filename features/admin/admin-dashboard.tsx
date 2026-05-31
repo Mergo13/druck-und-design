@@ -15,6 +15,7 @@ type AdminProduct = {
   short: string;
   description: string;
   priceFrom: number;
+  unitPrice: number;
   quantityStepsCsv: string;
   propertyTemplate: string;
   active: boolean;
@@ -28,6 +29,7 @@ type AdminCategory = {
   description: string;
   quantityStepsCsv: string;
   defaultPropertyTemplate: string;
+  logo: string;
   active: boolean;
 };
 
@@ -64,6 +66,7 @@ type AdminState = {
     expressEnabled: boolean;
     invoicePrefix: string;
     taxRate: number;
+    clientLogos: string[];
   };
 };
 
@@ -74,7 +77,8 @@ const emptyProduct: AdminProduct = {
   short: "",
   description: "",
   priceFrom: 0,
-  quantityStepsCsv: "1, 10, 25, 50, 100, 1000, 2000, 5000",
+  unitPrice: 0.1,
+  quantityStepsCsv: "1, 10, 100, 1000, 2500, 5000, 10000",
   propertyTemplate: "print-basic",
   active: true,
   stockMode: "Verkauf aktiv",
@@ -85,12 +89,13 @@ const emptyCategory: AdminCategory = {
   slug: "",
   name: "",
   description: "",
-  quantityStepsCsv: "1, 10, 25, 50, 100, 1000, 2000, 5000",
+  quantityStepsCsv: "1, 10, 100, 1000, 2500, 5000, 10000",
   defaultPropertyTemplate: "print-basic",
+  logo: "",
   active: true
 };
 
-const defaultQuantitySteps = [1, 10, 25, 50, 100, 1000, 2000, 5000];
+const defaultQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
 
 const propertyTemplates: Array<{ key: string; label: string }> = [
   { key: "print-basic", label: "Print Standard (Material, Grammatur, Veredelung, Lieferzeit)" },
@@ -125,7 +130,8 @@ const seedState: AdminState = {
     sellingEnabled: true,
     expressEnabled: true,
     invoicePrefix: "RE-2026",
-    taxRate: 19
+    taxRate: 19,
+    clientLogos: ["/brand/logo-dud.png", "/demo/flyer.svg", "/demo/rollup.svg"]
   }
 };
 
@@ -146,8 +152,14 @@ export function AdminDashboard() {
   const [categoryDraft, setCategoryDraft] = useState<AdminCategory>(emptyCategory);
   const [postDraft, setPostDraft] = useState<AdminPost>(emptyPost);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingCategoryLogo, setUploadingCategoryLogo] = useState(false);
+  const [uploadingClientLogo, setUploadingClientLogo] = useState(false);
   const [productStatus, setProductStatus] = useState<string>("");
   const [productError, setProductError] = useState<string>("");
+  const [categoryStatus, setCategoryStatus] = useState<string>("");
+  const [categoryError, setCategoryError] = useState<string>("");
+  const [settingsStatus, setSettingsStatus] = useState<string>("");
+  const [settingsError, setSettingsError] = useState<string>("");
   const [previewNonce, setPreviewNonce] = useState(0);
   const categoryOptions = useMemo(() => state.categories.map((item) => item.slug), [state.categories]);
   const autoCategory = useMemo(() => suggestCategory(productDraft.name, categoryOptions), [categoryOptions, productDraft.name]);
@@ -160,14 +172,16 @@ export function AdminDashboard() {
   const openInvoices = useMemo(() => state.invoices.filter((invoice) => invoice.status !== "Bezahlt").length, [state.invoices]);
 
   async function loadBackendState() {
-    const [productsRes, categoriesRes, ordersRes] = await Promise.all([
+    const [productsRes, categoriesRes, ordersRes, logosRes] = await Promise.all([
       fetch("/api/catalog/products"),
       fetch("/api/catalog/categories"),
-      fetch("/api/orders")
+      fetch("/api/orders"),
+      fetch("/api/settings/client-logos")
     ]);
     const products = await productsRes.json() as ProductCatalogItem[];
     const categories = await categoriesRes.json() as ProductCategory[];
     const backendOrders = await ordersRes.json() as any[];
+    const clientLogos = await logosRes.json() as string[];
 
     setState((current) => ({
       ...current,
@@ -178,6 +192,7 @@ export function AdminDashboard() {
         short: product.short,
         description: product.description,
         priceFrom: product.basePrice,
+        unitPrice: product.variants[0]?.priceRules.find((rule) => rule.key === "auflage")?.amount ?? 0,
         quantityStepsCsv: toStepsCsv(product.quantitySteps ?? [product.variants[0]?.quantityRule.min ?? 1]),
         propertyTemplate: product.propertyTemplate ?? "print-basic",
         active: true,
@@ -188,6 +203,7 @@ export function AdminDashboard() {
         ...category,
         quantityStepsCsv: toStepsCsv(category.quantitySteps ?? defaultQuantitySteps),
         defaultPropertyTemplate: category.defaultPropertyTemplate ?? "print-basic",
+        logo: category.logo ?? "",
         active: true
       })),
       orders: backendOrders.length > 0 ? backendOrders.map(o => ({
@@ -195,7 +211,8 @@ export function AdminDashboard() {
         customer: o.customer || "Kunde " + o.id.split('-').pop(),
         total: o.total,
         status: o.status || "Neu"
-      })) : current.orders
+      })) : current.orders,
+      settings: { ...current.settings, clientLogos }
     }));
   }
 
@@ -231,7 +248,13 @@ export function AdminDashboard() {
   }
 
   async function upsertCategory() {
+    if (uploadingCategoryLogo) {
+      setCategoryError("Bitte warten Sie, bis der Logo-Upload abgeschlossen ist.");
+      return;
+    }
     if (!categoryDraft.slug || !categoryDraft.name) return;
+    setCategoryStatus("");
+    setCategoryError("");
     const steps = parseStepsCsv(categoryDraft.quantityStepsCsv);
     if (!steps.length) return;
     await fetch("/api/catalog/categories", {
@@ -242,10 +265,12 @@ export function AdminDashboard() {
         name: categoryDraft.name,
         description: categoryDraft.description,
         quantitySteps: steps,
-        defaultPropertyTemplate: categoryDraft.defaultPropertyTemplate
+        defaultPropertyTemplate: categoryDraft.defaultPropertyTemplate,
+        logo: categoryDraft.logo
       })
     });
     await loadBackendState();
+    setCategoryStatus(`Kategorie gespeichert: ${categoryDraft.slug}`);
     setCategoryDraft(emptyCategory);
   }
 
@@ -297,6 +322,78 @@ export function AdminDashboard() {
       quantityStepsCsv: selectedCategory.quantityStepsCsv,
       propertyTemplate: selectedCategory.defaultPropertyTemplate
     }));
+  }
+
+  async function uploadCategoryLogo(file?: File) {
+    if (!file) return;
+    setCategoryStatus("");
+    setCategoryError("");
+    setUploadingCategoryLogo(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/uploads/product-image", { method: "POST", body: form });
+      if (!res.ok) {
+        setCategoryError("Logo-Upload fehlgeschlagen. Bitte versuchen Sie es erneut.");
+        return;
+      }
+      const data = await res.json() as { url: string };
+      setCategoryDraft((current) => ({ ...current, logo: data.url }));
+      setPreviewNonce((current) => current + 1);
+      setCategoryStatus("Logo hochgeladen. Bitte auf Speichern klicken.");
+    } finally {
+      setUploadingCategoryLogo(false);
+    }
+  }
+
+  async function uploadClientLogo(file?: File) {
+    if (!file) return;
+    setSettingsError("");
+    setSettingsStatus("");
+    setUploadingClientLogo(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/api/uploads/product-image", { method: "POST", body: form });
+      if (!res.ok) {
+        setSettingsError("Logo-Upload fehlgeschlagen.");
+        return;
+      }
+      const data = await res.json() as { url: string };
+      const nextLogos = [...state.settings.clientLogos, data.url].filter(Boolean);
+      setState((current) => ({
+        ...current,
+        settings: { ...current.settings, clientLogos: nextLogos }
+      }));
+      const saveRes = await fetch("/api/settings/client-logos", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logos: nextLogos })
+      });
+      if (!saveRes.ok) {
+        setSettingsError("Logo wurde hochgeladen, aber nicht gespeichert.");
+        return;
+      }
+      setSettingsStatus("Logo hochgeladen und gespeichert.");
+    } finally {
+      setUploadingClientLogo(false);
+    }
+  }
+
+  async function saveClientLogosSettings() {
+    setSettingsError("");
+    setSettingsStatus("");
+    const logos = state.settings.clientLogos.map((item) => item.trim()).filter(Boolean);
+    const res = await fetch("/api/settings/client-logos", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logos })
+    });
+    if (!res.ok) {
+      setSettingsError("Kundenlogos konnten nicht gespeichert werden.");
+      return;
+    }
+    setSettingsStatus("Kundenlogos gespeichert.");
   }
 
   return (
@@ -353,6 +450,9 @@ export function AdminDashboard() {
                     ))}
                   </select>
                   <Input placeholder="Preis ab" type="number" value={productDraft.priceFrom} onChange={(event) => setProductDraft({ ...productDraft, priceFrom: Number(event.target.value) })} />
+                </div>
+                <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto]">
+                  <Input placeholder="Preis je Stück (Auflagenfaktor)" type="number" step="0.01" value={productDraft.unitPrice} onChange={(event) => setProductDraft({ ...productDraft, unitPrice: Number(event.target.value) })} />
                   <Button onClick={() => void upsertProduct()} disabled={uploadingImage}><Plus className="h-4 w-4" /> Speichern</Button>
                 </div>
                 <Input className="mt-3" placeholder="Kurzbeschreibung" value={productDraft.short} onChange={(event) => setProductDraft({ ...productDraft, short: event.target.value })} />
@@ -397,7 +497,7 @@ export function AdminDashboard() {
                 </div>
                 {productStatus ? <p className="mt-3 text-sm font-bold text-emerald-700">{productStatus}</p> : null}
                 {productError ? <p className="mt-3 text-sm font-bold text-red-700">{productError}</p> : null}
-                <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={handleEditProduct} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
+                <AdminTable rows={state.products.map((item) => [item.name, item.category, `${formatEuro(item.priceFrom)} + ${formatEuro(item.unitPrice)}/Stk`, item.stockMode])} onEdit={handleEditProduct} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
 
@@ -408,12 +508,27 @@ export function AdminDashboard() {
                   <Input placeholder="Name" value={categoryDraft.name} onChange={(event) => setCategoryDraft({ ...categoryDraft, name: event.target.value })} />
                   <Input placeholder="SEO-Beschreibung" value={categoryDraft.description} onChange={(event) => setCategoryDraft({ ...categoryDraft, description: event.target.value })} />
                   <Input placeholder="Kategorie-Mengenstufen (z.B. 1,10,25,50...)" value={categoryDraft.quantityStepsCsv} onChange={(event) => setCategoryDraft({ ...categoryDraft, quantityStepsCsv: event.target.value })} />
+                  <Input placeholder="Logo-URL (für Homepage-Marquee)" value={categoryDraft.logo} onChange={(event) => setCategoryDraft({ ...categoryDraft, logo: event.target.value })} />
                   <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={categoryDraft.defaultPropertyTemplate} onChange={(event) => setCategoryDraft({ ...categoryDraft, defaultPropertyTemplate: event.target.value })}>
                     {propertyTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
                   </select>
                   <Button onClick={() => void upsertCategory()}><Save className="h-4 w-4" /> Speichern</Button>
                 </div>
-                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.quantityStepsCsv, item.defaultPropertyTemplate])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => void deleteCategory(state.categories[index].slug, loadBackendState)} />
+                {categoryDraft.logo ? (
+                  <div className="mt-3 overflow-hidden rounded-lg border bg-white p-4">
+                    <img src={`${categoryDraft.logo}${categoryDraft.logo.startsWith("/uploads/") ? `?v=${previewNonce}` : ""}`} alt="Logo Vorschau" className="h-16 w-auto object-contain" />
+                  </div>
+                ) : null}
+                <div className="mt-3 rounded-lg border bg-slate-50 p-4">
+                  <label className="grid gap-2 text-sm font-bold">
+                    Kategorie-Logo hochladen
+                    <input suppressHydrationWarning type="file" accept="image/*" onChange={(event) => void uploadCategoryLogo(event.target.files?.[0])} className="block w-full text-sm font-normal" />
+                  </label>
+                  <p className="mt-2 text-xs text-muted-foreground">{uploadingCategoryLogo ? "Upload läuft..." : "Nach Upload wird die Logo-URL automatisch ins Feld übernommen."}</p>
+                </div>
+                {categoryStatus ? <p className="mt-3 text-sm font-bold text-emerald-700">{categoryStatus}</p> : null}
+                {categoryError ? <p className="mt-3 text-sm font-bold text-red-700">{categoryError}</p> : null}
+                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.quantityStepsCsv, item.defaultPropertyTemplate, item.logo ? "Logo gesetzt" : "Kein Logo"])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => void deleteCategory(state.categories[index].slug, loadBackendState)} />
               </AdminPanel>
             )}
 
@@ -523,7 +638,7 @@ function toCatalogProduct(input: AdminProduct, quantitySteps: number[]): Product
         skuPrefix: input.slug.toUpperCase().slice(0, 8),
         attributes: buildAttributesByTemplate(input.propertyTemplate),
         quantityRule: { min: minStep, max: normalizedMax, step: minStep },
-        priceRules: [{ key: "basis", label: "Basispreis", type: "fixed", amount: input.priceFrom }, { key: "auflage", label: "Auflagenfaktor", type: "per-unit", amount: 0.1 }]
+        priceRules: [{ key: "basis", label: "Basispreis", type: "fixed", amount: input.priceFrom }, { key: "auflage", label: "Auflagenfaktor", type: "per-unit", amount: input.unitPrice }]
       }
     ],
     production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" }

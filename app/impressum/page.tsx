@@ -5,7 +5,7 @@ export default function ImpressumPage() {
     <LegalPage title="Impressum">
       <div className="grid gap-8 sm:grid-cols-2">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Vision L&T e.U.</h2>
+          <h2 className="text-xl font-bold text-slate-900">druck&design studio</h2>
           <p className="mt-2">
             Mergim Izairi<br />
             Roseggerstraße 11<br />
@@ -29,7 +29,7 @@ export default function ImpressumPage() {
           </div>
           <div>
             <p className="font-bold">E-Mail</p>
-            <p>office@vision-lt.at</p>
+            <p>service@druckdesignstudio.at</p>
           </div>
         </div>
       </div>

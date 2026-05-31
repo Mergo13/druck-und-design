@@ -6,6 +6,7 @@ import { Info } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { formatEuro } from "@/lib/utils";
 import type { Product } from "@/types";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
@@ -14,13 +15,16 @@ type CardProduct = Product | ProductCatalogItem;
 export function ProductCard({
   product,
   isSelected = false,
-  onToggleSelect
+  onToggleSelect,
+  onAddToCart
 }: {
   product: CardProduct;
   isSelected?: boolean;
   onToggleSelect?: (slug: string) => void;
+  onAddToCart?: (slug: string) => void;
 }) {
   const image = "heroImage" in product ? product.heroImage : product.image;
+  const priceLabel = "basePrice" in product ? `Ab ${formatEuro(product.basePrice)}` : "Preis auf Anfrage";
 
   return (
     <motion.div whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
@@ -35,8 +39,13 @@ export function ProductCard({
           <Link href={`/produkt/${product.slug}`} className="mt-4 block text-xl font-black hover:text-primary">{product.name}</Link>
           <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">{product.short}</p>
           <div className="mt-5 flex items-center justify-between">
-            <p className="text-sm font-bold text-muted-foreground">Preis auf Anfrage</p>
+            <p className="text-sm font-bold text-muted-foreground">{priceLabel}</p>
           </div>
+          {onAddToCart ? (
+            <Button type="button" className="mt-4 w-full" onClick={() => onAddToCart(product.slug)}>
+              In den Warenkorb
+            </Button>
+          ) : null}
           {onToggleSelect ? (
             <Button
               type="button"
@@ -47,7 +56,7 @@ export function ProductCard({
               {isSelected ? "Ausgewählt" : "Produkt auswählen"}
             </Button>
           ) : null}
-          <Button asChild variant="outline" className="mt-5 w-full hover:bg-brand-mist hover:text-brand-blue"><Link href={`/produkt/${product.slug}`}><Info className="h-4 w-4" /> Details ansehen</Link></Button>
+          <Button asChild variant="outline" className="mt-3 w-full hover:bg-brand-mist hover:text-brand-blue"><Link href={`/produkt/${product.slug}`}><Info className="h-4 w-4" /> Details ansehen</Link></Button>
         </CardContent>
       </Card>
     </motion.div>

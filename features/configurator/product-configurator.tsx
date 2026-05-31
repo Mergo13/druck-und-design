@@ -1,34 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, PhoneCall } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { calculateVariantPrice } from "@/lib/print-workflow";
+import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
+const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
 
 export function ProductConfigurator({ product }: { product: ProductCatalogItem }) {
+  const router = useRouter();
   const firstVariant = product.variants[0];
   const productOptions = useMemo(() => {
     if (!firstVariant) return [];
     return firstVariant.attributes
       .filter((attribute) => attribute.type === "select")
-      .map((attribute) => ({
-        label: attribute.label,
-        key: attribute.key,
-        values: (attribute.options ?? []).map((option) => option.label)
-      }));
+      .map((attribute) => ({ label: attribute.label, key: attribute.key, options: attribute.options ?? [] }));
   }, [firstVariant]);
 
   const quantityOptions = useMemo(() => {
-    if (!firstVariant) return ["100", "250", "500", "1.000"];
-    const steps = product.quantitySteps ?? [firstVariant.quantityRule.min, firstVariant.quantityRule.max];
-    return steps
-      .filter((step) => Number.isFinite(step) && step > 0)
-      .sort((a, b) => a - b)
-      .map((step) => step.toLocaleString("de-DE"));
-  }, [firstVariant, product]);
+    return fixedQuantitySteps.map((step) => ({
+      value: String(step),
+      label: step.toLocaleString("de-DE")
+    }));
+  }, []);
 
   const [config, setConfig] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -36,9 +35,9 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
       for (const attribute of firstVariant.attributes) {
         if (attribute.type !== "select") continue;
         const selected = attribute.options?.find((option) => option.value === attribute.defaultValue);
-        initial[attribute.label] = selected?.label ?? attribute.options?.[0]?.label ?? "";
+        initial[attribute.key] = selected?.value ?? attribute.options?.[0]?.value ?? "";
       }
-      initial.Auflage = (product.quantitySteps?.[0] ?? firstVariant.quantityRule.min ?? 1).toLocaleString("de-DE");
+      initial.auflage = String(fixedQuantitySteps[0]);
     }
     return initial;
   });
@@ -61,6 +60,12 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [cartMessage, setCartMessage] = useState("");
+  const currentQuantity = Number(config.auflage ?? fixedQuantitySteps[0]);
+  const currentPrice = useMemo(() => {
+    if (!firstVariant) return product.basePrice;
+    return calculateVariantPrice(product, firstVariant.id, Number.isFinite(currentQuantity) ? currentQuantity : 1, config);
+  }, [config, currentQuantity, firstVariant, product]);
 
   useEffect(() => {
     return () => {
@@ -151,32 +156,44 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
     }
   }
 
+  function addToCart() {
+    const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{ slug: string; name: string; quantity: number; category: string; unitPrice?: number }>;
+    const merged = [...existing];
+    const found = merged.find((entry) => entry.slug === product.slug);
+    if (found) found.quantity += 1;
+    else merged.push({ slug: product.slug, name: product.name, quantity: 1, category: product.category, unitPrice: currentPrice });
+    localStorage.setItem("dud_cart", JSON.stringify(merged));
+    window.dispatchEvent(new Event("dud-cart-updated"));
+    setCartMessage("Produkt wurde in den Warenkorb gelegt.");
+  }
+
   return (
     <aside className="sticky top-24 rounded-lg border bg-white p-5 shadow-premium lg:block">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
-          <h2 className="text-2xl font-black">Preis auf Anfrage</h2>
+          <h2 className="text-2xl font-black">{formatEuro(currentPrice)}</h2>
           <p className="text-sm text-muted-foreground">Konfiguration inkl. Datencheck</p>
+          <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p>
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
           <CalendarCheck className="ml-auto h-4 w-4 text-primary" />
-          {config.Lieferzeit === "Same Day" || config.Lieferzeit === "sameday" ? "Heute versandbereit" : "Lieferung in 2-5 Tagen"}
+          {config.lieferzeit === "sameday" ? "Heute versandbereit" : "Lieferung in 2-5 Tagen"}
         </div>
       </div>
       <div className="mt-6 grid gap-4">
-        {[...productOptions, { label: "Auflage", key: "auflage", values: quantityOptions }].map(({ label, values }) => (
+        {[...productOptions, { label: "Auflage", key: "auflage", options: quantityOptions }].map(({ label, key, options }) => (
           <label className="grid gap-2" key={label}>
             <span className="text-sm font-bold">{label}</span>
             <select
               suppressHydrationWarning
-              value={config[label]}
-              onChange={(event) => setConfig({ ...config, [label]: event.target.value })}
+              value={config[key]}
+              onChange={(event) => setConfig({ ...config, [key]: event.target.value })}
               className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             >
-          {values.map((value) => (
-            <option key={value} value={value}>
-              {value}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
             </select>
@@ -253,7 +270,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         </div>
       ) : null}
       {preflightStatus === "ok" && (
-        <div className="mt-4 flex flex-col gap-2 rounded-md bg-teal-50 p-4 text-sm text-teal-900 border border-teal-200">
+        <div className="mt-4 flex flex-col gap-2 rounded-md border border-fuchsia-200 bg-fuchsia-50 p-4 text-sm text-fuchsia-900">
           <div className="flex items-center gap-2 font-bold">
             <CheckCircle2 className="h-4 w-4" /> Datencheck OK
           </div>
@@ -300,7 +317,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           <p className="font-bold">Qualitätschecks</p>
           <div className="mt-2 grid gap-1">
             {preflightDetails.map((item) => (
-              <div key={item.code} className={`flex items-center gap-2 ${item.passed ? "text-emerald-700" : "text-red-700"}`}>
+              <div key={item.code} className={`flex items-center gap-2 ${item.passed ? "text-fuchsia-700" : "text-red-700"}`}>
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 <span className="flex-1">{item.label}</span>
                 <span>{item.passed ? "OK" : "Error"}</span>
@@ -309,15 +326,22 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           </div>
         </div>
       )}
-      <Button
-        className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]"
-        size="lg"
-        asChild
-      >
-        <a href="/kontakt">
-          <PhoneCall className="h-4 w-4 mr-2" /> Jetzt unverbindlich anfragen
-        </a>
+      <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
+        In den Warenkorb
       </Button>
+      <Button
+        className="mt-3 w-full"
+        size="lg"
+        variant="outline"
+        type="button"
+        onClick={() => {
+          addToCart();
+          router.push("/warenkorb");
+        }}
+      >
+        Jetzt kaufen
+      </Button>
+      {cartMessage ? <p className="mt-3 text-center text-xs text-fuchsia-700">{cartMessage}</p> : null}
       <p className="mt-3 text-center text-xs text-muted-foreground">Wir beraten Sie gerne zu Materialien und Veredelungen.</p>
     </aside>
   );

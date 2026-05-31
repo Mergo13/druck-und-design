@@ -8,6 +8,7 @@ type PlatformDb = {
   products: ProductCatalogItem[];
   orders: Order[];
   users?: import("@/types").UserAccount[];
+  clientLogos?: string[];
 };
 
 const dbPath = path.join(process.cwd(), "data", "platform-db.json");
@@ -100,4 +101,16 @@ export async function deleteOrder(id: string) {
   const db = await readDb();
   const orders = db.orders.filter((item) => item.id !== id);
   await writeDb({ ...db, orders });
+}
+
+export async function getClientLogos() {
+  const db = await readDb();
+  return db.clientLogos ?? [];
+}
+
+export async function saveClientLogos(logos: string[]) {
+  const db = await readDb();
+  const clientLogos = logos.filter(Boolean);
+  await writeDb({ ...db, clientLogos });
+  return clientLogos;
 }

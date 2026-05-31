@@ -1,6 +1,86 @@
 {
   "orders": [
     {
+      "id": "ORD-2026-6028",
+      "createdAt": "2026-05-29T19:16:25.817Z",
+      "items": [
+        {
+          "id": "4fb25f80-af19-4034-ae4c-0b615d978cff",
+          "productSlug": "premium-flyer-a5",
+          "name": "Premium Flyer DIN A5",
+          "quantity": 1,
+          "price": 26.15,
+          "config": {
+            "Kategorie": "druckprodukte",
+            "Hinweis": "-"
+          }
+        },
+        {
+          "id": "e8fc2d15-229e-4f9b-8a47-f951ff93e870",
+          "productSlug": "visitenkarten",
+          "name": "Visitenkarten",
+          "quantity": 1,
+          "price": 177.45,
+          "config": {
+            "Kategorie": "druckprodukte",
+            "Hinweis": "-"
+          }
+        }
+      ],
+      "total": 203.6
+    },
+    {
+      "id": "ORD-2026-6364",
+      "createdAt": "2026-05-29T15:24:12.263Z",
+      "items": [
+        {
+          "id": "f4d41b3b-8e0e-4c37-9017-6a51a71723b0",
+          "productSlug": "premium-flyer-a5",
+          "name": "Premium Flyer DIN A5",
+          "quantity": 1,
+          "price": 26.15,
+          "config": {
+            "Kategorie": "druckprodukte",
+            "Hinweis": "-"
+          }
+        },
+        {
+          "id": "cc792f88-0185-4348-b9bf-059274b87f75",
+          "productSlug": "visitenkarten",
+          "name": "Visitenkarten",
+          "quantity": 1,
+          "price": 19.95,
+          "config": {
+            "Kategorie": "druckprodukte",
+            "Hinweis": "-"
+          }
+        },
+        {
+          "id": "3e37be98-3c7c-432a-b2b7-0393085072be",
+          "productSlug": "briefpapier",
+          "name": "Briefpapier",
+          "quantity": 1,
+          "price": 30.45,
+          "config": {
+            "Kategorie": "druckprodukte",
+            "Hinweis": "-"
+          }
+        },
+        {
+          "id": "3cafe3ed-b558-405d-ac05-7cb0097d7426",
+          "productSlug": "magazine",
+          "name": "Magazine",
+          "quantity": 1,
+          "price": 257,
+          "config": {
+            "Kategorie": "druckprodukte",
+            "Hinweis": "-"
+          }
+        }
+      ],
+      "total": 333.55
+    },
+    {
       "id": "ORD-2026-7140",
       "createdAt": "2026-05-24T15:19:05.455Z",
       "items": [
@@ -210,76 +290,6 @@
               "label": "Basispreis",
               "type": "fixed",
               "amount": 523.95
-            },
-            {
-              "key": "auflage",
-              "label": "Auflagenfaktor",
-              "type": "per-unit",
-              "amount": 0.105
-            }
-          ]
-        }
-      ],
-      "production": {
-        "baseProductionDays": 3,
-        "expressAvailable": true,
-        "preflightProfile": "standard-print",
-        "renderPipeline": "pdf-x4"
-      }
-    },
-    {
-      "slug": "test",
-      "name": "test",
-      "category": "druckprodukte",
-      "short": "test für professionelle Printproduktion.",
-      "description": "test mit konfigurierbaren Optionen und Produktionsworkflow.",
-      "seo": "test online konfigurieren, prüfen und drucken lassen.",
-      "heroImage": "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80",
-      "gallery": [
-        "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80"
-      ],
-      "rating": 4.8,
-      "basePrice": 19.95,
-      "deliveryText": "2-5 Werktage",
-      "tags": [
-        "Neu"
-      ],
-      "variants": [
-        {
-          "id": "test-standard",
-          "name": "Standard",
-          "skuPrefix": "TEST",
-          "attributes": [
-            {
-              "key": "lieferzeit",
-              "label": "Lieferzeit",
-              "type": "select",
-              "required": true,
-              "defaultValue": "standard",
-              "options": [
-                {
-                  "value": "standard",
-                  "label": "Standard"
-                },
-                {
-                  "value": "express",
-                  "label": "Express",
-                  "priceModifier": 19.95
-                }
-              ]
-            }
-          ],
-          "quantityRule": {
-            "min": 1,
-            "max": 10000,
-            "step": 1
-          },
-          "priceRules": [
-            {
-              "key": "basis",
-              "label": "Basispreis",
-              "type": "fixed",
-              "amount": 19.95
             },
             {
               "key": "auflage",
@@ -1842,5 +1852,18 @@
         "renderPipeline": "pdf-x4"
       }
     }
+  ],
+  "users": [
+    {
+      "id": "9dc7d017-7e1e-41fb-a166-a76cd8fd03fc",
+      "company": "Mrg",
+      "email": "mergoiza@mail.com",
+      "passwordHash": "054e73e65aa944059c2dc23e60ffd2db:dd89af60ff8c3ed8bfb075c4cd4ada8c1beb0a152cd838f1e120095302c58a978cf6094b85f621efeca860fbd52aa74f28ed74c7ebd57471c18921deb54efe96",
+      "createdAt": "2026-05-28T13:04:09.880Z"
+    }
+  ],
+  "clientLogos": [
+    "/uploads/products/1780141050661-83yh661v.jpeg",
+    "/uploads/products/1780141100142-qvzcbttu.jpg"
   ]
 }

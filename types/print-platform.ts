@@ -54,6 +54,7 @@ export type ProductCategory = {
   description: string;
   quantitySteps?: number[];
   defaultPropertyTemplate?: string;
+  logo?: string;
 };
 
 export type ProductCatalogItem = {
