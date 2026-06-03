@@ -7,9 +7,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as ProductCategory;
-  if (!body.slug || !body.name) {
+  const body = await request.json() as ProductCategory & { originalSlug?: string };
+  const { originalSlug, ...category } = body;
+  if (!category.slug || !category.name) {
     return NextResponse.json({ message: "Slug und Name sind Pflichtfelder." }, { status: 400 });
   }
-  return NextResponse.json(await upsertCategory(body));
+  return NextResponse.json(await upsertCategory(category, originalSlug));
 }

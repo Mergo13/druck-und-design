@@ -308,83 +308,16 @@
       }
     },
     {
-      "slug": "premium-flyer-a5",
-      "name": "Premium Flyer DIN A5",
-      "category": "druckprodukte",
-      "short": "Flyer mit Veredelung, Express und Preflight.",
-      "description": "Konfigurierbare Flyer für Kampagnen mit Materialwahl, Veredelung und Live-Preis.",
-      "seo": "Flyer drucken mit professionellem Datencheck, Variantenlogik und Expressproduktion.",
-      "heroImage": "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80",
-      "gallery": [
-        "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80",
-        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80"
-      ],
-      "rating": 4.9,
-      "basePrice": 26.15,
-      "deliveryText": "ab morgen",
-      "tags": [
-        "Bestseller",
-        "Same Day"
-      ],
-      "variants": [
-        {
-          "id": "flyer-standard",
-          "name": "Standard Flyer",
-          "skuPrefix": "FLY-A5",
-          "attributes": [
-            {
-              "key": "material",
-              "label": "Material",
-              "type": "select",
-              "required": true,
-              "defaultValue": "bd-matt",
-              "options": [
-                {
-                  "value": "bd-matt",
-                  "label": "Bilderdruck matt"
-                }
-              ]
-            }
-          ],
-          "quantityRule": {
-            "min": 100,
-            "max": 10000,
-            "step": 50
-          },
-          "priceRules": [
-            {
-              "key": "basis",
-              "label": "Basispreis",
-              "type": "fixed",
-              "amount": 26.15
-            },
-            {
-              "key": "auflage",
-              "label": "Auflagenfaktor",
-              "type": "per-unit",
-              "amount": 0.04725
-            }
-          ]
-        }
-      ],
-      "production": {
-        "baseProductionDays": 3,
-        "expressAvailable": true,
-        "sameDayCutoff": "11:00",
-        "preflightProfile": "standard-print",
-        "renderPipeline": "pdf-x4"
-      }
-    },
-    {
       "slug": "briefpapier",
       "name": "Briefpapier",
       "category": "druckprodukte",
       "short": "Geschäftsbriefpapier mit sauberem Markenauftritt.",
       "description": "Briefpapier in professioneller Qualität für Unternehmen, Kanzleien und Agenturen.",
       "seo": "Briefpapier drucken mit professioneller Papierauswahl und schneller Lieferung.",
-      "heroImage": "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80",
+      "heroImage": "/uploads/products/1780482264609-kiquhmxi.jpg",
       "gallery": [
-        "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80"
+        "https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=1200&q=80",
+        "/uploads/products/1780482265424-pd0pno9g.jpg"
       ],
       "rating": 4.8,
       "basePrice": 30.45,
@@ -625,9 +558,9 @@
       "short": "Premium-Visitenkarten für einen starken ersten Eindruck.",
       "description": "Visitenkarten mit hochwertiger Haptik, Veredelung und sauberer Kantenqualität.",
       "seo": "Visitenkarten drucken mit Premiumpapieren und optionaler Veredelung.",
-      "heroImage": "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80",
+      "heroImage": "/uploads/products/1780494756748-fbvz13tm.png",
       "gallery": [
-        "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=1200&q=80"
+        "/uploads/products/1780494764038-ueca2o3z.png"
       ],
       "rating": 4.9,
       "basePrice": 19.95,
@@ -1102,7 +1035,7 @@
       "short": "Premium Hoodie für Teams und Brandwear.",
       "description": "Warmer Hoodie mit modernem Schnitt für Unternehmen, Creator-Merch und Corporate Teams.",
       "seo": "Team Hoodie im Textildruck konfigurieren mit Größenmix und Expressoption.",
-      "heroImage": "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80",
+      "heroImage": "/uploads/products/1780495543782-ji4hr4cj.jpg",
       "gallery": [
         "https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=1200&q=80"
       ],
@@ -1670,9 +1603,10 @@
       "short": "Robuste Firmenschilder für außen.",
       "description": "Hochwertiger UV-Direktdruck auf 3mm Alu-Dibond Verbundplatten.",
       "seo": "Alu-Dibond Schilder drucken mit UV-Schutz und optionalen Bohrungen.",
-      "heroImage": "https://images.unsplash.com/photo-1541462608141-ad60397d4574?auto=format&fit=crop&w=1200&q=80",
+      "heroImage": "/uploads/products/1780495815071-5ihhdscg.png",
       "gallery": [
-        "https://images.unsplash.com/photo-1541462608141-ad60397d4574?auto=format&fit=crop&w=1200&q=80"
+        "/uploads/products/1780495781833-crbxcxuq.png",
+        "/uploads/products/1780495785048-ijh8vss5.png"
       ],
       "rating": 4.9,
       "basePrice": 47.25,

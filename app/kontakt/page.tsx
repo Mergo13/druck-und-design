@@ -5,7 +5,7 @@ import { ContactForm } from "@/features/contact/contact-form";
 export default function ContactPage() {
   const supportCards: Array<[LucideIcon, string, string, string]> = [
     [Phone, "Telefon", "+43 (0) 7242 63 2 39", "Mo-Do 8:00-18:00, Fr 8:00-14:00 Uhr"],
-    [Mail, "E-Mail", "service@druckdesignstudio.at", "Antwort meist am selben Werktag"],
+    [Mail, "E-Mail", "kontakt@druck-und-design.at", "Antwort meist am selben Werktag"],
     [MessageCircle, "WhatsApp", "+43 (0) 7242 63 2 39", "Direkt fuer schnelle Rueckfragen"],
     [MapPin, "Standort", "Wels, Oberoesterreich", "Termin nach Vereinbarung"]
   ];
@@ -24,10 +24,15 @@ export default function ContactPage() {
               <p className="mt-1 text-sm text-muted-foreground">{text}</p>
             </div>
           ))}
-          <div className="grid h-64 place-items-center rounded-lg border bg-slate-100 px-6 text-center text-sm font-bold text-muted-foreground">
-            druck&design studio
-            <br />
-            Wels, Oberoesterreich
+          <div className="h-64 overflow-hidden rounded-lg border bg-slate-100">
+            <iframe
+              title="Google Maps: Roseggerstrasse 11, 4600 Wels"
+              src="https://www.google.com/maps?q=Roseggerstrasse+11,+4600+Wels&output=embed"
+              className="h-full w-full border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
           </div>
         </aside>
       </section>

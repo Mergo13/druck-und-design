@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle } from "lucide-react";
+import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem } from "@/types/print-platform";
@@ -45,7 +46,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
   const [mockupUrl, setMockupUrl] = useState<string>("");
   const [uploadError, setUploadError] = useState("");
   const [preflightStatus, setPreflightStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
-  const [preflightMessage, setPreflightMessage] = useState("Live-Vorschau und Datencheck starten nach dem Upload.");
+  const [preflightMessage, setPreflightMessage] = useState("Die KI-gestützte Live-Analyse startet nach dem Dateiupload.");
   const [preflightDetails, setPreflightDetails] = useState<Array<{ code: string; label: string; passed: boolean; hint?: string }>>([]);
   const [metrics, setMetrics] = useState<{
     fileSizeMb: number;
@@ -149,10 +150,10 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
     setMetrics(result.metrics ?? null);
     if (result.valid) {
       setPreflightStatus("ok");
-      setPreflightMessage(result.aiAdvice || `Preflight bestanden: ${result.checks.filter((item) => item.passed).length}/${result.checks.length} Checks OK.`);
+      setPreflightMessage(result.aiAdvice || "Die KI hat Ihre Daten als produktionsreif eingestuft.");
     } else {
       setPreflightStatus("error");
-      setPreflightMessage(result.aiAdvice || "Preflight fehlgeschlagen. Bitte Datei prüfen.");
+      setPreflightMessage(result.aiAdvice || "Die KI-Analyse hat kritische Fehler festgestellt, die das Druckergebnis beeinträchtigen könnten.");
     }
   }
 
@@ -223,7 +224,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         />
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />
         <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten hochladen"}</p>
-        <p className="text-xs text-muted-foreground">Klicken oder Datei hier ablegen. PDF, AI, PSD, PNG, JPG oder TIFF bis 50 MB.</p>
+        <p className="text-xs text-muted-foreground mt-1">Klicken oder Datei hier ablegen. PDF, AI, PSD, PNG, JPG oder TIFF bis 50 MB.</p>
         {uploadedFile && (
           <div className="mt-3 flex justify-center">
             <Button
@@ -248,14 +249,11 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           </div>
         )}
       </label>
-      {(uploadError || preflightStatus === "error") && (
+      {(uploadError) && (
         <div className="mt-4 flex flex-col gap-2 rounded-md bg-red-50 p-3 text-sm text-red-800 border border-red-200">
           <div className="flex items-center gap-2">
-            <XCircle className="h-4 w-4" /> {uploadError || "Fehler in den Druckdaten"}
+            <XCircle className="h-4 w-4" /> {uploadError}
           </div>
-          {preflightMessage && preflightStatus === "error" && (
-            <p className="text-xs opacity-90 leading-relaxed italic">{preflightMessage}</p>
-          )}
         </div>
       )}
       {mockupUrl ? (
@@ -270,24 +268,47 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         </div>
       ) : null}
       {preflightStatus === "ok" && (
-        <div className="mt-4 flex flex-col gap-2 rounded-md border border-fuchsia-200 bg-fuchsia-50 p-4 text-sm text-fuchsia-900">
-          <div className="flex items-center gap-2 font-bold">
-            <CheckCircle2 className="h-4 w-4" /> Datencheck OK
+        <div className="mt-4 flex flex-col gap-2 rounded-md border border-emerald-200 bg-emerald-50/50 p-4 text-sm text-emerald-900">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold">
+              <FileCheck className="h-4 w-4 text-emerald-600" /> Preflight
+            </div>
+            <Badge variant="success">BESTANDEN</Badge>
           </div>
-          <p className="leading-relaxed">{preflightMessage}</p>
-          <div className="mt-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-black/40">
-            <Sparkles className="h-3 w-3" /> KI-Assistent Analyse
+          <p className="mt-1 leading-relaxed text-xs">{preflightMessage}</p>
+          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600/70">
+            <Sparkles className="h-3 w-3 animate-pulse" /> KI-Visionsanalyse & Profi-Datencheck
+          </div>
+        </div>
+      )}
+      {preflightStatus === "error" && (
+        <div className="mt-4 flex flex-col gap-2 rounded-md border border-red-200 bg-red-50/50 p-4 text-sm text-red-900">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold">
+              <XCircle className="h-4 w-4 text-red-600" /> Preflight
+            </div>
+            <Badge variant="destructive">FEHLER</Badge>
+          </div>
+          <p className="mt-1 leading-relaxed text-xs">{preflightMessage}</p>
+          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-red-600/70">
+            <Sparkles className="h-3 w-3" /> KI-Risikobewertung
           </div>
         </div>
       )}
       {preflightStatus === "idle" && (
-        <div className="mt-4 flex items-center gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700 border">
-          <FileCheck className="h-4 w-4" /> Preflight
+        <div className="mt-4 flex items-center justify-between rounded-md bg-slate-50 p-3 text-sm text-slate-700 border">
+          <div className="flex items-center gap-2">
+            <FileCheck className="h-4 w-4" /> Preflight
+          </div>
+          <Badge variant="outline">BEREIT</Badge>
         </div>
       )}
       {preflightStatus === "running" && (
-        <div className="mt-4 flex items-center gap-2 rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-100 animate-pulse">
-          <FileCheck className="h-4 w-4" /> Preflight läuft...
+        <div className="mt-4 flex items-center justify-between rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-100 animate-pulse">
+          <div className="flex items-center gap-2">
+            <FileCheck className="h-4 w-4" /> Preflight läuft...
+          </div>
+          <Badge variant="secondary">PRÜFT</Badge>
         </div>
       )}
       {metrics && (

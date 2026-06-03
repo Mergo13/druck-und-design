@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import generateRetailData from "data-generator-retail";
 import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
 import type { Order } from "@/types";
 
@@ -37,11 +38,15 @@ export async function getProductBySlug(slug: string) {
   return db.products.find((item) => item.slug === slug) ?? null;
 }
 
-export async function upsertCategory(category: ProductCategory) {
+export async function upsertCategory(category: ProductCategory, originalSlug?: string) {
   const db = await readDb();
-  const exists = db.categories.some((item) => item.slug === category.slug);
-  const categories = exists ? db.categories.map((item) => item.slug === category.slug ? category : item) : [category, ...db.categories];
-  await writeDb({ ...db, categories });
+  const targetSlug = originalSlug ?? category.slug;
+  const categoriesWithoutOld = db.categories.filter((item) => item.slug !== targetSlug);
+  const categories = [category, ...categoriesWithoutOld];
+  const products = targetSlug !== category.slug
+    ? db.products.map((item) => item.category === targetSlug ? { ...item, category: category.slug } : item)
+    : db.products;
+  await writeDb({ ...db, categories, products });
   return category;
 }
 
@@ -113,4 +118,89 @@ export async function saveClientLogos(logos: string[]) {
   const clientLogos = logos.filter(Boolean);
   await writeDb({ ...db, clientLogos });
   return clientLogos;
+}
+
+function toSlug(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+export async function seedFromReactAdminDataGenerator() {
+  const generated = generateRetailData();
+  const db = await readDb();
+
+  const categories: ProductCategory[] = generated.categories.map((category) => ({
+    slug: toSlug(category.name),
+    name: category.name.charAt(0).toUpperCase() + category.name.slice(1),
+    description: `Demo category generated from react-admin data-generator: ${category.name}.`,
+    defaultPropertyTemplate: "print-basic",
+    quantitySteps: [1, 10, 50, 100, 500, 1000]
+  }));
+
+  const categoryIdToSlug = new Map(generated.categories.map((category) => [category.id, toSlug(category.name)]));
+
+  const products: ProductCatalogItem[] = generated.products.map((product) => {
+    const categorySlug = categoryIdToSlug.get(product.category_id) ?? "druckprodukte";
+    const productSlug = toSlug(`${categorySlug}-${product.reference}-${product.id}`);
+    const basePrice = Number(product.price.toFixed(2));
+
+    return {
+      slug: productSlug,
+      name: product.reference,
+      category: categorySlug,
+      short: `${product.reference} - generated demo product.`,
+      description: product.description,
+      seo: `${product.reference} in category ${categorySlug}. Auto-generated SEO text for demo catalog.`,
+      heroImage: product.image,
+      gallery: [product.image, product.thumbnail],
+      rating: 4.5,
+      basePrice,
+      deliveryText: product.stock > 0 ? "3-5 Werktage" : "Auf Anfrage",
+      tags: ["Demo", categorySlug],
+      variants: [
+        {
+          id: `${productSlug}-default`,
+          name: "Default",
+          skuPrefix: productSlug.toUpperCase().slice(0, 12),
+          attributes: [
+            {
+              key: "size",
+              label: "Size",
+              type: "select",
+              required: true,
+              defaultValue: "standard",
+              options: [{ value: "standard", label: `${Math.round(product.width)}x${Math.round(product.height)} cm` }]
+            }
+          ],
+          quantityRule: { min: 1, max: 5000, step: 1 },
+          priceRules: [
+            { key: "basis", label: "Basispreis", type: "fixed", amount: basePrice },
+            { key: "auflage", label: "Auflagenfaktor", type: "per-unit", amount: Number((basePrice * 0.1).toFixed(2)) }
+          ]
+        }
+      ],
+      production: {
+        baseProductionDays: 3,
+        expressAvailable: product.stock > 0,
+        preflightProfile: "standard-print",
+        renderPipeline: "pdf-x4"
+      },
+      quantitySteps: [1, 10, 50, 100, 500, 1000],
+      propertyTemplate: "print-basic"
+    };
+  });
+
+  await writeDb({
+    ...db,
+    categories,
+    products
+  });
+
+  return {
+    categories: categories.length,
+    products: products.length
+  };
 }

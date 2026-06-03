@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { AdminDashboard } from "@/features/admin/admin-dashboard";
+import { AdminClient } from "@/app/admin/admin-client";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminPage() {
-  return <AdminDashboard />;
+  return <AdminClient />;
 }

@@ -55,6 +55,10 @@ export type ProductCategory = {
   quantitySteps?: number[];
   defaultPropertyTemplate?: string;
   logo?: string;
+  properties?: Array<{
+    name: string;
+    values: string[];
+  }>;
 };
 
 export type ProductCatalogItem = {

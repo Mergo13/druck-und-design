@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { Star } from "lucide-react";
+import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
 import { getProductBySlug } from "@/lib/catalog-repository";
+import { CheckCircle2 } from "lucide-react";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -29,29 +30,28 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
       <div className="grid gap-10 lg:grid-cols-[1fr_420px]">
         <div>
-          <div className="grid gap-4 md:grid-cols-[1fr_120px]">
-            <div className="relative aspect-[4/3] overflow-hidden rounded-lg border bg-brand-mist shadow-soft">
-              <Image src={product.heroImage} alt={`${product.name} Demo-Mockup`} fill className="object-cover" priority sizes="(min-width: 1024px) 60vw, 100vw" />
-            </div>
-            <div className="grid grid-cols-3 gap-3 md:grid-cols-1">
-              {product.gallery.map((image) => (
-                <div className="relative aspect-square overflow-hidden rounded-lg border bg-muted" key={image}>
-                  <Image src={image} alt={`${product.name} Galerie`} fill className="object-cover" sizes="120px" />
-                </div>
-              ))}
-            </div>
-          </div>
+          <ProductGallery images={[product.heroImage, ...product.gallery]} name={product.name} />
           <div className="mt-8">
-            <div className="flex items-center gap-2 text-sm font-bold text-amber-600"><Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {product.rating} Kundenbewertung</div>
-            <h1 className="mt-3 text-4xl font-black">{product.name}</h1>
+            <div className="flex items-center gap-2 text-sm font-bold text-amber-600">
+              <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {product.rating} Kundenbewertung
+            </div>
+            <h1 className="mt-3 text-4xl font-black tracking-tight">{product.name}</h1>
             <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">{product.description}</p>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
-              "Automatischer Datencheck Ihrer Vorlagen",
-              "Fachliche Beratung zu Material und Veredelung",
-              "Sonderformate und individuelle Wünsche auf Anfrage"
-            ].map((feature) => <div className="rounded-lg border p-5 font-bold" key={feature}>{feature}</div>)}
+              { title: "Profi-Datencheck", desc: "Automatischer Check Ihrer Vorlagen auf Druckfähigkeit" },
+              { title: "Fachberatung", desc: "Beratung zu Material und Veredelung durch Experten" },
+              { title: "Individualität", desc: "Sonderformate und Wünsche auf Anfrage möglich" }
+            ].map((feature) => (
+              <div className="flex flex-col gap-2 rounded-xl border bg-brand-mist/30 p-5 shadow-sm transition-hover hover:shadow-md" key={feature.title}>
+                <div className="flex items-center gap-2 font-black text-brand-primary">
+                  <CheckCircle2 className="h-5 w-5" />
+                  {feature.title}
+                </div>
+                <div className="text-sm text-muted-foreground leading-relaxed">{feature.desc}</div>
+              </div>
+            ))}
           </div>
         </div>
         <ProductConfigurator product={product} />
