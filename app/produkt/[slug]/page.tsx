@@ -3,18 +3,18 @@ import { notFound } from "next/navigation";
 import { Star } from "lucide-react";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
-import { getProductBySlug } from "@/lib/catalog-repository";
+import { getPublicProductBySlug } from "@/lib/catalog-repository";
 import { CheckCircle2 } from "lucide-react";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const product = await getPublicProductBySlug(slug);
   return { title: product?.name ?? "Produkt", description: product?.seo };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const product = await getPublicProductBySlug(slug);
   if (!product) notFound();
 
   const schema = {

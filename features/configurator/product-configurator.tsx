@@ -12,6 +12,7 @@ import type { ProductCatalogItem } from "@/types/print-platform";
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
 const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
+const PRINT_CHECK_FEE = Number(process.env.NEXT_PUBLIC_PRINT_CHECK_FEE_EUR ?? "9.99");
 
 export function ProductConfigurator({ product }: { product: ProductCatalogItem }) {
   const router = useRouter();
@@ -62,6 +63,8 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
   const [isDragging, setIsDragging] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
+  const [printCheckRequested, setPrintCheckRequested] = useState(false);
+  const [categoryProperties, setCategoryProperties] = useState<Array<{ name: string; values: string[] }>>([]);
   const currentQuantity = Number(config.auflage ?? fixedQuantitySteps[0]);
   const currentPrice = useMemo(() => {
     if (!firstVariant) return product.basePrice;
@@ -73,6 +76,26 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
       if (mockupUrl) URL.revokeObjectURL(mockupUrl);
     };
   }, [mockupUrl]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/catalog/categories");
+        if (!res.ok) return;
+        const categories = await res.json() as Array<{ slug: string; properties?: Array<{ name: string; values: string[] }> }>;
+        const category = categories.find((entry) => entry.slug === product.category);
+        setCategoryProperties(category?.properties ?? []);
+      } catch {
+        setCategoryProperties([]);
+      }
+    })();
+  }, [product.category]);
+
+  const enabledProperties = useMemo(() => {
+    const enabled = new Set(product.enabledCategoryProperties ?? []);
+    if (!enabled.size) return [];
+    return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
+  }, [categoryProperties, product.enabledCategoryProperties]);
 
   async function validateAndSetFile(file?: File) {
     setUploadError("");
@@ -157,15 +180,80 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
     }
   }
 
-  function addToCart() {
-    const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{ slug: string; name: string; quantity: number; category: string; unitPrice?: number }>;
+  async function uploadPrintFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch("/api/uploads/print-file", { method: "POST", body: formData });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ message: "Datei-Upload fehlgeschlagen." }));
+      throw new Error(payload.message ?? "Datei-Upload fehlgeschlagen.");
+    }
+    return response.json() as Promise<{ url: string; name: string; size?: number; mimeType?: string }>;
+  }
+
+  async function addToCart() {
+    if (printCheckRequested && !uploadedFile) {
+      setCartMessage("Für den Profi-Print-Check bitte zuerst eine Datei hochladen.");
+      return false;
+    }
+    if (printCheckRequested && preflightStatus !== "ok" && preflightStatus !== "error") {
+      setCartMessage("Bitte warten, bis der Datei-Check abgeschlossen ist.");
+      return false;
+    }
+
+    const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{
+      slug: string;
+      name: string;
+      quantity: number;
+      category: string;
+      unitPrice?: number;
+      printCheckRequested?: boolean;
+      printCheckFee?: number;
+      printCheckFileName?: string;
+      printCheckFileUrl?: string;
+      printCheckStatus?: "ok" | "error" | "idle";
+    }>;
+
+    let uploadedUrl: string | undefined;
+    if (printCheckRequested && uploadedFile) {
+      try {
+        const uploaded = await uploadPrintFile(uploadedFile);
+        uploadedUrl = uploaded.url;
+      } catch (error) {
+        setCartMessage(error instanceof Error ? error.message : "Datei-Upload fehlgeschlagen.");
+        return false;
+      }
+    }
+
     const merged = [...existing];
     const found = merged.find((entry) => entry.slug === product.slug);
-    if (found) found.quantity += 1;
-    else merged.push({ slug: product.slug, name: product.name, quantity: 1, category: product.category, unitPrice: currentPrice });
+    if (found) {
+      found.quantity += 1;
+      if (printCheckRequested) {
+        found.printCheckRequested = true;
+        found.printCheckFee = PRINT_CHECK_FEE;
+        found.printCheckFileName = uploadedFile?.name ?? found.printCheckFileName;
+        found.printCheckFileUrl = uploadedUrl ?? found.printCheckFileUrl;
+        found.printCheckStatus = preflightStatus === "ok" ? "ok" : preflightStatus === "error" ? "error" : "idle";
+      }
+    } else {
+      merged.push({
+        slug: product.slug,
+        name: product.name,
+        quantity: 1,
+        category: product.category,
+        unitPrice: currentPrice,
+        printCheckRequested,
+        printCheckFee: printCheckRequested ? PRINT_CHECK_FEE : 0,
+        printCheckFileName: uploadedFile?.name,
+        printCheckFileUrl: uploadedUrl,
+        printCheckStatus: preflightStatus === "ok" ? "ok" : preflightStatus === "error" ? "error" : "idle"
+      });
+    }
     localStorage.setItem("dud_cart", JSON.stringify(merged));
     window.dispatchEvent(new Event("dud-cart-updated"));
     setCartMessage("Produkt wurde in den Warenkorb gelegt.");
+    return true;
   }
 
   return (
@@ -197,6 +285,23 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
               {option.label}
             </option>
           ))}
+            </select>
+          </label>
+        ))}
+        {enabledProperties.map((property) => (
+          <label className="grid gap-2" key={`category-property-${property.name}`}>
+            <span className="text-sm font-bold">{property.name}</span>
+            <select
+              suppressHydrationWarning
+              value={config[`eigenschaft:${property.name}`] ?? property.values[0]}
+              onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
+              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              {property.values.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
             </select>
           </label>
         ))}
@@ -347,6 +452,17 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           </div>
         </div>
       )}
+      <div className="mt-4 rounded-md border p-3">
+        <label className="flex items-center gap-3 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={printCheckRequested}
+            onChange={(event) => setPrintCheckRequested(event.target.checked)}
+          />
+          Profi Print-Check (KI + manuell) + {formatEuro(PRINT_CHECK_FEE)}
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">Wird als Zusatzleistung berechnet (Abholung oder Versand).</p>
+      </div>
       <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
         In den Warenkorb
       </Button>
@@ -356,8 +472,10 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         variant="outline"
         type="button"
         onClick={() => {
-          addToCart();
-          router.push("/warenkorb");
+          void (async () => {
+            const ok = await addToCart();
+            if (ok) router.push("/warenkorb");
+          })();
         }}
       >
         Jetzt kaufen

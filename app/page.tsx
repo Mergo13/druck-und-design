@@ -8,12 +8,12 @@ import { ClientsMarquee } from "@/components/home/clients-marquee";
 import { HeroBackgroundSlideshow } from "@/components/home/hero-background-slideshow";
 import { HighlightCarousel } from "@/components/home/highlight-carousel";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { getCategories } from "@/lib/catalog-repository";
+import { getPublicCategories } from "@/lib/catalog-repository";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const platformCategories = await getCategories();
+  const platformCategories = await getPublicCategories();
   const homepageLogos = await getHomepageLogos();
   const services: Array<{ icon: typeof Printer; title: string; text: string; href: string }> = [
     { icon: Printer, title: "Druckservice", text: "Flyer, Broschüren, Karten und Geschäftsdrucksorten in hochwertiger Produktion.", href: "/druckservice" },

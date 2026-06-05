@@ -52,6 +52,8 @@ export type ProductCategory = {
   slug: MainCategory;
   name: string;
   description: string;
+  visible?: boolean;
+  published?: boolean;
   quantitySteps?: number[];
   defaultPropertyTemplate?: string;
   logo?: string;
@@ -65,6 +67,8 @@ export type ProductCatalogItem = {
   slug: string;
   name: string;
   category: MainCategory;
+  visible?: boolean;
+  published?: boolean;
   short: string;
   description: string;
   seo: string;
@@ -78,6 +82,7 @@ export type ProductCatalogItem = {
   production: ProductionMetadata;
   quantitySteps?: number[];
   propertyTemplate?: string;
+  enabledCategoryProperties?: string[];
 };
 
 export type FileCheckResult = {

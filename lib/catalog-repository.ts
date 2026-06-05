@@ -33,9 +33,39 @@ export async function getProducts() {
   return db.products;
 }
 
+export async function getPublicCategories() {
+  const categories = await getCategories();
+  return categories.filter((item) => item.visible !== false && item.published !== false);
+}
+
+export async function getPublicProducts() {
+  const [products, categories] = await Promise.all([getProducts(), getCategories()]);
+  const visibleCategories = new Set(
+    categories
+      .filter((item) => item.visible !== false && item.published !== false)
+      .map((item) => item.slug)
+  );
+  return products.filter(
+    (item) => item.visible !== false && item.published !== false && visibleCategories.has(item.category)
+  );
+}
+
 export async function getProductBySlug(slug: string) {
   const db = await readDb();
   return db.products.find((item) => item.slug === slug) ?? null;
+}
+
+export async function getPublicProductBySlug(slug: string) {
+  const [products, categories] = await Promise.all([getProducts(), getCategories()]);
+  const product = products.find((item) => item.slug === slug);
+  if (!product || product.visible === false || product.published === false) {
+    return null;
+  }
+  const category = categories.find((item) => item.slug === product.category);
+  if (!category || category.visible === false || category.published === false) {
+    return null;
+  }
+  return product;
 }
 
 export async function upsertCategory(category: ProductCategory, originalSlug?: string) {
@@ -52,6 +82,10 @@ export async function upsertCategory(category: ProductCategory, originalSlug?: s
 
 export async function deleteCategory(slug: string) {
   const db = await readDb();
+  const linkedProducts = db.products.filter((item) => item.category === slug);
+  if (linkedProducts.length > 0) {
+    throw new Error("Kategorie kann nicht gelöscht werden, solange Produkte zugeordnet sind.");
+  }
   const categories = db.categories.filter((item) => item.slug !== slug);
   await writeDb({ ...db, categories });
 }
@@ -96,8 +130,14 @@ export async function getUserByEmail(email: string) {
 export async function saveUser(user: import("@/types").UserAccount) {
   const db = await readDb();
   const users = db.users ?? [];
-  const exists = users.some((item) => item.email.toLowerCase() === user.email.toLowerCase());
-  const nextUsers = exists ? users.map((item) => item.email.toLowerCase() === user.email.toLowerCase() ? user : item) : [user, ...users];
+  const exists = users.some(
+    (item) => item.id === user.id || item.email.toLowerCase() === user.email.toLowerCase()
+  );
+  const nextUsers = exists
+    ? users.map((item) =>
+        item.id === user.id || item.email.toLowerCase() === user.email.toLowerCase() ? user : item
+      )
+    : [user, ...users];
   await writeDb({ ...db, users: nextUsers });
   return user;
 }
@@ -136,6 +176,8 @@ export async function seedFromReactAdminDataGenerator() {
     slug: toSlug(category.name),
     name: category.name.charAt(0).toUpperCase() + category.name.slice(1),
     description: `Demo category generated from react-admin data-generator: ${category.name}.`,
+    visible: true,
+    published: true,
     defaultPropertyTemplate: "print-basic",
     quantitySteps: [1, 10, 50, 100, 500, 1000]
   }));
@@ -151,6 +193,8 @@ export async function seedFromReactAdminDataGenerator() {
       slug: productSlug,
       name: product.reference,
       category: categorySlug,
+      visible: true,
+      published: true,
       short: `${product.reference} - generated demo product.`,
       description: product.description,
       seo: `${product.reference} in category ${categorySlug}. Auto-generated SEO text for demo catalog.`,

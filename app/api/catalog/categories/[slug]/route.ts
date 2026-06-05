@@ -11,6 +11,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ slug: stri
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  await deleteCategory(slug);
-  return NextResponse.json({ ok: true });
+  try {
+    await deleteCategory(slug);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Kategorie konnte nicht gelöscht werden.";
+    return NextResponse.json({ message }, { status: 409 });
+  }
 }

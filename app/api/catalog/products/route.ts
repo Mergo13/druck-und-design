@@ -8,10 +8,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const body = await request.json() as ProductCatalogItem;
+  const product: ProductCatalogItem = {
+    ...body,
+    visible: body.visible ?? true,
+    published: body.published ?? true
+  };
   const categories = await getCategories();
-  const isValidCategory = categories.some((item) => item.slug === body.category);
+  const isValidCategory = categories.some((item) => item.slug === product.category);
   if (!isValidCategory) {
     return NextResponse.json({ message: "Ungültige Kategorie. Bitte bestehende Kategorie verwenden." }, { status: 400 });
   }
-  return NextResponse.json(await upsertProduct(body));
+  return NextResponse.json(await upsertProduct(product));
 }

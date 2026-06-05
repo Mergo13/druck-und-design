@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShopBrowser } from "@/features/shop/shop-browser";
-import { getCategories, getProducts } from "@/lib/catalog-repository";
+import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository";
 
 export async function generateMetadata({ params }: { params: Promise<{ kategorie: string }> }): Promise<Metadata> {
   const { kategorie } = await params;
-  const category = (await getCategories()).find((item) => item.slug === kategorie);
+  const category = (await getPublicCategories()).find((item) => item.slug === kategorie);
   return {
     title: category?.name ?? "Kategorie",
     description: category?.description
@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ kategorie
 
 export default async function CategoryPage({ params }: { params: Promise<{ kategorie: string }> }) {
   const { kategorie } = await params;
-  const [categories, products] = await Promise.all([getCategories(), getProducts()]);
+  const [categories, products] = await Promise.all([getPublicCategories(), getPublicProducts()]);
   const category = categories.find((item) => item.slug === kategorie);
   if (!category || ["druckservice", "werbetechnik", "werbeagentur", "kleidung-textilien", "leistungen"].includes(kategorie)) notFound();
 
