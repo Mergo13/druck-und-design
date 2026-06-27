@@ -4,20 +4,20 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 motion-elevate",
   {
     variants: {
       variant: {
-        default: "bg-[linear-gradient(135deg,#235c99,#1e7f9d)] text-primary-foreground shadow-[0_10px_24px_rgba(35,92,153,.24)] hover:brightness-105",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline: "border bg-background hover:bg-muted",
-        ghost: "hover:bg-muted",
-        accent: "bg-[linear-gradient(135deg,#c026d3,#ec4899)] text-white shadow-[0_10px_24px_rgba(192,38,211,.22)] hover:brightness-105"
+        default: "bg-[linear-gradient(135deg,#1d4ed8,#0f766e)] text-primary-foreground shadow-[0_10px_22px_rgba(29,78,216,.26)] hover:brightness-110",
+        secondary: "bg-slate-100 text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,.75)] hover:bg-slate-200/80",
+        outline: "border border-slate-200 bg-white/80 text-slate-800 shadow-[0_1px_1px_rgba(15,23,42,.04)] hover:bg-slate-50",
+        ghost: "text-slate-700 hover:bg-slate-100",
+        accent: "bg-[linear-gradient(135deg,#8b5cf6,#ec4899)] text-white shadow-[0_10px_22px_rgba(139,92,246,.24)] hover:brightness-110"
       },
       size: {
-        default: "h-11 px-5",
-        sm: "h-9 px-3",
-        lg: "h-12 px-7",
+        default: "h-10 px-4",
+        sm: "h-8 px-3 text-xs",
+        lg: "h-11 px-6",
         icon: "h-10 w-10"
       }
     },

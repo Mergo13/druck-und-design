@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, Search, User, ShoppingCart, X, ArrowRight, Store, Newspaper, MessageCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { createElement, type ComponentType, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEuro } from "@/lib/utils";
@@ -28,6 +29,8 @@ export function Header() {
   const [searchText, setSearchText] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [cartPulse, setCartPulse] = useState(false);
+  const [flyItems, setFlyItems] = useState<Array<{ id: string; x: number; y: number; tx: number; ty: number }>>([]);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const suggestions = useMemo(() => {
@@ -96,6 +99,28 @@ export function Header() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    const onFlyToCart = (event: Event) => {
+      const custom = event as CustomEvent<{ x?: number; y?: number }>;
+      const cartTarget = document.getElementById("global-cart-button");
+      if (!cartTarget) return;
+      const x = custom.detail?.x ?? window.innerWidth * 0.5;
+      const y = custom.detail?.y ?? window.innerHeight * 0.5;
+      const rect = cartTarget.getBoundingClientRect();
+      const tx = rect.left + rect.width / 2;
+      const ty = rect.top + rect.height / 2;
+      const id = `fly-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      setFlyItems((prev) => [...prev, { id, x, y, tx, ty }]);
+      setCartPulse(true);
+      window.setTimeout(() => setCartPulse(false), 450);
+      window.setTimeout(() => {
+        setFlyItems((prev) => prev.filter((item) => item.id !== id));
+      }, 750);
+    };
+    window.addEventListener("dud-fly-to-cart", onFlyToCart as EventListener);
+    return () => window.removeEventListener("dud-fly-to-cart", onFlyToCart as EventListener);
+  }, []);
+
   const saveRecentSearch = (term: string) => {
     const normalized = term.trim();
     if (!normalized) return;
@@ -105,7 +130,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/80 text-brand-ink shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+    <header className="sticky top-0 z-50 w-full border-b border-white/70 bg-white/65 text-brand-ink shadow-[0_8px_28px_rgba(15,23,42,0.08)] backdrop-blur-2xl">
       <div className="container-page">
         <div className="flex min-h-[4.5rem] items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
@@ -122,13 +147,13 @@ export function Header() {
                 <Link
                   key={item.href + item.label}
                   href={item.href}
-                  className={isActive ? "group relative rounded-md px-4 py-2 text-sm font-semibold text-slate-900" : "group relative rounded-md px-4 py-2 text-sm font-medium text-slate-700 transition hover:text-slate-900"}
+                  className={isActive ? "group relative rounded-lg px-4 py-2 text-sm font-semibold text-slate-900" : "group relative rounded-lg px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-white/75 hover:text-slate-900"}
                 >
                   <span className="inline-flex items-center gap-2">
                     {navIconByHref[item.href] ? createElement(navIconByHref[item.href], { className: "h-4 w-4" }) : null}
                     {item.label}
                   </span>
-                  <span className={isActive ? "absolute bottom-1 left-4 right-4 h-0.5 rounded bg-slate-900" : "absolute bottom-1 left-4 right-4 h-0.5 origin-left scale-x-0 rounded bg-slate-900 transition-transform duration-300 group-hover:scale-x-100"} />
+                  <span className={isActive ? "absolute bottom-1 left-4 right-4 h-0.5 rounded bg-slate-900" : "absolute bottom-1 left-4 right-4 h-0.5 origin-left scale-x-0 rounded bg-slate-900/80 transition-transform duration-300 group-hover:scale-x-100"} />
                 </Link>
               );
             })}
@@ -163,7 +188,13 @@ export function Header() {
                 </div>
               </form>
               {searchOpen ? (
-                <div className="absolute right-0 top-12 z-50 w-[360px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-premium">
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="absolute right-0 top-12 z-50 w-[360px] overflow-hidden rounded-xl border border-white/70 bg-white/92 shadow-premium backdrop-blur-xl"
+                >
                   <div className="max-h-[420px] overflow-y-auto p-2">
                     {searchText.trim() && suggestions.length === 0 ? (
                       <p className="p-3 text-sm text-muted-foreground">Keine Treffer zu Ihrer Suche.</p>
@@ -232,14 +263,21 @@ export function Header() {
                       </Link>
                     </div>
                   ) : null}
-                </div>
+                </motion.div>
               ) : null}
             </div>
             {!isAdmin && (
               <>
                 <Link href="/konto" className="hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-brand-blue/30 hover:bg-brand-mist hover:text-brand-blue sm:flex"><User className="h-4.5 w-4.5" /></Link>
                 <Link href="/warenkorb" className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-brand-blue/30 hover:bg-brand-mist hover:text-brand-blue">
-                  <ShoppingCart className="h-4.5 w-4.5" />
+                  <motion.span
+                    id="global-cart-button"
+                    animate={cartPulse ? { scale: [1, 1.14, 1] } : { scale: 1 }}
+                    transition={{ duration: 0.35, ease: "easeOut" }}
+                    className="inline-flex"
+                  >
+                    <ShoppingCart className="h-4.5 w-4.5" />
+                  </motion.span>
                   {cartCount > 0 ? <span className="absolute -right-1 -top-1 rounded-full bg-brand-blue px-1.5 text-[10px] font-bold text-white">{cartCount}</span> : null}
                 </Link>
               </>
@@ -250,8 +288,15 @@ export function Header() {
           </div>
         </div>
       </div>
+      <AnimatePresence>
       {mobileOpen && (
-        <div className="border-t border-slate-200/80 bg-white/90 shadow-premium backdrop-blur-xl md:hidden">
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className="border-t border-white/70 bg-white/90 shadow-premium backdrop-blur-xl md:hidden"
+        >
           <div className="container-page grid gap-5 py-5">
             <Input placeholder="Produkte, Vorlagen oder Druckideen suchen" />
             <nav className="grid gap-2">
@@ -311,8 +356,25 @@ export function Header() {
               ))}
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
+      <div className="pointer-events-none fixed inset-0 z-[70]">
+        <AnimatePresence>
+          {flyItems.map((item) => (
+            <motion.div
+              key={item.id}
+              initial={{ x: item.x, y: item.y, opacity: 1, scale: 1 }}
+              animate={{ x: item.tx, y: item.ty, opacity: 0.2, scale: 0.28 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.72, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute"
+            >
+              <div className="h-3.5 w-3.5 rounded-full bg-[linear-gradient(135deg,#1d4ed8,#0f766e)] shadow-[0_8px_18px_rgba(29,78,216,.35)]" />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </header>
   );
 }

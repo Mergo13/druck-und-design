@@ -1,0 +1,210 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model AdminOrder {
+  id              String   @id
+  customer        String
+  email           String?
+  company         String?
+  vatId           String?
+  total           Float
+  status          String
+  items           Json
+  billingAddress  String?
+  shippingAddress String?
+  shippingCost    Float?
+  shippingName    String?
+  processingFee   Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AdminQuote {
+  id        String   @id @default(cuid())
+  customer  String
+  email     String
+  amount    Float
+  status    String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AdminInvoice {
+  id        String    @id
+  customer  String
+  amount    Float
+  status    String
+  dueDate   DateTime?
+  issuedAt  DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model ContactFileUpload {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  topic     String
+  message   String
+  files     Json
+  status    String   @default("new")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Coupon {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  discountType  String
+  discountValue Float
+  active        Boolean   @default(true)
+  usageLimit    Int?
+  usedCount     Int       @default(0)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  customer  String
+  rating    Int
+  comment   String
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CompanyInformation {
+  id        String   @id @default("company")
+  name      String   @default("DUD Studio")
+  legalName String?
+  email     String?
+  phone     String?
+  vatId     String?
+  address   String?
+  website   String?
+  updatedAt DateTime @updatedAt
+}
+
+model ShippingMethod {
+  id        String   @id @default(cuid())
+  name      String
+  price     Float
+  etaDays   Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PaymentMethod {
+  id        String   @id @default(cuid())
+  name      String
+  provider  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TaxSetting {
+  id         String   @id @default("tax")
+  vatPercent Float    @default(20)
+  updatedAt  DateTime @updatedAt
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  permissions RolePermission[]
+  users       AdminUser[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model RolePermission {
+  id        String  @id @default(cuid())
+  roleId    String
+  module    String
+  canView   Boolean @default(true)
+  canCreate Boolean @default(false)
+  canUpdate Boolean @default(false)
+  canDelete Boolean @default(false)
+  role      Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, module])
+}
+
+model AdminUser {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  roleId    String
+  active    Boolean  @default(true)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model StoreControlSetting {
+  id              String   @id @default("store-control")
+  maintenanceMode Boolean  @default(false)
+  vacationMode    Boolean  @default(false)
+  disableCheckout Boolean  @default(false)
+  announcementBar String?
+  updatedAt       DateTime @updatedAt
+}
+
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  subject   String
+  body      String
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model BackupRecord {
+  id        String   @id @default(cuid())
+  label     String
+  status    String
+  location  String?
+  createdAt DateTime @default(now())
+}
+
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  level     String
+  event     String
+  metadata  Json?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorEmail String?
+  module     String
+  action     String
+  entityId   String?
+  payload    Json?
+  createdAt  DateTime @default(now())
+}

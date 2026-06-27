@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Info } from "lucide-react";
-import { motion } from "framer-motion";
+import { Check, Info, ShoppingCart } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatEuro } from "@/lib/utils";
@@ -23,8 +24,23 @@ export function ProductCard({
   onToggleSelect?: (slug: string) => void;
   onAddToCart?: (slug: string) => void;
 }) {
+  const [added, setAdded] = useState(false);
   const image = "heroImage" in product ? product.heroImage : product.image;
   const priceLabel = "basePrice" in product ? `Ab ${formatEuro(product.basePrice)}` : "Preis auf Anfrage";
+
+  function handleAddToCart(event: React.MouseEvent<HTMLButtonElement>) {
+    if (!onAddToCart) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    window.dispatchEvent(new CustomEvent("dud-fly-to-cart", {
+      detail: {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      }
+    }));
+    onAddToCart(product.slug);
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 1200);
+  }
 
   return (
     <motion.div whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
@@ -42,9 +58,50 @@ export function ProductCard({
             <p className="text-sm font-bold text-muted-foreground">{priceLabel}</p>
           </div>
           {onAddToCart ? (
-            <Button type="button" className="mt-4 w-full" onClick={() => onAddToCart(product.slug)}>
-              In den Warenkorb
-            </Button>
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.98 }}
+              className="mt-4 w-full overflow-hidden rounded-lg"
+              onClick={handleAddToCart}
+            >
+              <motion.span
+                className={added
+                  ? "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(16,185,129,.28)]"
+                  : "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#1d4ed8,#0f766e)] text-sm font-semibold text-white shadow-[0_10px_22px_rgba(29,78,216,.26)]"}
+                animate={{
+                  scale: added ? [1, 1.03, 1] : 1
+                }}
+                transition={{ duration: 0.32, ease: "easeOut" }}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {added ? (
+                    <motion.span
+                      key="added"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18 }}
+                      className="inline-flex items-center gap-2"
+                    >
+                      <Check className="h-4 w-4" />
+                      Hinzugefügt
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="default"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18 }}
+                      className="inline-flex items-center gap-2"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      In den Warenkorb
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.span>
+            </motion.button>
           ) : null}
           {onToggleSelect ? (
             <Button

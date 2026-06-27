@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 
 const navigation: Array<[LucideIcon, string, string]> = [
@@ -183,7 +184,7 @@ export function AccountDashboard() {
 
   return (
     <section className="container-page py-6 md:py-8">
-      <div className="overflow-hidden rounded-lg border bg-card/90 shadow-[0_20px_55px_rgba(15,23,42,.08)] backdrop-blur-sm">
+      <div className="glass-panel overflow-hidden rounded-xl">
         <div className="flex min-h-[calc(100vh-6rem)] flex-col lg:flex-row">
             <aside className="hidden w-72 shrink-0 border-r bg-muted/35 lg:flex lg:flex-col">
             <div className="border-b px-5 py-5">
@@ -280,8 +281,14 @@ export function AccountDashboard() {
                   </Button>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {orders.length > 0 ? orders.map((order) => (
-                    <article className="rounded-md border bg-primary/5 p-4 border-primary/20 shadow-sm" key={order.id}>
+                  {orders.length > 0 ? orders.map((order, idx) => (
+                    <motion.article
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.18) }}
+                      className="glass-panel rounded-xl p-4"
+                      key={order.id}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-bold">Bestellung {order.id.slice(0, 15)}...</p>
@@ -302,7 +309,7 @@ export function AccountDashboard() {
                           Details
                         </Button>
                       </div>
-                    </article>
+                    </motion.article>
                   )) : (
                     <div className="col-span-full rounded-md border border-dashed p-8 text-center">
                       <p className="text-sm text-muted-foreground">Keine Bestellungen gefunden.</p>
@@ -318,7 +325,7 @@ export function AccountDashboard() {
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-black md:text-xl">Rechnungen</h2>
                 </div>
-                <div className="overflow-x-auto rounded-md border bg-background">
+                <div className="glass-panel overflow-x-auto rounded-xl">
                   <table className="w-full min-w-[640px] text-sm">
                     <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>

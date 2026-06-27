@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <MarketingTracking />
         <StorefrontGate>
           <Header />
-          <main>{children}</main>
+          <main className="min-h-[calc(100vh-9rem)]">{children}</main>
           <Footer />
         </StorefrontGate>
       </body>

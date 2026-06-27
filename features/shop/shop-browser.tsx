@@ -3,6 +3,7 @@
 import { Search, SlidersHorizontal } from "lucide-react";
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
 import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
@@ -42,7 +43,7 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
 
   return (
     <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
-      <aside className="h-fit rounded-lg border bg-white p-5 shadow-soft">
+      <aside className="glass-panel h-fit rounded-xl p-5">
         <div className="flex items-center gap-2 font-black"><SlidersHorizontal className="h-5 w-5" /> Filter</div>
         <div className="mt-5 grid gap-2">
           <button onClick={() => setCategory("alle")} className={category === "alle" ? "rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-bold text-white" : "rounded-md px-3 py-2 text-left text-sm font-bold hover:bg-muted"}>Alle Produkte</button>
@@ -56,7 +57,7 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
         </div>
       </aside>
       <div>
-        <div className="flex flex-col gap-3 rounded-lg border bg-white p-4 shadow-soft md:flex-row md:items-center">
+        <div className="glass-panel flex flex-col gap-3 rounded-xl p-4 md:flex-row md:items-center">
           <div className="flex flex-1 items-center gap-2 rounded-md border px-3">
             <Search className="h-4 w-4 text-muted-foreground" />
             <input suppressHydrationWarning value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 flex-1 text-sm outline-none" placeholder="Produkt, Material oder Anwendung suchen" />
@@ -69,15 +70,21 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
           </select>
         </div>
         <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((product) => (
-            <ProductCard
+          {filtered.map((product, idx) => (
+            <motion.div
               key={product.slug}
-              product={product}
-              onAddToCart={addToCart}
-            />
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.24, delay: Math.min(idx * 0.02, 0.2) }}
+            >
+              <ProductCard
+                product={product}
+                onAddToCart={addToCart}
+              />
+            </motion.div>
           ))}
         </div>
-        <div className="mt-8 rounded-lg border bg-white p-4 shadow-soft">
+        <div className="glass-panel mt-8 rounded-xl p-4">
           <p className="text-sm font-bold">Ihr Einkauf</p>
           <p className="mt-1 text-xs text-muted-foreground">Produkte direkt in den Warenkorb legen und danach im Checkout bestellen.</p>
           <div className="mt-4 flex flex-wrap gap-3">

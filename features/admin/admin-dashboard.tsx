@@ -610,6 +610,37 @@ function ModuleCrudPanel({ title, moduleKey, refreshNonce }: { title: string; mo
     await load();
   }
 
+  async function onInvoiceCancel(item: Record<string, unknown>) {
+    const rawOrderId = typeof item.orderId === "string"
+      ? item.orderId
+      : (typeof item.order_id === "string" ? item.order_id : "");
+    const rawInvoiceId = typeof item.id === "string"
+      ? item.id
+      : (typeof item.invoice_id === "string" ? item.invoice_id : "");
+    const orderId = rawOrderId.trim();
+    const invoiceId = rawInvoiceId.trim();
+    if (!orderId && !invoiceId) {
+      alert("Keine Rechnungs-ID/Order-ID gefunden.");
+      return;
+    }
+    if (!confirm("Rechnung wirklich stornieren?")) return;
+
+    const res = await fetch("/api/admin/tools?action=crm-manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        operation: "stornieren",
+        ...(orderId ? { orderId } : {}),
+        ...(invoiceId ? { invoiceId } : {})
+      })
+    });
+    if (!res.ok) {
+      alert("Stornierung fehlgeschlagen.");
+      return;
+    }
+    await load();
+  }
+
   const columns = useMemo(() => {
     const first = items[0] ?? {};
     const keys = Object.keys(first).filter((key) => !["items", "metadata", "payload", "gallery", "variants", "description", "seo"].includes(key));
@@ -688,6 +719,17 @@ function ModuleCrudPanel({ title, moduleKey, refreshNonce }: { title: string; mo
             <tbody className="divide-y divide-slate-100 bg-white">
               {items.map((item) => {
                 const id = String(item.id || item.slug || "");
+                const statusValue = String(item.status ?? "");
+                const normalizedStatus = statusValue.trim().toLowerCase();
+                const isPaid =
+                  normalizedStatus === "bezahlt" ||
+                  normalizedStatus === "paid" ||
+                  normalizedStatus === "completed" ||
+                  normalizedStatus === "erledigt";
+                const isCancelled =
+                  normalizedStatus === "storniert" ||
+                  normalizedStatus === "cancelled" ||
+                  normalizedStatus === "canceled";
                 return (
                   <tr key={id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-6 py-4">
@@ -703,9 +745,9 @@ function ModuleCrudPanel({ title, moduleKey, refreshNonce }: { title: string; mo
                         {column === "status" ? (
                           <span className={cn(
                             "px-2 py-1 rounded-full text-[10px] font-bold uppercase",
-                            String(item[column]).toLowerCase() === "active" || String(item[column]).toLowerCase() === "paid" || String(item[column]).toLowerCase() === "bezahlt"
-                              ? "bg-teal-100 text-teal-700" 
-                              : "bg-slate-100 text-slate-600"
+                            isPaid
+                              ? "bg-green-100 text-green-700"
+                              : (isCancelled ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600")
                           )}>
                             {String(item[column])}
                           </span>
@@ -713,17 +755,29 @@ function ModuleCrudPanel({ title, moduleKey, refreshNonce }: { title: string; mo
                       </td>
                     ))}
                     <td className="px-6 py-4 text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="opacity-0 group-hover:opacity-100 text-brand-blue font-bold"
-                        onClick={() => {
-                          setUpdateId(id);
-                          setUpdatePayload(JSON.stringify(item, null, 2));
-                        }}
-                      >
-                        Bearbeiten
-                      </Button>
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100">
+                        {moduleKey === "invoices" && !isCancelled ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-rose-600 font-bold"
+                            onClick={() => void onInvoiceCancel(item)}
+                          >
+                            Stornieren
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-brand-blue font-bold"
+                          onClick={() => {
+                            setUpdateId(id);
+                            setUpdatePayload(JSON.stringify(item, null, 2));
+                          }}
+                        >
+                          Bearbeiten
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );

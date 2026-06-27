@@ -35,7 +35,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <div className="flex items-center gap-2 text-sm font-bold text-amber-600">
               <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {product.rating} Kundenbewertung
             </div>
-            <h1 className="mt-3 text-4xl font-black tracking-tight">{product.name}</h1>
+            <h1 className="mt-3 text-4xl font-black tracking-tight md:text-5xl">{product.name}</h1>
             <p className="mt-4 max-w-3xl text-lg leading-8 text-muted-foreground">{product.description}</p>
           </div>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -44,7 +44,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               { title: "Fachberatung", desc: "Beratung zu Material und Veredelung durch Experten" },
               { title: "Individualität", desc: "Sonderformate und Wünsche auf Anfrage möglich" }
             ].map((feature) => (
-              <div className="flex flex-col gap-2 rounded-xl border bg-brand-mist/30 p-5 shadow-sm transition-hover hover:shadow-md" key={feature.title}>
+              <div className="glass-panel motion-elevate flex flex-col gap-2 rounded-xl p-5" key={feature.title}>
                 <div className="flex items-center gap-2 font-black text-brand-primary">
                   <CheckCircle2 className="h-5 w-5" />
                   {feature.title}

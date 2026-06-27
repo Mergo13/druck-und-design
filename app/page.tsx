@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { promises as fs } from "fs";
 import path from "path";
-import { ArrowRight, CheckCircle2, Layers3, PhoneCall, Printer, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, PhoneCall, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import { FlipWords } from "@/components/flipwords";
 import { ClientsMarquee } from "@/components/home/clients-marquee";
 import { HeroBackgroundSlideshow } from "@/components/home/hero-background-slideshow";
 import { HighlightCarousel } from "@/components/home/highlight-carousel";
+import { ScrollZoomHero } from "@/components/home/scroll-zoom-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getPublicCategories } from "@/lib/catalog-repository";
 
@@ -15,11 +18,6 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const platformCategories = await getPublicCategories();
   const homepageLogos = await getHomepageLogos();
-  const services: Array<{ icon: typeof Printer; title: string; text: string; href: string }> = [
-    { icon: Printer, title: "Druckservice", text: "Flyer, Broschüren, Karten und Geschäftsdrucksorten in hochwertiger Produktion.", href: "/druckservice" },
-    { icon: Layers3, title: "Werbetechnik", text: "Banner, Schilder, Roll-ups und Fahrzeugbeschriftung für starke Sichtbarkeit.", href: "/werbetechnik" },
-    { icon: Sparkles, title: "Werbeagentur", text: "Logo, Corporate Design und Kampagnenmaterial für einen klaren Markenauftritt.", href: "/werbeagentur" }
-  ];
 
   return (
     <>
@@ -53,39 +51,21 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="bg-white py-16">
-        <div className="container-page">
-          <SectionHeading eyebrow="Dienstleistungen" title="Was Wir Für Sie Umsetzen" description="Klarer Fokus auf Verkauf, Sichtbarkeit und professionelle Markenwirkung." />
-        <div className="mt-8 grid gap-6 sm:grid-cols-3">
-          {services.map(({ icon: Icon, title, text, href }) => (
-            <Link href={href} key={title} className="group rounded-lg border border-white/80 bg-[linear-gradient(180deg,#fff,#f8fbff)] p-8 shadow-[0_18px_46px_rgba(15,23,42,.08)] transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-premium">
-              <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-lg border border-brand-blue/15 bg-white text-brand-blue shadow-sm transition-colors group-hover:bg-brand-blue group-hover:text-white">
-                <Icon className="h-6 w-6" />
-              </div>
-              <h3 className="text-xl font-black">{title}</h3>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">{text}</p>
-              <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
-                Mehr erfahren <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </div>
-            </Link>
-          ))}
-        </div>
-        </div>
-      </section>
-
-      <section className="container-page py-12">
-        <HighlightCarousel />
-      </section>
+      <ScrollZoomHero />
 
       <section className="bg-[linear-gradient(180deg,#eef4ff,#f8fbff)] py-16">
         <div className="container-page">
           <SectionHeading eyebrow="Kategorien" title="Unsere Kompetenzbereiche" description="Entdecken Sie unsere vielfältigen Lösungen für Ihre Werbemittel und Druckprodukte." />
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {platformCategories.slice(0, 8).map((category) => (
-              <Link href={`/${category.slug}`} key={category.slug} className="rounded-lg border border-white/80 bg-white p-5 shadow-[0_12px_32px_rgba(15,23,42,.06)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-premium">
-                <h3 className="text-lg font-black">{category.name}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
-              </Link>
+              <Card key={category.slug} className="border border-border bg-card shadow-[0_12px_32px_rgba(15,23,42,.06)] transition hover:-translate-y-1 hover:border-foreground/20 hover:shadow-premium">
+                <CardContent className="p-5">
+                  <Link href={`/${category.slug}`} className="block">
+                    <h3 className="text-lg font-black">{category.name}</h3>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
+                  </Link>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
@@ -99,32 +79,40 @@ export default async function HomePage() {
             { step: "02", title: "Design & Freigabe", text: "Sie erhalten Entwürfe und geben die Produktion frei." },
             { step: "03", title: "Produktion & Lieferung", text: "Wir produzieren sauber und liefern termingerecht aus." }
           ].map((item) => (
-            <div key={item.step} className="rounded-lg border border-white/80 bg-white p-6 shadow-[0_16px_42px_rgba(15,23,42,.07)]">
-              <p className="text-xs font-bold tracking-[0.14em] text-brand-blue">{item.step}</p>
-              <h3 className="mt-2 text-xl font-black">{item.title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{item.text}</p>
-            </div>
+            <Card key={item.step} className="border border-border bg-card shadow-[0_16px_42px_rgba(15,23,42,.07)]">
+              <CardContent className="p-6">
+                <Badge variant="outline" className="text-xs font-bold tracking-[0.14em] text-muted-foreground">{item.step}</Badge>
+                <h3 className="mt-3 text-xl font-black">{item.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{item.text}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
       </section>
 
+      <section className="container-page py-12">
+        <HighlightCarousel />
+      </section>
+
       <section className="container-page py-16">
-        <div className="rounded-lg bg-[linear-gradient(135deg,#0f172a,#1d4ed8,#0891b2)] p-8 text-white shadow-[0_28px_80px_rgba(15,23,42,.28)] md:p-12">
-          <p className="text-sm font-bold uppercase tracking-[0.12em] text-cyan-200">Bereit Für Ihr Projekt?</p>
-          <h2 className="mt-2 max-w-3xl text-4xl font-black">Sie brauchen Druck, Werbetechnik oder Design? Wir beraten Sie direkt und starten sofort mit der Umsetzung.</h2>
-          <div className="mt-6 grid gap-2 sm:grid-cols-2">
-            {["Persönliche Beratung in Wels", "Klare Angebote ohne Umwege", "Verlässliche Produktionszeiten", "Ein Ansprechpartner für alles"].map((item) => (
-              <div className="flex items-center gap-2 text-sm" key={item}>
-                <CheckCircle2 className="h-4 w-4 text-cyan-200" />
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
-            <Button asChild variant="secondary"><Link href="/leistungen">Leistungen ansehen</Link></Button>
-          </div>
-        </div>
+        <Card className="border border-border bg-card text-card-foreground shadow-[0_20px_56px_rgba(15,23,42,.08)]">
+          <CardContent className="p-8 md:p-12">
+            <Badge variant="outline" className="text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">Bereit Für Ihr Projekt?</Badge>
+            <h2 className="mt-3 max-w-3xl text-4xl font-black text-foreground">Sie brauchen Druck, Werbetechnik oder Design? Wir beraten Sie direkt und starten sofort mit der Umsetzung.</h2>
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              {["Persönliche Beratung in Wels", "Klare Angebote ohne Umwege", "Verlässliche Produktionszeiten", "Ein Ansprechpartner für alles"].map((item) => (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" key={item}>
+                  <CheckCircle2 className="h-4 w-4 text-foreground/80" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
+              <Button asChild variant="secondary"><Link href="/leistungen">Leistungen ansehen</Link></Button>
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       <ClientsMarquee logos={homepageLogos} />
