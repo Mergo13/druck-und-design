@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:deploy": "prisma db push",
+    "db:demo-catalog": "tsx scripts/reset-demo-catalog.ts",
     "deploy:check": "tsx scripts/check-production-env.ts",
     "security:audit": "npm audit --omit=dev",
     "postinstall": "prisma generate"
