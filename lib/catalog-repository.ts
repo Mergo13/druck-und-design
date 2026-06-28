@@ -15,6 +15,7 @@ type LegacyPlatformDb = {
 };
 
 const legacyDbPath = path.join(process.cwd(), "data", "platform-db.json");
+const demoProductSlugs = new Set(["Flyer", "kontur-aufkleber-pro", "team-hoodie"]);
 let catalogSeeded = false;
 
 function asJson(value: unknown) {
@@ -24,6 +25,13 @@ function asJson(value: unknown) {
 async function readLegacyDb(): Promise<LegacyPlatformDb> {
   const raw = await fs.readFile(legacyDbPath, "utf8");
   return JSON.parse(raw) as LegacyPlatformDb;
+}
+
+function demoCatalogFromLegacy(legacy: LegacyPlatformDb) {
+  const products = (legacy.products ?? []).filter((product) => demoProductSlugs.has(product.slug));
+  const categorySlugs = new Set(products.map((product) => product.category));
+  const categories = (legacy.categories ?? []).filter((category) => categorySlugs.has(category.slug));
+  return { categories, products };
 }
 
 async function ensureCatalogSeeded() {
@@ -43,9 +51,10 @@ async function ensureCatalogSeeded() {
     catalogSeeded = true;
     return;
   }
+  const demoCatalog = demoCatalogFromLegacy(legacy);
 
   await prisma.$transaction(async (tx) => {
-    for (const category of legacy.categories ?? []) {
+    for (const category of demoCatalog.categories) {
       await tx.catalogCategory.upsert({
         where: { slug: category.slug },
         update: {},
@@ -58,7 +67,7 @@ async function ensureCatalogSeeded() {
         }
       });
     }
-    for (const product of legacy.products ?? []) {
+    for (const product of demoCatalog.products) {
       await tx.catalogProduct.upsert({
         where: { slug: product.slug },
         update: {},
@@ -360,7 +369,10 @@ function toSlug(value: string) {
 
 export async function seedFromReactAdminDataGenerator() {
   const generated = generateRetailData();
-  const categories: ProductCategory[] = generated.categories.map((category) => ({
+  const demoProducts = generated.products.slice(0, 3);
+  const demoCategoryIds = new Set(demoProducts.map((product) => product.category_id));
+  const sourceCategories = generated.categories.filter((category) => demoCategoryIds.has(category.id));
+  const categories: ProductCategory[] = sourceCategories.map((category) => ({
     slug: toSlug(category.name),
     name: category.name.charAt(0).toUpperCase() + category.name.slice(1),
     description: `Demo-Kategorie: ${category.name}.`,
@@ -369,8 +381,8 @@ export async function seedFromReactAdminDataGenerator() {
     defaultPropertyTemplate: "print-basic",
     quantitySteps: [1, 10, 50, 100, 500, 1000]
   }));
-  const categoryIdToSlug = new Map(generated.categories.map((category) => [category.id, toSlug(category.name)]));
-  const products: ProductCatalogItem[] = generated.products.map((product) => {
+  const categoryIdToSlug = new Map(sourceCategories.map((category) => [category.id, toSlug(category.name)]));
+  const products: ProductCatalogItem[] = demoProducts.map((product) => {
     const categorySlug = categoryIdToSlug.get(product.category_id) ?? "druckprodukte";
     const productSlug = toSlug(`${categorySlug}-${product.reference}-${product.id}`);
     const basePrice = Number(product.price.toFixed(2));
@@ -446,4 +458,43 @@ export async function seedFromReactAdminDataGenerator() {
     }
   });
   return { categories: categories.length, products: products.length };
+}
+
+export async function resetDemoCatalog() {
+  const legacy = await readLegacyDb();
+  const demoCatalog = demoCatalogFromLegacy(legacy);
+  if (demoCatalog.products.length !== 3) {
+    throw new Error(`Demo-Katalog unvollständig: erwartet 3 Produkte, gefunden ${demoCatalog.products.length}.`);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.catalogProduct.deleteMany();
+    await tx.catalogCategory.deleteMany();
+    for (const category of demoCatalog.categories) {
+      await tx.catalogCategory.create({
+        data: {
+          slug: category.slug,
+          name: category.name,
+          visible: category.visible ?? true,
+          published: category.published ?? true,
+          data: asJson(category)
+        }
+      });
+    }
+    for (const product of demoCatalog.products) {
+      await tx.catalogProduct.create({
+        data: {
+          slug: product.slug,
+          name: product.name,
+          category: product.category,
+          visible: product.visible ?? true,
+          published: product.published ?? true,
+          data: asJson(product)
+        }
+      });
+    }
+  });
+
+  catalogSeeded = true;
+  return { categories: demoCatalog.categories.length, products: demoCatalog.products.length };
 }
