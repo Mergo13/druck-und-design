@@ -1,0 +1,81 @@
+[
+  {
+    "stripeSessionId": "cs_test_b13A6DvfvGZPR0DIwxkYMPtzzL3ktR5DHdWFQmbaup3pUFVe7ZqcOtybwU",
+    "syncedAt": "2026-06-05T15:08:01.325Z",
+    "orderId": "STRIPE-cs_test_b13A6DvfvGZPR0DIwxkYMPtzzL3ktR5DHdWFQmbaup3pUFVe7ZqcOtybwU",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "476",
+    "invoiceNumber": "RE-2026-1780672081"
+  },
+  {
+    "stripeSessionId": "cs_test_b15sF3FMj6xeJdvOqapA1n89nFkPoMhW75lXRWPhSUndgy2FBoTVt1CNJl",
+    "syncedAt": "2026-06-05T15:10:54.838Z",
+    "orderId": "STRIPE-cs_test_b15sF3FMj6xeJdvOqapA1n89nFkPoMhW75lXRWPhSUndgy2FBoTVt1CNJl",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "477",
+    "invoiceNumber": "RE-2026-1780672254"
+  },
+  {
+    "stripeSessionId": "cs_test_b1FKvX13oV9XQkFYDZUg76fc7PWDO46mEtxpEaYJa7uZ96bWGo868b7anD",
+    "syncedAt": "2026-06-05T15:12:59.050Z",
+    "orderId": "STRIPE-cs_test_b1FKvX13oV9XQkFYDZUg76fc7PWDO46mEtxpEaYJa7uZ96bWGo868b7anD",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "478",
+    "invoiceNumber": "RE-2026-1780672379"
+  },
+  {
+    "stripeSessionId": "cs_test_b1p1sLMQ4GB8EbwKvbVGSttbEEQ82KkChLBsn2FngVN15AQV3n78rwpX1a",
+    "syncedAt": "2026-06-05T15:16:24.160Z",
+    "orderId": "STRIPE-cs_test_b1p1sLMQ4GB8EbwKvbVGSttbEEQ82KkChLBsn2FngVN15AQV3n78rwpX1a",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "479",
+    "invoiceNumber": "RE-2026-1780672584"
+  },
+  {
+    "stripeSessionId": "cs_test_b1r7BCw2pI9Il2ESVDGGlwumV7fVi4WWZh73lxlWBYsT4QocOTcOndp6o8",
+    "syncedAt": "2026-06-05T18:13:19.667Z",
+    "orderId": "STRIPE-cs_test_b1r7BCw2pI9Il2ESVDGGlwumV7fVi4WWZh73lxlWBYsT4QocOTcOndp6o8",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "480",
+    "invoiceNumber": "RE-2026-1780683199"
+  },
+  {
+    "stripeSessionId": "cs_test_b15TwaNL75gkzxSRFBhZl3XmipGPQgZiod6QUbYMPVyox7hUwDMNyMurJE",
+    "syncedAt": "2026-06-05T18:14:10.920Z",
+    "orderId": "STRIPE-cs_test_b15TwaNL75gkzxSRFBhZl3XmipGPQgZiod6QUbYMPVyox7hUwDMNyMurJE",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "481",
+    "invoiceNumber": "RE-2026-1780683250"
+  },
+  {
+    "stripeSessionId": "cs_test_b1cd2D6DIGoeRDWJvu8Alcq0BQjI7fVa3SnpnND37L5szpooA4MQu0mukL",
+    "syncedAt": "2026-06-05T18:25:09.695Z",
+    "orderId": "STRIPE-cs_test_b1cd2D6DIGoeRDWJvu8Alcq0BQjI7fVa3SnpnND37L5szpooA4MQu0mukL",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "482",
+    "invoiceNumber": "RE-2026-1780683909"
+  },
+  {
+    "syncedAt": "2026-06-07T13:56:43.498Z",
+    "orderId": "LOCAL-TEST-INV-1",
+    "customerEmail": "sync-test@example.com",
+    "invoiceId": "485",
+    "invoiceNumber": "RE-2026-1780840603"
+  },
+  {
+    "stripeSessionId": "cs_test_b1nohWndpZXuEwP2jD0jKepuekgwf7UcHhDOApL1x9umodacvboXL2Pvxv",
+    "syncedAt": "2026-06-07T13:59:14.651Z",
+    "orderId": "STRIPE-cs_test_b1nohWndpZXuEwP2jD0jKepuekgwf7UcHhDOApL1x9umodacvboXL2Pvxv",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "486",
+    "invoiceNumber": "RE-2026-1780840754"
+  },
+  {
+    "stripeSessionId": "cs_test_b1OOxAQoYXSCw01bSUyumLGtEKNniSfMPyj18G7m97AN21KeAXY1ZHnjxV",
+    "syncedAt": "2026-06-07T16:46:56.649Z",
+    "orderId": "STRIPE-cs_test_b1OOxAQoYXSCw01bSUyumLGtEKNniSfMPyj18G7m97AN21KeAXY1ZHnjxV",
+    "customerEmail": "druck@email.com",
+    "invoiceId": "505",
+    "invoiceNumber": "RE-2026-1780850816"
+  }
+]

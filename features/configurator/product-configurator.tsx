@@ -1,34 +1,35 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, PhoneCall } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { calculateVariantPrice } from "@/lib/print-workflow";
+import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
+const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
+const PRINT_CHECK_FEE = Number(process.env.NEXT_PUBLIC_PRINT_CHECK_FEE_EUR ?? "9.99");
 
 export function ProductConfigurator({ product }: { product: ProductCatalogItem }) {
+  const router = useRouter();
   const firstVariant = product.variants[0];
   const productOptions = useMemo(() => {
     if (!firstVariant) return [];
     return firstVariant.attributes
       .filter((attribute) => attribute.type === "select")
-      .map((attribute) => ({
-        label: attribute.label,
-        key: attribute.key,
-        values: (attribute.options ?? []).map((option) => option.label)
-      }));
+      .map((attribute) => ({ label: attribute.label, key: attribute.key, options: attribute.options ?? [] }));
   }, [firstVariant]);
 
   const quantityOptions = useMemo(() => {
-    if (!firstVariant) return ["100", "250", "500", "1.000"];
-    const steps = product.quantitySteps ?? [firstVariant.quantityRule.min, firstVariant.quantityRule.max];
-    return steps
-      .filter((step) => Number.isFinite(step) && step > 0)
-      .sort((a, b) => a - b)
-      .map((step) => step.toLocaleString("de-DE"));
-  }, [firstVariant, product]);
+    return fixedQuantitySteps.map((step) => ({
+      value: String(step),
+      label: step.toLocaleString("de-DE")
+    }));
+  }, []);
 
   const [config, setConfig] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -36,9 +37,9 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
       for (const attribute of firstVariant.attributes) {
         if (attribute.type !== "select") continue;
         const selected = attribute.options?.find((option) => option.value === attribute.defaultValue);
-        initial[attribute.label] = selected?.label ?? attribute.options?.[0]?.label ?? "";
+        initial[attribute.key] = selected?.value ?? attribute.options?.[0]?.value ?? "";
       }
-      initial.Auflage = (product.quantitySteps?.[0] ?? firstVariant.quantityRule.min ?? 1).toLocaleString("de-DE");
+      initial.auflage = String(fixedQuantitySteps[0]);
     }
     return initial;
   });
@@ -46,7 +47,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
   const [mockupUrl, setMockupUrl] = useState<string>("");
   const [uploadError, setUploadError] = useState("");
   const [preflightStatus, setPreflightStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
-  const [preflightMessage, setPreflightMessage] = useState("Live-Vorschau und Datencheck starten nach dem Upload.");
+  const [preflightMessage, setPreflightMessage] = useState("Die KI-gestützte Live-Analyse startet nach dem Dateiupload.");
   const [preflightDetails, setPreflightDetails] = useState<Array<{ code: string; label: string; passed: boolean; hint?: string }>>([]);
   const [metrics, setMetrics] = useState<{
     fileSizeMb: number;
@@ -61,12 +62,40 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
   } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
+  const [cartMessage, setCartMessage] = useState("");
+  const [printCheckRequested, setPrintCheckRequested] = useState(false);
+  const [categoryProperties, setCategoryProperties] = useState<Array<{ name: string; values: string[] }>>([]);
+  const currentQuantity = Number(config.auflage ?? fixedQuantitySteps[0]);
+  const currentPrice = useMemo(() => {
+    if (!firstVariant) return product.basePrice;
+    return calculateVariantPrice(product, firstVariant.id, Number.isFinite(currentQuantity) ? currentQuantity : 1, config);
+  }, [config, currentQuantity, firstVariant, product]);
 
   useEffect(() => {
     return () => {
       if (mockupUrl) URL.revokeObjectURL(mockupUrl);
     };
   }, [mockupUrl]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/catalog/categories");
+        if (!res.ok) return;
+        const categories = await res.json() as Array<{ slug: string; properties?: Array<{ name: string; values: string[] }> }>;
+        const category = categories.find((entry) => entry.slug === product.category);
+        setCategoryProperties(category?.properties ?? []);
+      } catch {
+        setCategoryProperties([]);
+      }
+    })();
+  }, [product.category]);
+
+  const enabledProperties = useMemo(() => {
+    const enabled = new Set(product.enabledCategoryProperties ?? []);
+    if (!enabled.size) return [];
+    return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
+  }, [categoryProperties, product.enabledCategoryProperties]);
 
   async function validateAndSetFile(file?: File) {
     setUploadError("");
@@ -144,11 +173,87 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
     setMetrics(result.metrics ?? null);
     if (result.valid) {
       setPreflightStatus("ok");
-      setPreflightMessage(result.aiAdvice || `Preflight bestanden: ${result.checks.filter((item) => item.passed).length}/${result.checks.length} Checks OK.`);
+      setPreflightMessage(result.aiAdvice || "Die KI hat Ihre Daten als produktionsreif eingestuft.");
     } else {
       setPreflightStatus("error");
-      setPreflightMessage(result.aiAdvice || "Preflight fehlgeschlagen. Bitte Datei prüfen.");
+      setPreflightMessage(result.aiAdvice || "Die KI-Analyse hat kritische Fehler festgestellt, die das Druckergebnis beeinträchtigen könnten.");
     }
+  }
+
+  async function uploadPrintFile(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch("/api/uploads/print-file", { method: "POST", body: formData });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({ message: "Datei-Upload fehlgeschlagen." }));
+      throw new Error(payload.message ?? "Datei-Upload fehlgeschlagen.");
+    }
+    return response.json() as Promise<{ url: string; name: string; size?: number; mimeType?: string }>;
+  }
+
+  async function addToCart() {
+    if (printCheckRequested && !uploadedFile) {
+      setCartMessage("Für den Profi-Print-Check bitte zuerst eine Datei hochladen.");
+      return false;
+    }
+    if (printCheckRequested && preflightStatus !== "ok" && preflightStatus !== "error") {
+      setCartMessage("Bitte warten, bis der Datei-Check abgeschlossen ist.");
+      return false;
+    }
+
+    const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{
+      slug: string;
+      name: string;
+      quantity: number;
+      category: string;
+      unitPrice?: number;
+      printCheckRequested?: boolean;
+      printCheckFee?: number;
+      printCheckFileName?: string;
+      printCheckFileUrl?: string;
+      printCheckStatus?: "ok" | "error" | "idle";
+    }>;
+
+    let uploadedUrl: string | undefined;
+    if (printCheckRequested && uploadedFile) {
+      try {
+        const uploaded = await uploadPrintFile(uploadedFile);
+        uploadedUrl = uploaded.url;
+      } catch (error) {
+        setCartMessage(error instanceof Error ? error.message : "Datei-Upload fehlgeschlagen.");
+        return false;
+      }
+    }
+
+    const merged = [...existing];
+    const found = merged.find((entry) => entry.slug === product.slug);
+    if (found) {
+      found.quantity += 1;
+      if (printCheckRequested) {
+        found.printCheckRequested = true;
+        found.printCheckFee = PRINT_CHECK_FEE;
+        found.printCheckFileName = uploadedFile?.name ?? found.printCheckFileName;
+        found.printCheckFileUrl = uploadedUrl ?? found.printCheckFileUrl;
+        found.printCheckStatus = preflightStatus === "ok" ? "ok" : preflightStatus === "error" ? "error" : "idle";
+      }
+    } else {
+      merged.push({
+        slug: product.slug,
+        name: product.name,
+        quantity: 1,
+        category: product.category,
+        unitPrice: currentPrice,
+        printCheckRequested,
+        printCheckFee: printCheckRequested ? PRINT_CHECK_FEE : 0,
+        printCheckFileName: uploadedFile?.name,
+        printCheckFileUrl: uploadedUrl,
+        printCheckStatus: preflightStatus === "ok" ? "ok" : preflightStatus === "error" ? "error" : "idle"
+      });
+    }
+    localStorage.setItem("dud_cart", JSON.stringify(merged));
+    window.dispatchEvent(new Event("dud-cart-updated"));
+    setCartMessage("Produkt wurde in den Warenkorb gelegt.");
+    return true;
   }
 
   return (
@@ -156,29 +261,47 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
-          <h2 className="text-2xl font-black">Preis auf Anfrage</h2>
+          <h2 className="text-2xl font-black">{formatEuro(currentPrice)}</h2>
           <p className="text-sm text-muted-foreground">Konfiguration inkl. Datencheck</p>
+          <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p>
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
           <CalendarCheck className="ml-auto h-4 w-4 text-primary" />
-          {config.Lieferzeit === "Same Day" || config.Lieferzeit === "sameday" ? "Heute versandbereit" : "Lieferung in 2-5 Tagen"}
+          {config.lieferzeit === "sameday" ? "Heute versandbereit" : "Lieferung in 2-5 Tagen"}
         </div>
       </div>
       <div className="mt-6 grid gap-4">
-        {[...productOptions, { label: "Auflage", key: "auflage", values: quantityOptions }].map(({ label, values }) => (
+        {[...productOptions, { label: "Auflage", key: "auflage", options: quantityOptions }].map(({ label, key, options }) => (
           <label className="grid gap-2" key={label}>
             <span className="text-sm font-bold">{label}</span>
             <select
               suppressHydrationWarning
-              value={config[label]}
-              onChange={(event) => setConfig({ ...config, [label]: event.target.value })}
+              value={config[key]}
+              onChange={(event) => setConfig({ ...config, [key]: event.target.value })}
               className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             >
-          {values.map((value) => (
-            <option key={value} value={value}>
-              {value}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
+            </select>
+          </label>
+        ))}
+        {enabledProperties.map((property) => (
+          <label className="grid gap-2" key={`category-property-${property.name}`}>
+            <span className="text-sm font-bold">{property.name}</span>
+            <select
+              suppressHydrationWarning
+              value={config[`eigenschaft:${property.name}`] ?? property.values[0]}
+              onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
+              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              {property.values.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
             </select>
           </label>
         ))}
@@ -206,7 +329,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         />
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />
         <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten hochladen"}</p>
-        <p className="text-xs text-muted-foreground">Klicken oder Datei hier ablegen. PDF, AI, PSD, PNG, JPG oder TIFF bis 50 MB.</p>
+        <p className="text-xs text-muted-foreground mt-1">Klicken oder Datei hier ablegen. PDF, AI, PSD, PNG, JPG oder TIFF bis 50 MB.</p>
         {uploadedFile && (
           <div className="mt-3 flex justify-center">
             <Button
@@ -231,14 +354,11 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           </div>
         )}
       </label>
-      {(uploadError || preflightStatus === "error") && (
+      {(uploadError) && (
         <div className="mt-4 flex flex-col gap-2 rounded-md bg-red-50 p-3 text-sm text-red-800 border border-red-200">
           <div className="flex items-center gap-2">
-            <XCircle className="h-4 w-4" /> {uploadError || "Fehler in den Druckdaten"}
+            <XCircle className="h-4 w-4" /> {uploadError}
           </div>
-          {preflightMessage && preflightStatus === "error" && (
-            <p className="text-xs opacity-90 leading-relaxed italic">{preflightMessage}</p>
-          )}
         </div>
       )}
       {mockupUrl ? (
@@ -253,24 +373,47 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         </div>
       ) : null}
       {preflightStatus === "ok" && (
-        <div className="mt-4 flex flex-col gap-2 rounded-md bg-teal-50 p-4 text-sm text-teal-900 border border-teal-200">
-          <div className="flex items-center gap-2 font-bold">
-            <CheckCircle2 className="h-4 w-4" /> Datencheck OK
+        <div className="mt-4 flex flex-col gap-2 rounded-md border border-emerald-200 bg-emerald-50/50 p-4 text-sm text-emerald-900">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold">
+              <FileCheck className="h-4 w-4 text-emerald-600" /> Preflight
+            </div>
+            <Badge variant="success">BESTANDEN</Badge>
           </div>
-          <p className="leading-relaxed">{preflightMessage}</p>
-          <div className="mt-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-black/40">
-            <Sparkles className="h-3 w-3" /> KI-Assistent Analyse
+          <p className="mt-1 leading-relaxed text-xs">{preflightMessage}</p>
+          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600/70">
+            <Sparkles className="h-3 w-3 animate-pulse" /> KI-Visionsanalyse & Profi-Datencheck
+          </div>
+        </div>
+      )}
+      {preflightStatus === "error" && (
+        <div className="mt-4 flex flex-col gap-2 rounded-md border border-red-200 bg-red-50/50 p-4 text-sm text-red-900">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold">
+              <XCircle className="h-4 w-4 text-red-600" /> Preflight
+            </div>
+            <Badge variant="destructive">FEHLER</Badge>
+          </div>
+          <p className="mt-1 leading-relaxed text-xs">{preflightMessage}</p>
+          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-red-600/70">
+            <Sparkles className="h-3 w-3" /> KI-Risikobewertung
           </div>
         </div>
       )}
       {preflightStatus === "idle" && (
-        <div className="mt-4 flex items-center gap-2 rounded-md bg-slate-50 p-3 text-sm text-slate-700 border">
-          <FileCheck className="h-4 w-4" /> Preflight
+        <div className="mt-4 flex items-center justify-between rounded-md bg-slate-50 p-3 text-sm text-slate-700 border">
+          <div className="flex items-center gap-2">
+            <FileCheck className="h-4 w-4" /> Preflight
+          </div>
+          <Badge variant="outline">BEREIT</Badge>
         </div>
       )}
       {preflightStatus === "running" && (
-        <div className="mt-4 flex items-center gap-2 rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-100 animate-pulse">
-          <FileCheck className="h-4 w-4" /> Preflight läuft...
+        <div className="mt-4 flex items-center justify-between rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-100 animate-pulse">
+          <div className="flex items-center gap-2">
+            <FileCheck className="h-4 w-4" /> Preflight läuft...
+          </div>
+          <Badge variant="secondary">PRÜFT</Badge>
         </div>
       )}
       {metrics && (
@@ -300,7 +443,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           <p className="font-bold">Qualitätschecks</p>
           <div className="mt-2 grid gap-1">
             {preflightDetails.map((item) => (
-              <div key={item.code} className={`flex items-center gap-2 ${item.passed ? "text-emerald-700" : "text-red-700"}`}>
+              <div key={item.code} className={`flex items-center gap-2 ${item.passed ? "text-fuchsia-700" : "text-red-700"}`}>
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 <span className="flex-1">{item.label}</span>
                 <span>{item.passed ? "OK" : "Error"}</span>
@@ -309,15 +452,35 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
           </div>
         </div>
       )}
-      <Button
-        className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]"
-        size="lg"
-        asChild
-      >
-        <a href="/kontakt">
-          <PhoneCall className="h-4 w-4 mr-2" /> Jetzt unverbindlich anfragen
-        </a>
+      <div className="mt-4 rounded-md border p-3">
+        <label className="flex items-center gap-3 text-sm font-semibold">
+          <input
+            type="checkbox"
+            checked={printCheckRequested}
+            onChange={(event) => setPrintCheckRequested(event.target.checked)}
+          />
+          Profi Print-Check (KI + manuell) + {formatEuro(PRINT_CHECK_FEE)}
+        </label>
+        <p className="mt-1 text-xs text-muted-foreground">Wird als Zusatzleistung berechnet (Abholung oder Versand).</p>
+      </div>
+      <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
+        In den Warenkorb
       </Button>
+      <Button
+        className="mt-3 w-full"
+        size="lg"
+        variant="outline"
+        type="button"
+        onClick={() => {
+          void (async () => {
+            const ok = await addToCart();
+            if (ok) router.push("/warenkorb");
+          })();
+        }}
+      >
+        Jetzt kaufen
+      </Button>
+      {cartMessage ? <p className="mt-3 text-center text-xs text-fuchsia-700">{cartMessage}</p> : null}
       <p className="mt-3 text-center text-xs text-muted-foreground">Wir beraten Sie gerne zu Materialien und Veredelungen.</p>
     </aside>
   );

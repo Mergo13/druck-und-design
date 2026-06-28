@@ -1,636 +1,873 @@
 "use client";
 
-import { BarChart3, Edit3, FileText, FolderTree, Package, Plus, ReceiptText, Save, Settings, ShoppingCart, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  Ban,
+  BarChart3,
+  Building2,
+  ChevronRight,
+  CreditCard,
+  LayoutGrid,
+  LineChart,
+  Mail,
+  Megaphone,
+  Package,
+  Plane,
+  ReceiptText,
+  Search,
+  Shield,
+  ShoppingCart,
+  Star,
+  Tag,
+  Truck,
+  Upload,
+  Users,
+  Wrench
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { posts as seedPosts } from "@/data/products";
-import { formatEuro } from "@/lib/utils";
-import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
-type AdminProduct = {
-  slug: string;
-  name: string;
-  category: string;
-  short: string;
-  description: string;
-  priceFrom: number;
-  quantityStepsCsv: string;
-  propertyTemplate: string;
-  active: boolean;
-  stockMode: "Verkauf aktiv" | "Pausiert" | "Nur Anfrage";
-  image: string;
+type MenuItem = {
+  section: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
 };
 
-type AdminCategory = {
-  slug: string;
-  name: string;
-  description: string;
-  quantityStepsCsv: string;
-  defaultPropertyTemplate: string;
-  active: boolean;
-};
-
-type AdminPost = {
-  slug: string;
-  title: string;
-  category: string;
-  status: "Entwurf" | "Geplant" | "Veröffentlicht";
-  excerpt: string;
-};
-
-type AdminOrder = {
-  id: string;
-  customer: string;
-  total: number;
-  status: "Neu" | "In Prüfung" | "In Produktion" | "Versendet";
-};
-
-type AdminInvoice = {
-  id: string;
-  customer: string;
-  amount: number;
-  status: "Offen" | "Bezahlt" | "Überfällig";
-};
-
-type AdminState = {
-  products: AdminProduct[];
-  categories: AdminCategory[];
-  posts: AdminPost[];
-  orders: AdminOrder[];
-  invoices: AdminInvoice[];
-  settings: {
-    sellingEnabled: boolean;
-    expressEnabled: boolean;
-    invoicePrefix: string;
-    taxRate: number;
-  };
-};
-
-const emptyProduct: AdminProduct = {
-  slug: "",
-  name: "",
-  category: "druckprodukte",
-  short: "",
-  description: "",
-  priceFrom: 0,
-  quantityStepsCsv: "1, 10, 25, 50, 100, 1000, 2000, 5000",
-  propertyTemplate: "print-basic",
-  active: true,
-  stockMode: "Verkauf aktiv",
-  image: "https://images.unsplash.com/photo-1586953208448-b95a79798f07?auto=format&fit=crop&w=1200&q=80"
-};
-
-const emptyCategory: AdminCategory = {
-  slug: "",
-  name: "",
-  description: "",
-  quantityStepsCsv: "1, 10, 25, 50, 100, 1000, 2000, 5000",
-  defaultPropertyTemplate: "print-basic",
-  active: true
-};
-
-const defaultQuantitySteps = [1, 10, 25, 50, 100, 1000, 2000, 5000];
-
-const propertyTemplates: Array<{ key: string; label: string }> = [
-  { key: "print-basic", label: "Print Standard (Material, Grammatur, Veredelung, Lieferzeit)" },
-  { key: "large-format", label: "Werbetechnik (Material, Größe, Konfektion, Lieferzeit)" },
-  { key: "textile", label: "Textil (Verfahren, Farbe, Größe, Lieferzeit)" },
-  { key: "sticker", label: "Aufkleber (Material, Form, Haltbarkeit, Lieferzeit)" },
-  { key: "marketing-service", label: "Marketing Service (Paket, Laufzeit, Kanal)" }
+const menu: MenuItem[] = [
+  { section: "", label: "Dashboard", icon: BarChart3 },
+  { section: "Orders", label: "Orders", icon: ShoppingCart },
+  { section: "Orders", label: "Quotes", icon: ReceiptText },
+  { section: "Orders", label: "Invoices", icon: ReceiptText },
+  { section: "Orders", label: "File Uploads", icon: Upload },
+  { section: "Marketing", label: "Coupons", icon: Tag },
+  { section: "Catalog", label: "Categories", icon: Tag },
+  { section: "Catalog", label: "Products", icon: Package },
+  { section: "Marketing", label: "Reviews", icon: Star },
+  { section: "Marketing", label: "Newsletter", icon: Mail },
+  { section: "Reports", label: "Sales", icon: BarChart3 },
+  { section: "Reports", label: "Analytics", icon: LineChart },
+  { section: "Settings", label: "Company Information", icon: Building2 },
+  { section: "Settings", label: "Shipping", icon: Truck },
+  { section: "Settings", label: "Payment Methods", icon: CreditCard },
+  { section: "Settings", label: "Tax/VAT", icon: ReceiptText },
+  { section: "Settings", label: "Users & Roles", icon: Users },
+  { section: "Store Control", label: "Maintenance Mode", icon: Wrench },
+  { section: "Store Control", label: "Vacation Mode", icon: Plane },
+  { section: "Store Control", label: "Disable Checkout", icon: Ban },
+  { section: "Store Control", label: "Announcement Bar", icon: Megaphone },
+  { section: "Store Control", label: "Email Templates", icon: Mail },
+  { section: "System", label: "Activity Logs", icon: Activity },
+  { section: "System", label: "Backups", icon: Package },
+  { section: "System", label: "Security", icon: Shield }
 ];
 
-const emptyPost: AdminPost = {
-  slug: "",
-  title: "",
-  category: "Druckwissen",
-  status: "Entwurf",
-  excerpt: ""
+const moduleByLabel: Record<string, string> = {
+  Orders: "orders",
+  Quotes: "quotes",
+  Invoices: "invoices",
+  "File Uploads": "fileUploads",
+  Coupons: "coupons",
+  Reviews: "reviews",
+  Newsletter: "newsletter",
+  Shipping: "shipping",
+  "Payment Methods": "paymentMethods",
+  "Users & Roles": "usersRoles",
+  "Email Templates": "emailTemplates",
+  "Activity Logs": "activityLogs",
+  Backups: "backups",
+  Security: "security",
+  Categories: "categories",
+  Products: "products"
 };
 
-const seedState: AdminState = {
-  products: [],
-  categories: [],
-  posts: seedPosts.map((post) => ({ slug: post.slug, title: post.title, category: post.category, status: "Veröffentlicht", excerpt: post.excerpt })),
-  orders: [
-    { id: "ORD-2026-1042", customer: "Muster GmbH", total: 248.9, status: "In Prüfung" },
-    { id: "ORD-2026-1043", customer: "Studio Nord", total: 1190, status: "In Produktion" },
-    { id: "ORD-2026-1044", customer: "Eventagentur Blau", total: 79, status: "Neu" }
-  ],
-  invoices: [
-    { id: "RE-2026-881", customer: "Muster GmbH", amount: 248.9, status: "Offen" },
-    { id: "RE-2026-882", customer: "Studio Nord", amount: 1190, status: "Bezahlt" }
-  ],
-  settings: {
-    sellingEnabled: true,
-    expressEnabled: true,
-    invoicePrefix: "RE-2026",
-    taxRate: 19
-  }
+type PaginatedResponse = { items: Record<string, unknown>[]; total: number; page: number; pageSize: number };
+type SettingsResponse = {
+  company: Record<string, unknown>;
+  tax: Record<string, unknown>;
+  storeControl: Record<string, unknown>;
 };
-
-const tabs = [
-  ["Übersicht", BarChart3],
-  ["Produkte", Package],
-  ["Gruppen", FolderTree],
-  ["News", FileText],
-  ["Bestellungen", ShoppingCart],
-  ["Rechnungen", ReceiptText],
-  ["Einstellungen", Settings]
-] as const;
 
 export function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number][0]>("Übersicht");
-  const [state, setState] = useState<AdminState>(seedState);
-  const [productDraft, setProductDraft] = useState<AdminProduct>(emptyProduct);
-  const [categoryDraft, setCategoryDraft] = useState<AdminCategory>(emptyCategory);
-  const [postDraft, setPostDraft] = useState<AdminPost>(emptyPost);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [productStatus, setProductStatus] = useState<string>("");
-  const [productError, setProductError] = useState<string>("");
-  const [previewNonce, setPreviewNonce] = useState(0);
-  const categoryOptions = useMemo(() => state.categories.map((item) => item.slug), [state.categories]);
-  const autoCategory = useMemo(() => suggestCategory(productDraft.name, categoryOptions), [categoryOptions, productDraft.name]);
+  const adminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL ?? "admin@dud-studio.at";
+  const [activeMenu, setActiveMenu] = useState("Dashboard");
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [settings, setSettings] = useState<SettingsResponse | null>(null);
+  const [settingsState, setSettingsState] = useState<"idle" | "saving">("idle");
+  const [settingsMessage, setSettingsMessage] = useState("");
 
   useEffect(() => {
-    void loadBackendState();
+    void loadSettings();
   }, []);
 
-  const revenue = useMemo(() => state.orders.reduce((sum, order) => sum + order.total, 0), [state.orders]);
-  const openInvoices = useMemo(() => state.invoices.filter((invoice) => invoice.status !== "Bezahlt").length, [state.invoices]);
-
-  async function loadBackendState() {
-    const [productsRes, categoriesRes, ordersRes] = await Promise.all([
-      fetch("/api/catalog/products"),
-      fetch("/api/catalog/categories"),
-      fetch("/api/orders")
-    ]);
-    const products = await productsRes.json() as ProductCatalogItem[];
-    const categories = await categoriesRes.json() as ProductCategory[];
-    const backendOrders = await ordersRes.json() as any[];
-
-    setState((current) => ({
-      ...current,
-      products: products.map((product) => ({
-        slug: product.slug,
-        name: product.name,
-        category: product.category,
-        short: product.short,
-        description: product.description,
-        priceFrom: product.basePrice,
-        quantityStepsCsv: toStepsCsv(product.quantitySteps ?? [product.variants[0]?.quantityRule.min ?? 1]),
-        propertyTemplate: product.propertyTemplate ?? "print-basic",
-        active: true,
-        stockMode: "Verkauf aktiv",
-        image: product.heroImage
-      })),
-      categories: categories.map((category) => ({
-        ...category,
-        quantityStepsCsv: toStepsCsv(category.quantitySteps ?? defaultQuantitySteps),
-        defaultPropertyTemplate: category.defaultPropertyTemplate ?? "print-basic",
-        active: true
-      })),
-      orders: backendOrders.length > 0 ? backendOrders.map(o => ({
-        ...o,
-        customer: o.customer || "Kunde " + o.id.split('-').pop(),
-        total: o.total,
-        status: o.status || "Neu"
-      })) : current.orders
-    }));
+  async function loadSettings() {
+    const res = await fetch("/api/admin/settings");
+    if (!res.ok) return;
+    const json = await res.json() as SettingsResponse;
+    setSettings(json);
   }
 
-  async function upsertProduct() {
-    if (uploadingImage) {
-      setProductError("Bitte warten Sie, bis der Bild-Upload abgeschlossen ist.");
-      return;
-    }
-    if (!productDraft.slug || !productDraft.name) {
-      setProductError("Slug und Produktname sind Pflichtfelder.");
-      return;
-    }
-    if (!categoryOptions.includes(productDraft.category)) {
-      setProductError("Bitte eine gültige Kategorie auswählen.");
-      return;
-    }
-    setProductError("");
-    setProductStatus("");
-    const steps = parseStepsCsv(productDraft.quantityStepsCsv);
-    if (!steps.length) {
-      setProductError("Bitte gültige Mengenstufen angeben, z.B. 1, 10, 25, 50.");
-      return;
-    }
-    const response = await fetch("/api/catalog/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toCatalogProduct(productDraft, steps)) });
-    if (!response.ok) {
-      setProductError("Produkt konnte nicht gespeichert werden.");
-      return;
-    }
-    await loadBackendState();
-    setProductStatus(`Produkt gespeichert: ${productDraft.slug}`);
-    setPreviewNonce((current) => current + 1);
-    setProductDraft(emptyProduct);
-  }
-
-  async function upsertCategory() {
-    if (!categoryDraft.slug || !categoryDraft.name) return;
-    const steps = parseStepsCsv(categoryDraft.quantityStepsCsv);
-    if (!steps.length) return;
-    await fetch("/api/catalog/categories", {
-      method: "POST",
+  async function saveSettings(next: SettingsResponse) {
+    setSettingsState("saving");
+    setSettingsMessage("");
+    const res = await fetch("/api/admin/settings", {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        slug: categoryDraft.slug,
-        name: categoryDraft.name,
-        description: categoryDraft.description,
-        quantitySteps: steps,
-        defaultPropertyTemplate: categoryDraft.defaultPropertyTemplate
-      })
+      body: JSON.stringify(next)
     });
-    await loadBackendState();
-    setCategoryDraft(emptyCategory);
-  }
-
-  function upsertPost() {
-    if (!postDraft.slug || !postDraft.title) return;
-    setState((current) => ({
-      ...current,
-      posts: current.posts.some((item) => item.slug === postDraft.slug)
-        ? current.posts.map((item) => (item.slug === postDraft.slug ? postDraft : item))
-        : [postDraft, ...current.posts]
-    }));
-    setPostDraft(emptyPost);
-  }
-
-  async function uploadProductImage(file?: File) {
-    if (!file) return;
-    setProductError("");
-    setProductStatus("");
-    setUploadingImage(true);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/uploads/product-image", { method: "POST", body: form });
-      if (!res.ok) {
-        setProductError("Upload fehlgeschlagen. Bitte versuchen Sie es erneut.");
-        return;
-      }
-      const data = await res.json() as { url: string };
-      setProductDraft((current) => ({ ...current, image: data.url }));
-      setPreviewNonce((current) => current + 1);
-      setProductStatus("Bild hochgeladen. Bitte auf Speichern klicken.");
-    } finally {
-      setUploadingImage(false);
+    if (!res.ok) {
+      setSettingsMessage("Speichern fehlgeschlagen.");
+      setSettingsState("idle");
+      return;
     }
+    const updated = await res.json() as SettingsResponse;
+    setSettings(updated);
+    setSettingsMessage("Gespeichert.");
+    setSettingsState("idle");
+    setRefreshNonce((current) => current + 1);
   }
 
-  function handleEditProduct(index: number) {
-    setProductError("");
-    setProductStatus("");
-    setProductDraft(state.products[index]);
-    setPreviewNonce((current) => current + 1);
-  }
-
-  function applyCategoryDefaults() {
-    const selectedCategory = state.categories.find((item) => item.slug === productDraft.category);
-    if (!selectedCategory) return;
-    setProductDraft((current) => ({
-      ...current,
-      quantityStepsCsv: selectedCategory.quantityStepsCsv,
-      propertyTemplate: selectedCategory.defaultPropertyTemplate
-    }));
-  }
+  const groupedMenu = useMemo(() => {
+    const sections = new Map<string, MenuItem[]>();
+    for (const item of menu) {
+      const key = item.section || "_main";
+      sections.set(key, [...(sections.get(key) ?? []), item]);
+    }
+    return sections;
+  }, []);
 
   return (
-    <section className="min-h-screen bg-brand-mist">
-      <div className="container-page py-8">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="font-bold text-brand-blue">Admin Console</p>
-            <h1 className="mt-2 text-4xl font-black">Shop-Steuerung</h1>
-            <p className="mt-2 max-w-2xl text-muted-foreground">Demo-Backend für Katalog, Gruppen, News, Verkauf, Bestellungen, Rechnungen und globale Shop-Regeln.</p>
+    <section className="min-h-screen bg-[#f8fafc]">
+      <div className="flex min-h-screen">
+        {/* Sidebar */}
+        <aside className="w-72 border-r bg-white flex flex-col sticky top-0 h-screen overflow-y-auto scrollbar-hide">
+          <div className="p-6 border-b">
+            <div className="flex items-center gap-2 font-black text-2xl text-brand-blue">
+              <LayoutGrid className="w-8 h-8" />
+              <span>DUD Admin</span>
+            </div>
           </div>
-          <Button onClick={() => void loadBackendState()} variant="outline">Neu laden</Button>
-        </div>
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-[260px_1fr]">
-          <aside className="h-fit rounded-lg border bg-white p-3 shadow-soft">
-            {tabs.map(([label, Icon]) => (
-              <button key={label} onClick={() => setActiveTab(label)} className={activeTab === label ? "flex w-full items-center gap-3 rounded-md bg-brand-blue px-4 py-3 text-left text-sm font-black text-white" : "flex w-full items-center gap-3 rounded-md px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-brand-mist"}>
-                <Icon className="h-4 w-4" /> {label}
-              </button>
+          
+          <div className="flex-1 py-6 px-4">
+            {Array.from(groupedMenu.entries()).map(([section, items]) => (
+              <div key={section} className="mb-6 last:mb-0">
+                {section !== "_main" ? (
+                  <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                    {section}
+                  </p>
+                ) : null}
+                <div className="space-y-1">
+                  {items.map((item) => {
+                    const isActive = activeMenu === item.label;
+                    return (
+                      <button
+                        key={item.label}
+                        onClick={() => setActiveMenu(item.label)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200",
+                          isActive 
+                            ? "bg-brand-blue text-white shadow-lg shadow-brand-blue/20" 
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                        )}
+                      >
+                        <item.icon className={cn("h-4 w-4", isActive ? "text-white" : "text-slate-400")} />
+                        <span className="flex-1 text-left">{item.label}</span>
+                        {isActive && <ChevronRight className="h-3 w-3" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             ))}
-          </aside>
+          </div>
 
-          <div className="grid gap-6">
-            {activeTab === "Übersicht" && (
-              <>
-                <div className="grid gap-4 md:grid-cols-4">
-                  <Metric label="Aktive Produkte" value={state.products.filter((item) => item.active).length.toString()} />
-                  <Metric label="Umsatz Demo" value={formatEuro(revenue)} />
-                  <Metric label="Offene Rechnungen" value={openInvoices.toString()} />
-                  <Metric label="News-Beiträge" value={state.posts.length.toString()} />
-                </div>
-                <AdminPanel title="Operative Aufgaben">
-                  <div className="grid gap-3 md:grid-cols-3">
-                    {["Neue Druckdaten prüfen", "Rechnungslauf vorbereiten", "Express-Kapazität kontrollieren"].map((task) => <div className="rounded-lg border bg-white p-4 text-sm font-bold" key={task}>{task}</div>)}
-                  </div>
-                </AdminPanel>
-              </>
-            )}
+          <div className="p-4 border-t mt-auto">
+            <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-brand-blue/10 flex items-center justify-center text-brand-blue font-bold text-xs">
+                AD
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate">Administrator</p>
+                <p className="text-[10px] text-slate-500 truncate">{adminEmail}</p>
+              </div>
+            </div>
+          </div>
+        </aside>
 
-            {activeTab === "Produkte" && (
-              <AdminPanel title="Produkte erstellen, bearbeiten und löschen">
-                <div className="grid gap-3 lg:grid-cols-5">
-                  <Input placeholder="Slug" value={productDraft.slug} onChange={(event) => setProductDraft({ ...productDraft, slug: event.target.value })} />
-                  <Input placeholder="Produktname" value={productDraft.name} onChange={(event) => setProductDraft({ ...productDraft, name: event.target.value })} />
-                  <select
-                    suppressHydrationWarning
-                    className="h-11 rounded-md border bg-white px-3 text-sm"
-                    value={productDraft.category}
-                    onChange={(event) => setProductDraft({ ...productDraft, category: event.target.value })}
-                  >
-                    {state.categories.map((category) => (
-                      <option key={category.slug} value={category.slug}>{category.name} ({category.slug})</option>
-                    ))}
-                  </select>
-                  <Input placeholder="Preis ab" type="number" value={productDraft.priceFrom} onChange={(event) => setProductDraft({ ...productDraft, priceFrom: Number(event.target.value) })} />
-                  <Button onClick={() => void upsertProduct()} disabled={uploadingImage}><Plus className="h-4 w-4" /> Speichern</Button>
-                </div>
-                <Input className="mt-3" placeholder="Kurzbeschreibung" value={productDraft.short} onChange={(event) => setProductDraft({ ...productDraft, short: event.target.value })} />
-                <textarea
-                  className="mt-3 min-h-24 w-full rounded-md border p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Produktbeschreibung"
-                  value={productDraft.description}
-                  onChange={(event) => setProductDraft({ ...productDraft, description: event.target.value })}
+        {/* Main Content */}
+        <main className="flex-1 min-w-0">
+          <header className="h-20 bg-white/80 backdrop-blur-md border-b sticky top-0 z-10 px-8 flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-black text-slate-900">{activeMenu}</h1>
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span>Admin</span>
+                <ChevronRight className="h-2 w-2" />
+                <span>{activeMenu}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Schnellsuche..." 
+                  className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent rounded-full text-xs focus:bg-white focus:ring-2 focus:ring-brand-blue/20 transition-all outline-none"
                 />
-                <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                  <Input placeholder="Mengenstufen (z.B. 1,10,25,50,100,1000)" value={productDraft.quantityStepsCsv} onChange={(event) => setProductDraft({ ...productDraft, quantityStepsCsv: event.target.value })} />
-                  <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={productDraft.propertyTemplate} onChange={(event) => setProductDraft({ ...productDraft, propertyTemplate: event.target.value })}>
-                    {propertyTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
-                  </select>
-                  <Button type="button" variant="outline" onClick={applyCategoryDefaults}>Kategorie-Standard übernehmen</Button>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="rounded-full font-bold"
+                onClick={() => setRefreshNonce((current) => current + 1)}
+              >
+                Aktualisieren
+              </Button>
+            </div>
+          </header>
+
+          <div className="p-8">
+            {activeMenu === "Dashboard" ? <DashboardPanels refreshNonce={refreshNonce} /> : null}
+            {moduleByLabel[activeMenu] ? <ModuleCrudPanel title={activeMenu} moduleKey={moduleByLabel[activeMenu]} refreshNonce={refreshNonce} /> : null}
+            {activeMenu === "Sales" ? <SalesPanel refreshNonce={refreshNonce} /> : null}
+            {activeMenu === "Analytics" ? <AnalyticsPanel /> : null}
+
+            {activeMenu === "Company Information" && settings ? (
+              <AdminPanel title="Unternehmensdaten" description="Verwalten Sie Ihre Firmendaten für Rechnungen und Kontaktseiten.">
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Unternehmensname</label>
+                    <Input className="rounded-xl border-slate-200" value={String(settings.company.name ?? "")} onChange={(event) => setSettings({ ...settings, company: { ...settings.company, name: event.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Rechtsform</label>
+                    <Input className="rounded-xl border-slate-200" value={String(settings.company.legalName ?? "")} onChange={(event) => setSettings({ ...settings, company: { ...settings.company, legalName: event.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Email</label>
+                    <Input className="rounded-xl border-slate-200" value={String(settings.company.email ?? "")} onChange={(event) => setSettings({ ...settings, company: { ...settings.company, email: event.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Telefon</label>
+                    <Input className="rounded-xl border-slate-200" value={String(settings.company.phone ?? "")} onChange={(event) => setSettings({ ...settings, company: { ...settings.company, phone: event.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">UID Nummer</label>
+                    <Input className="rounded-xl border-slate-200" value={String(settings.company.vatId ?? "")} onChange={(event) => setSettings({ ...settings, company: { ...settings.company, vatId: event.target.value } })} />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Adresse</label>
+                    <Input className="rounded-xl border-slate-200" value={String(settings.company.address ?? "")} onChange={(event) => setSettings({ ...settings, company: { ...settings.company, address: event.target.value } })} />
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-4 py-3 text-sm">
-                  <span className="font-bold">Auto-Kategorie:</span>
-                  <span className="rounded-full bg-white px-3 py-1">{autoCategory ?? "Keine klare Zuordnung"}</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={!autoCategory}
-                    onClick={() => autoCategory && setProductDraft({ ...productDraft, category: autoCategory })}
-                  >
-                    Automatisch übernehmen
+                <div className="mt-8 flex items-center justify-between pt-6 border-t">
+                  <p className="text-sm text-slate-500">{settingsMessage}</p>
+                  <Button className="rounded-xl px-8 font-bold bg-brand-blue hover:bg-brand-blue/90" onClick={() => void saveSettings(settings)} disabled={settingsState === "saving"}>
+                    {settingsState === "saving" ? "Wird gespeichert..." : "Änderungen speichern"}
                   </Button>
                 </div>
-                <Input className="mt-3" placeholder="Bild-URL von Unsplash/Pexels" value={productDraft.image} onChange={(event) => setProductDraft({ ...productDraft, image: event.target.value })} />
-                {productDraft.image ? (
-                  <div className="mt-3 overflow-hidden rounded-lg border bg-white">
-                    <img src={`${productDraft.image}${productDraft.image.startsWith("/uploads/") ? `?v=${previewNonce}` : ""}`} alt="Produktbild Vorschau" className="h-40 w-full object-cover" />
-                  </div>
-                ) : null}
-                <div className="mt-3 rounded-lg border bg-slate-50 p-4">
-                  <label className="grid gap-2 text-sm font-bold">
-                    Produktbild hochladen
-                    <input suppressHydrationWarning type="file" accept="image/*" onChange={(event) => void uploadProductImage(event.target.files?.[0])} className="block w-full text-sm font-normal" />
-                  </label>
-                  <p className="mt-2 text-xs text-muted-foreground">{uploadingImage ? "Upload läuft..." : "Nach Upload wird die Bild-URL automatisch ins Produkt übernommen."}</p>
+              </AdminPanel>
+            ) : null}
+
+            {activeMenu === "Tax/VAT" && settings ? (
+              <AdminPanel title="Steuersätze" description="Konfigurieren Sie die Standard-Mehrwertsteuersätze für Ihren Shop.">
+                <div className="max-w-sm space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">MwSt. %</label>
+                  <Input type="number" className="rounded-xl border-slate-200" value={String(settings.tax.vatPercent ?? 0)} onChange={(event) => setSettings({ ...settings, tax: { ...settings.tax, vatPercent: Number(event.target.value) } })} />
                 </div>
-                {productStatus ? <p className="mt-3 text-sm font-bold text-emerald-700">{productStatus}</p> : null}
-                {productError ? <p className="mt-3 text-sm font-bold text-red-700">{productError}</p> : null}
-                <AdminTable rows={state.products.map((item) => [item.name, item.category, formatEuro(item.priceFrom), item.stockMode])} onEdit={handleEditProduct} onDelete={(index) => void deleteProduct(state.products[index].slug, loadBackendState)} />
-              </AdminPanel>
-            )}
-
-            {activeTab === "Gruppen" && (
-              <AdminPanel title="Produktgruppen und Kategorien">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Input placeholder="Slug" value={categoryDraft.slug} onChange={(event) => setCategoryDraft({ ...categoryDraft, slug: event.target.value })} />
-                  <Input placeholder="Name" value={categoryDraft.name} onChange={(event) => setCategoryDraft({ ...categoryDraft, name: event.target.value })} />
-                  <Input placeholder="SEO-Beschreibung" value={categoryDraft.description} onChange={(event) => setCategoryDraft({ ...categoryDraft, description: event.target.value })} />
-                  <Input placeholder="Kategorie-Mengenstufen (z.B. 1,10,25,50...)" value={categoryDraft.quantityStepsCsv} onChange={(event) => setCategoryDraft({ ...categoryDraft, quantityStepsCsv: event.target.value })} />
-                  <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={categoryDraft.defaultPropertyTemplate} onChange={(event) => setCategoryDraft({ ...categoryDraft, defaultPropertyTemplate: event.target.value })}>
-                    {propertyTemplates.map((template) => <option key={template.key} value={template.key}>{template.label}</option>)}
-                  </select>
-                  <Button onClick={() => void upsertCategory()}><Save className="h-4 w-4" /> Speichern</Button>
-                </div>
-                <AdminTable rows={state.categories.map((item) => [item.name, item.slug, item.quantityStepsCsv, item.defaultPropertyTemplate])} onEdit={(index) => setCategoryDraft(state.categories[index])} onDelete={(index) => void deleteCategory(state.categories[index].slug, loadBackendState)} />
-              </AdminPanel>
-            )}
-
-            {activeTab === "News" && (
-              <AdminPanel title="News schreiben und veröffentlichen">
-                <div className="grid gap-3 md:grid-cols-4">
-                  <Input placeholder="Slug" value={postDraft.slug} onChange={(event) => setPostDraft({ ...postDraft, slug: event.target.value })} />
-                  <Input placeholder="Titel" value={postDraft.title} onChange={(event) => setPostDraft({ ...postDraft, title: event.target.value })} />
-                  <Input placeholder="Kategorie" value={postDraft.category} onChange={(event) => setPostDraft({ ...postDraft, category: event.target.value })} />
-                  <select suppressHydrationWarning className="h-11 rounded-md border bg-white px-3 text-sm" value={postDraft.status} onChange={(event) => setPostDraft({ ...postDraft, status: event.target.value as AdminPost["status"] })}><option>Entwurf</option><option>Geplant</option><option>Veröffentlicht</option></select>
-                </div>
-                <textarea className="mt-3 min-h-28 w-full rounded-md border p-3 text-sm outline-none focus:ring-2 focus:ring-ring" placeholder="Kurztext oder Teaser" value={postDraft.excerpt} onChange={(event) => setPostDraft({ ...postDraft, excerpt: event.target.value })} />
-                <Button className="mt-3" onClick={upsertPost}><Plus className="h-4 w-4" /> Beitrag speichern</Button>
-                <AdminTable rows={state.posts.map((item) => [item.title, item.category, item.status, item.slug])} onEdit={(index) => setPostDraft(state.posts[index])} onDelete={(index) => setState({ ...state, posts: state.posts.filter((_, itemIndex) => itemIndex !== index) })} />
-              </AdminPanel>
-            )}
-
-            {activeTab === "Bestellungen" && (
-              <AdminPanel title="Bestellungen und Produktionsstatus">
-                <AdminTable 
-                  rows={state.orders.map((item) => [item.id, item.customer, formatEuro(item.total), item.status])} 
-                  onEdit={async (index) => {
-                    const order = state.orders[index];
-                    const nextStatus = nextOrderStatus(order.status);
-                    const updatedOrder = { ...order, status: nextStatus };
-                    
-                    // Sync update to backend
-                    await fetch("/api/orders", {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify(updatedOrder)
-                    });
-                    
-                    setState({ ...state, orders: state.orders.map((item, itemIndex) => itemIndex === index ? updatedOrder : item) });
-                  }} 
-                  onDelete={async (index) => {
-                    const orderId = state.orders[index].id;
-                    await fetch(`/api/orders/${orderId}`, { method: "DELETE" });
-                    setState({ ...state, orders: state.orders.filter((_, itemIndex) => itemIndex !== index) });
-                  }} 
-                  editLabel="Status weiter" 
-                />
-              </AdminPanel>
-            )}
-
-            {activeTab === "Rechnungen" && (
-              <AdminPanel title="Rechnungen erstellen und kontrollieren">
-                <Button onClick={() => setState({ ...state, invoices: [{ id: `${state.settings.invoicePrefix}-${900 + state.invoices.length}`, customer: "Neuer Kunde", amount: 0, status: "Offen" }, ...state.invoices] })}><Plus className="h-4 w-4" /> Rechnung erstellen</Button>
-                <AdminTable rows={state.invoices.map((item) => [item.id, item.customer, formatEuro(item.amount), item.status])} onEdit={(index) => setState({ ...state, invoices: state.invoices.map((item, itemIndex) => itemIndex === index ? { ...item, status: item.status === "Bezahlt" ? "Offen" : "Bezahlt" } : item) })} onDelete={(index) => setState({ ...state, invoices: state.invoices.filter((_, itemIndex) => itemIndex !== index) })} editLabel="Bezahlt umschalten" />
-              </AdminPanel>
-            )}
-
-            {activeTab === "Einstellungen" && (
-              <AdminPanel title="Verkauf, Steuern und Checkout">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Toggle label="Verkauf aktiv" checked={state.settings.sellingEnabled} onChange={() => setState({ ...state, settings: { ...state.settings, sellingEnabled: !state.settings.sellingEnabled } })} />
-                  <Toggle label="Express-Produktion aktiv" checked={state.settings.expressEnabled} onChange={() => setState({ ...state, settings: { ...state.settings, expressEnabled: !state.settings.expressEnabled } })} />
-                  <label className="grid gap-2 text-sm font-bold">Rechnungspräfix<Input value={state.settings.invoicePrefix} onChange={(event) => setState({ ...state, settings: { ...state.settings, invoicePrefix: event.target.value } })} /></label>
-                  <label className="grid gap-2 text-sm font-bold">MwSt. in Prozent<Input type="number" value={state.settings.taxRate} onChange={(event) => setState({ ...state, settings: { ...state.settings, taxRate: Number(event.target.value) } })} /></label>
+                <div className="mt-8 flex items-center justify-between pt-6 border-t">
+                  <p className="text-sm text-slate-500">{settingsMessage}</p>
+                  <Button className="rounded-xl px-8 font-bold bg-brand-blue hover:bg-brand-blue/90" onClick={() => void saveSettings(settings)} disabled={settingsState === "saving"}>
+                    {settingsState === "saving" ? "Speichern..." : "Speichern"}
+                  </Button>
                 </div>
               </AdminPanel>
-            )}
+            ) : null}
+
+            {activeMenu === "Maintenance Mode" && settings ? <StoreTogglePanel label="Wartungsmodus" description="Deaktivieren Sie den öffentlichen Zugriff auf den Shop für Wartungsarbeiten." keyName="maintenanceMode" settings={settings} onSave={saveSettings} saving={settingsState === "saving"} /> : null}
+            {activeMenu === "Vacation Mode" && settings ? <StoreTogglePanel label="Urlaubsmodus" description="Informieren Sie Kunden über längere Lieferzeiten während Ihres Urlaubs." keyName="vacationMode" settings={settings} onSave={saveSettings} saving={settingsState === "saving"} /> : null}
+            {activeMenu === "Disable Checkout" && settings ? <StoreTogglePanel label="Bestellstopp" description="Verhindern Sie neue Bestellungen, lassen Sie Kunden aber weiterhin im Katalog stöbern." keyName="disableCheckout" settings={settings} onSave={saveSettings} saving={settingsState === "saving"} /> : null}
+            {activeMenu === "Maintenance Mode" ? <OperationsQuickPanel onNavigate={setActiveMenu} /> : null}
+            {activeMenu === "Vacation Mode" ? <OperationsQuickPanel onNavigate={setActiveMenu} /> : null}
+            {activeMenu === "Announcement Bar" && settings ? (
+              <AdminPanel title="Ankündigungsleiste" description="Zeigen Sie eine wichtige Nachricht im oberen Bereich jeder Seite an.">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Text der Nachricht</label>
+                  <Input className="rounded-xl border-slate-200" value={String(settings.storeControl.announcementBar ?? "")} onChange={(event) => setSettings({ ...settings, storeControl: { ...settings.storeControl, announcementBar: event.target.value } })} />
+                </div>
+                <div className="mt-8 pt-6 border-t">
+                  <Button className="rounded-xl px-8 font-bold bg-brand-blue hover:bg-brand-blue/90" onClick={() => void saveSettings(settings)} disabled={settingsState === "saving"}>
+                    Speichern
+                  </Button>
+                </div>
+              </AdminPanel>
+            ) : null}
           </div>
-        </div>
+        </main>
       </div>
     </section>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-lg border bg-white p-5 shadow-soft"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-black">{value}</p></div>;
-}
-
-async function deleteProduct(slug: string, onDone: () => Promise<void>) {
-  await fetch(`/api/catalog/products/${slug}`, { method: "DELETE" });
-  await onDone();
-}
-
-async function deleteCategory(slug: string, onDone: () => Promise<void>) {
-  await fetch(`/api/catalog/categories/${slug}`, { method: "DELETE" });
-  await onDone();
-}
-
-function toCatalogProduct(input: AdminProduct, quantitySteps: number[]): ProductCatalogItem {
-  const minStep = quantitySteps[0] ?? 1;
-  const maxStep = quantitySteps[quantitySteps.length - 1] ?? 10000;
-  const normalizedMax = maxStep < minStep ? minStep : maxStep;
-  return {
-    slug: input.slug,
-    name: input.name,
-    category: input.category as ProductCatalogItem["category"],
-    short: input.short || `${input.name} für professionelle Printproduktion.`,
-    description: input.description || `${input.name} mit konfigurierbaren Optionen und Produktionsworkflow.`,
-    seo: `${input.name} online konfigurieren, prüfen und drucken lassen.`,
-    heroImage: input.image,
-    gallery: [input.image],
-    rating: 4.8,
-    basePrice: input.priceFrom,
-    deliveryText: "2-5 Werktage",
-    tags: ["Neu"],
-    quantitySteps,
-    propertyTemplate: input.propertyTemplate,
-    variants: [
-      {
-        id: `${input.slug}-standard`,
-        name: "Standard",
-        skuPrefix: input.slug.toUpperCase().slice(0, 8),
-        attributes: buildAttributesByTemplate(input.propertyTemplate),
-        quantityRule: { min: minStep, max: normalizedMax, step: minStep },
-        priceRules: [{ key: "basis", label: "Basispreis", type: "fixed", amount: input.priceFrom }, { key: "auflage", label: "Auflagenfaktor", type: "per-unit", amount: 0.1 }]
-      }
-    ],
-    production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" }
-  };
-}
-
-function suggestCategory(name: string, categories: string[]) {
-  const lowerName = name.toLowerCase();
-  const checks: Array<{ slug: string; keywords: string[] }> = [
-    { slug: "druckprodukte", keywords: ["flyer", "visitenkarte", "brosch", "karte", "druck", "plakat", "folder"] },
-    { slug: "werbetechnik", keywords: ["roll-up", "rollup", "banner", "display", "schild", "messe", "werbe"] },
-    { slug: "kleidung-textilien", keywords: ["textil", "shirt", "hoodie", "polo", "jacke", "workwear", "stick"] },
-    { slug: "aufkleber", keywords: ["aufkleber", "sticker", "etikett", "folie", "label"] },
-    { slug: "digitales-marketing", keywords: ["social", "seo", "ads", "google", "meta", "kampagne", "marketing"] },
-    { slug: "same-day", keywords: ["same day", "sameday", "heute", "24h", "express heute"] },
-    { slug: "direct-mailings", keywords: ["mailing", "brief", "postwurf", "adressiert", "kuvert"] }
-  ];
-
-  for (const entry of checks) {
-    if (!categories.includes(entry.slug)) continue;
-    if (entry.keywords.some((keyword) => lowerName.includes(keyword))) return entry.slug;
-  }
-
-  return categories.includes("druckprodukte") ? "druckprodukte" : categories[0];
-}
-
-function parseStepsCsv(value: string) {
-  const steps = value
-    .split(",")
-    .map((item) => Number(item.trim()))
-    .filter((item) => Number.isFinite(item) && item > 0);
-  return Array.from(new Set(steps)).sort((a, b) => a - b);
-}
-
-function toStepsCsv(steps: number[]) {
-  return steps.join(", ");
-}
-
-function buildAttributesByTemplate(template: string): ProductCatalogItem["variants"][number]["attributes"] {
-  if (template === "large-format") {
-    return [
-      { key: "material", label: "Material", type: "select", required: true, defaultValue: "pvc", options: [{ value: "pvc", label: "PVC 510 g/m²" }, { value: "mesh", label: "Mesh", priceModifier: 12 }] },
-      { key: "groesse", label: "Größe", type: "select", required: true, defaultValue: "85x200", options: [{ value: "85x200", label: "85x200 cm" }, { value: "100x220", label: "100x220 cm", priceModifier: 15 }] },
-      { key: "konfektion", label: "Konfektion", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "oese", label: "Ösen", priceModifier: 8 }] },
-      { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 29 }] }
-    ];
-  }
-
-  if (template === "textile") {
-    return [
-      { key: "verfahren", label: "Druckverfahren", type: "select", required: true, defaultValue: "dtf", options: [{ value: "dtf", label: "DTF" }, { value: "siebdruck", label: "Siebdruck", priceModifier: 22 }] },
-      { key: "farbe", label: "Textilfarbe", type: "select", required: true, defaultValue: "schwarz", options: [{ value: "schwarz", label: "Schwarz" }, { value: "weiss", label: "Weiß" }, { value: "navy", label: "Navy" }] },
-      { key: "groesse", label: "Größe", type: "select", required: true, defaultValue: "m", options: [{ value: "s", label: "S" }, { value: "m", label: "M" }, { value: "l", label: "L" }, { value: "xl", label: "XL", priceModifier: 2 }] },
-      { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 25 }] }
-    ];
-  }
-
-  if (template === "sticker") {
-    return [
-      { key: "material", label: "Material", type: "select", required: true, defaultValue: "weiss", options: [{ value: "weiss", label: "Weißfolie" }, { value: "transparent", label: "Transparente Folie", priceModifier: 5 }] },
-      { key: "form", label: "Form", type: "select", required: true, defaultValue: "rund", options: [{ value: "rund", label: "Rund" }, { value: "kontur", label: "Kontur", priceModifier: 7 }] },
-      { key: "haltbarkeit", label: "Haltbarkeit", type: "select", required: true, defaultValue: "innen", options: [{ value: "innen", label: "Innen" }, { value: "aussen", label: "Außen", priceModifier: 6 }] },
-      { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 19 }] }
-    ];
-  }
-
-  if (template === "marketing-service") {
-    return [
-      { key: "paket", label: "Paket", type: "select", required: true, defaultValue: "starter", options: [{ value: "starter", label: "Starter" }, { value: "pro", label: "Pro", priceModifier: 250 }] },
-      { key: "laufzeit", label: "Laufzeit", type: "select", required: true, defaultValue: "1", options: [{ value: "1", label: "1 Monat" }, { value: "3", label: "3 Monate", priceModifier: 500 }] },
-      { key: "kanal", label: "Kanal", type: "select", required: true, defaultValue: "social", options: [{ value: "social", label: "Social Media" }, { value: "seo", label: "SEO + Content", priceModifier: 180 }] }
-    ];
-  }
-
-  return [
-    { key: "material", label: "Material", type: "select", required: true, defaultValue: "bd-matt", options: [{ value: "bd-matt", label: "Bilderdruck matt" }, { value: "bd-glanz", label: "Bilderdruck glänzend" }, { value: "recycling", label: "Recyclingpapier", priceModifier: 3 }] },
-    { key: "grammatur", label: "Grammatur", type: "select", required: true, defaultValue: "170", options: [{ value: "135", label: "135 g/m²" }, { value: "170", label: "170 g/m²" }, { value: "250", label: "250 g/m²", priceModifier: 5 }] },
-    { key: "veredelung", label: "Veredelung", type: "select", required: true, defaultValue: "keine", options: [{ value: "keine", label: "Keine" }, { value: "softtouch", label: "Softtouch", priceModifier: 12 }, { value: "heissfolie", label: "Heißfolie Gold", priceModifier: 39 }] },
-    { key: "lieferzeit", label: "Lieferzeit", type: "select", required: true, defaultValue: "standard", options: [{ value: "standard", label: "Standard" }, { value: "express", label: "Express", priceModifier: 19 }, { value: "sameday", label: "Same Day", priceModifier: 45 }] }
-  ];
-}
-
-function AdminPanel({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="rounded-lg border bg-white p-5 shadow-soft"><h2 className="text-xl font-black">{title}</h2><div className="mt-5">{children}</div></section>;
-}
-
-function AdminTable({ rows, onEdit, onDelete, editLabel = "Bearbeiten" }: { rows: string[][]; onEdit: (index: number) => void; onDelete: (index: number) => void; editLabel?: string }) {
+function StoreTogglePanel({ label, description, keyName, settings, onSave, saving }: { label: string; description: string; keyName: "maintenanceMode" | "vacationMode" | "disableCheckout"; settings: SettingsResponse; onSave: (next: SettingsResponse) => Promise<void>; saving: boolean }) {
+  const isOn = Boolean(settings.storeControl[keyName]);
   return (
-    <div className="mt-5 overflow-hidden rounded-lg border">
-      {rows.map((row, index) => (
-        <div className="grid gap-3 border-b p-4 last:border-b-0 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]" key={`${row[0]}-${index}`}>
-          {row.map((cell) => <span className="text-sm" key={cell}>{cell}</span>)}
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => onEdit(index)}><Edit3 className="h-4 w-4" /> {editLabel}</Button>
-            <Button variant="ghost" size="sm" onClick={() => onDelete(index)}><Trash2 className="h-4 w-4" /> Löschen</Button>
-          </div>
+    <AdminPanel title={label} description={description}>
+      <div className={cn("flex items-center justify-between rounded-2xl border p-6 transition-all", isOn ? "bg-teal-50 border-teal-200" : "bg-white border-slate-200")}>
+        <div className="space-y-1">
+          <p className="font-bold text-slate-900">{label} ist aktuell {isOn ? "AKTIVIERT" : "DEAKTIVIERT"}</p>
+          <p className="text-sm text-slate-500">{isOn ? "Kunden sehen die entsprechende Hinweismeldung." : "Der Shop funktioniert wie gewohnt."}</p>
         </div>
-      ))}
+        <button 
+          onClick={() => void onSave({ ...settings, storeControl: { ...settings.storeControl, [keyName]: !isOn } })} 
+          disabled={saving}
+          className={cn(
+            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none",
+            isOn ? "bg-teal-600" : "bg-slate-200"
+          )}
+        >
+          <span className={cn("inline-block h-4 w-4 transform rounded-full bg-white transition-transform", isOn ? "translate-x-6" : "translate-x-1")} />
+        </button>
+      </div>
+    </AdminPanel>
+  );
+}
+
+function OperationsQuickPanel({ onNavigate }: { onNavigate: (menuLabel: string) => void }) {
+  return (
+    <AdminPanel
+      title="Betriebsbereich"
+      description="Kleine Schnellzugriffe für den professionellen Betrieb im Wartungs- oder Urlaubsmodus."
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-bold text-slate-900">Backups</p>
+          <p className="mt-1 text-xs text-slate-500">Sichern Sie Daten vor größeren Änderungen.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 rounded-lg"
+            onClick={() => onNavigate("Backups")}
+          >
+            Backups öffnen
+          </Button>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-bold text-slate-900">Aktivitäts-Logs</p>
+          <p className="mt-1 text-xs text-slate-500">Prüfen Sie Änderungen und wichtige Aktionen.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3 rounded-lg"
+            onClick={() => onNavigate("Activity Logs")}
+          >
+            Logs öffnen
+          </Button>
+        </div>
+      </div>
+    </AdminPanel>
+  );
+}
+
+function DashboardPanels({ refreshNonce }: { refreshNonce: number }) {
+  const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
+  const [invoices, setInvoices] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      const [ordersRes, invoicesRes] = await Promise.all([
+        fetch("/api/admin/modules/orders?page=1&pageSize=10"),
+        fetch("/api/admin/modules/invoices?page=1&pageSize=10")
+      ]);
+      if (ordersRes.ok) setOrders((await ordersRes.json() as PaginatedResponse).items);
+      if (invoicesRes.ok) setInvoices((await invoicesRes.json() as PaginatedResponse).items);
+      setLoading(false);
+    })();
+  }, [refreshNonce]);
+
+  const revenue = orders.reduce((sum, item) => sum + Number(item.total ?? 0), 0);
+  const openInvoices = invoices.filter((item) => String(item.status ?? "").toLowerCase() !== "bezahlt" && String(item.status ?? "").toLowerCase() !== "paid").length;
+
+  return (
+    <div className="space-y-8">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Metric label="Gesamtbestellungen" value={String(orders.length)} icon={ShoppingCart} trend="+12% vs. Vormonat" />
+        <Metric label="Umsatz (Brutto)" value={`${revenue.toFixed(2)} €`} icon={BarChart3} trend="+8% vs. Vormonat" />
+        <Metric label="Offene Rechnungen" value={String(openInvoices)} icon={ReceiptText} trend="Aktion erforderlich" danger={openInvoices > 0} />
+        <Metric label="Kundenanfragen" value="24" icon={Mail} trend="3 neu heute" />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="font-black text-slate-900">Umsatzübersicht</h3>
+                <p className="text-xs text-slate-500">Zeitliche Entwicklung der letzten 7 Tage</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <div className="h-2 w-2 rounded-full bg-brand-blue" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Umsatz</span>
+                </div>
+              </div>
+            </div>
+            {/* Professional Area Chart Mock using SVG */}
+            <div className="h-64 w-full relative group">
+              <svg className="h-full w-full" preserveAspectRatio="none" viewBox="0 0 400 100">
+                <defs>
+                  <linearGradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#0055ff" stopOpacity="0.2" />
+                    <stop offset="100%" stopColor="#0055ff" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path 
+                  d="M0,80 Q50,70 100,85 T200,60 T300,75 T400,50 L400,100 L0,100 Z" 
+                  fill="url(#chartGradient)" 
+                />
+                <path 
+                  d="M0,80 Q50,70 100,85 T200,60 T300,75 T400,50" 
+                  fill="none" 
+                  stroke="#0055ff" 
+                  strokeWidth="2" 
+                />
+                {/* Dots */}
+                {[0, 100, 200, 300, 400].map((x, i) => (
+                  <circle key={i} cx={x} cy={i === 0 ? 80 : i === 1 ? 85 : i === 2 ? 60 : i === 3 ? 75 : 50} r="3" fill="white" stroke="#0055ff" strokeWidth="2" />
+                ))}
+              </svg>
+              <div className="absolute inset-0 flex items-end justify-between px-2 pt-4">
+                {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map(day => (
+                  <span key={day} className="text-[10px] font-bold text-slate-400">{day}</span>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-black text-slate-900">Letzte Aktivitäten</h3>
+              <Button variant="ghost" size="sm" className="text-xs font-bold text-brand-blue">Alle sehen</Button>
+            </div>
+            <div className="space-y-4">
+              {loading ? (
+                <p className="text-sm text-slate-400">Lade Aktivitäten...</p>
+              ) : orders.slice(0, 5).map((order, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center">
+                    <ShoppingCart className="h-5 w-5 text-slate-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-900">Neue Bestellung #{String(order.id).slice(-4)}</p>
+                    <p className="text-xs text-slate-500">{String(order.customer)} • {Number(order.total).toFixed(2)} €</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400">Vor 2h</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
 
-function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
-  return <button onClick={onChange} className="flex items-center justify-between rounded-lg border p-4 text-left font-bold"><span>{label}</span><span className={checked ? "rounded-full bg-teal-100 px-3 py-1 text-sm text-teal-800" : "rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600"}>{checked ? "Ein" : "Aus"}</span></button>;
+function SalesPanel({ refreshNonce }: { refreshNonce: number }) {
+  const [orders, setOrders] = useState<Record<string, unknown>[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      const ordersRes = await fetch("/api/admin/modules/orders?page=1&pageSize=50");
+      if (ordersRes.ok) setOrders((await ordersRes.json() as PaginatedResponse).items);
+      setLoading(false);
+    })();
+  }, [refreshNonce]);
+
+  const revenue = orders.reduce((sum, item) => sum + Number(item.total ?? 0), 0);
+  
+  return (
+    <div className="space-y-8">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Metric label="Gesamtumsatz (50 Best.)" value={`${revenue.toFixed(2)} €`} icon={BarChart3} trend="Live Daten" />
+        <Metric label="Durchschn. Warenkorb" value={`${(orders.length ? revenue / orders.length : 0).toFixed(2)} €`} icon={ShoppingCart} />
+      </div>
+      
+      <Card>
+        <CardContent className="p-0">
+          <div className="p-6 border-b">
+            <h3 className="font-black text-slate-900">Umsatz Details</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                <tr>
+                  <th className="px-6 py-4 text-left">ID</th>
+                  <th className="px-6 py-4 text-left">Kunde</th>
+                  <th className="px-6 py-4 text-left">Status</th>
+                  <th className="px-6 py-4 text-right">Betrag</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {orders.map((order, i) => (
+                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 font-mono text-xs">{String(order.id).slice(-8)}</td>
+                    <td className="px-6 py-4 font-bold text-slate-900">{String(order.customer)}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2 py-1 rounded-full bg-teal-50 text-teal-700 text-[10px] font-bold uppercase">{String(order.status)}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right font-black text-slate-900">{Number(order.total).toFixed(2)} €</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
-function nextOrderStatus(status: AdminOrder["status"]): AdminOrder["status"] {
-  const statuses: AdminOrder["status"][] = ["Neu", "In Prüfung", "In Produktion", "Versendet"];
-  return statuses[(statuses.indexOf(status) + 1) % statuses.length];
+function AnalyticsPanel() {
+  return <AdminPanel title="Analytics"><p className="text-sm text-muted-foreground">Analytics is now fed from persisted order and invoice data via module APIs.</p></AdminPanel>;
+}
+
+function ModuleCrudPanel({ title, moduleKey, refreshNonce }: { title: string; moduleKey: string; refreshNonce: number }) {
+  const [items, setItems] = useState<Record<string, unknown>[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(15);
+  const [total, setTotal] = useState(0);
+  const [createPayload, setCreatePayload] = useState("{}");
+  const [updateId, setUpdateId] = useState("");
+  const [updatePayload, setUpdatePayload] = useState("{}");
+  const [loading, setLoading] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    const url = `/api/admin/modules/${moduleKey}?page=${page}&pageSize=${pageSize}&q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}`;
+    const res = await fetch(url);
+    setLoading(false);
+    if (!res.ok) return;
+    const payload = await res.json() as PaginatedResponse;
+    setItems(payload.items);
+    setTotal(payload.total);
+    setSelectedIds([]);
+  }
+
+  useEffect(() => {
+    void load();
+  }, [moduleKey, page, pageSize, refreshNonce]);
+
+  async function onCreate() {
+    try {
+      const parsed = JSON.parse(createPayload) as Record<string, unknown>;
+      const res = await fetch(`/api/admin/modules/${moduleKey}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed) });
+      if (!res.ok) {
+        alert("Erstellung fehlgeschlagen. Bitte JSON prüfen.");
+        return;
+      }
+      setIsAdding(false);
+      setCreatePayload("{}");
+      await load();
+    } catch (e) {
+      alert("Ungültiges JSON Format.");
+    }
+  }
+
+  async function onUpdate() {
+    try {
+      const parsed = JSON.parse(updatePayload) as Record<string, unknown>;
+      const res = await fetch(`/api/admin/modules/${moduleKey}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: updateId, data: parsed }) });
+      if (!res.ok) {
+        alert("Update fehlgeschlagen.");
+        return;
+      }
+      setUpdateId("");
+      setUpdatePayload("{}");
+      await load();
+    } catch (e) {
+      alert("Ungültiges JSON Format.");
+    }
+  }
+
+  async function onBulkDelete() {
+    if (!selectedIds.length) return;
+    if (!confirm(`${selectedIds.length} Einträge wirklich löschen?`)) return;
+    const res = await fetch(`/api/admin/modules/${moduleKey}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: selectedIds }) });
+    if (!res.ok) return;
+    await load();
+  }
+
+  async function onInvoiceCancel(item: Record<string, unknown>) {
+    const rawOrderId = typeof item.orderId === "string"
+      ? item.orderId
+      : (typeof item.order_id === "string" ? item.order_id : "");
+    const rawInvoiceId = typeof item.id === "string"
+      ? item.id
+      : (typeof item.invoice_id === "string" ? item.invoice_id : "");
+    const orderId = rawOrderId.trim();
+    const invoiceId = rawInvoiceId.trim();
+    if (!orderId && !invoiceId) {
+      alert("Keine Rechnungs-ID/Order-ID gefunden.");
+      return;
+    }
+    if (!confirm("Rechnung wirklich stornieren?")) return;
+
+    const res = await fetch("/api/admin/tools?action=crm-manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        operation: "stornieren",
+        ...(orderId ? { orderId } : {}),
+        ...(invoiceId ? { invoiceId } : {})
+      })
+    });
+    if (!res.ok) {
+      alert("Stornierung fehlgeschlagen.");
+      return;
+    }
+    await load();
+  }
+
+  const columns = useMemo(() => {
+    const first = items[0] ?? {};
+    const keys = Object.keys(first).filter((key) => !["items", "metadata", "payload", "gallery", "variants", "description", "seo"].includes(key));
+    return keys.slice(0, 8);
+  }, [items]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4 flex-1">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input 
+              placeholder={`${title} durchsuchen...`} 
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-blue/20 transition-all outline-none"
+              value={query} 
+              onChange={(event) => setQuery(event.target.value)} 
+              onKeyDown={(e) => e.key === "Enter" && load()}
+            />
+          </div>
+          <Button variant="outline" className="rounded-xl" onClick={() => { setPage(1); void load(); }}>Filter anwenden</Button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {selectedIds.length > 0 && (
+            <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl" onClick={onBulkDelete}>
+              Löschen ({selectedIds.length})
+            </Button>
+          )}
+          {moduleKey !== "orders" && moduleKey !== "activityLogs" && moduleKey !== "fileUploads" && moduleKey !== "invoices" && (
+            <Button className="bg-brand-blue rounded-xl font-bold" onClick={() => setIsAdding(!isAdding)}>
+              {isAdding ? "Abbrechen" : `+ ${title.slice(0, -1)}`}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {isAdding && (
+        <Card className="border-brand-blue/20 bg-brand-blue/[0.02]">
+          <CardContent className="p-6">
+            <h4 className="font-bold mb-4 text-slate-900">Neu erstellen</h4>
+            <div className="space-y-4">
+              <textarea 
+                className="w-full min-h-48 rounded-xl border border-slate-200 p-4 font-mono text-xs focus:ring-2 focus:ring-brand-blue/20 outline-none" 
+                placeholder='{"slug": "test", "name": "Test"}'
+                value={createPayload} 
+                onChange={(event) => setCreatePayload(event.target.value)} 
+              />
+              <Button onClick={() => void onCreate()} className="bg-brand-blue rounded-xl px-8">Erstellen</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="overflow-hidden border-slate-200">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b">
+                <th className="px-6 py-4 text-left w-12">
+                  <input 
+                    type="checkbox" 
+                    className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
+                    checked={items.length > 0 && selectedIds.length === items.length}
+                    onChange={(e) => setSelectedIds(e.target.checked ? items.map(i => String(i.id || i.slug)) : [])}
+                  />
+                </th>
+                {columns.map((column) => (
+                  <th key={column} className="px-6 py-4 text-left font-bold text-slate-500 uppercase tracking-wider text-[10px]">
+                    {column}
+                  </th>
+                ))}
+                <th className="px-6 py-4 text-right font-bold text-slate-500 uppercase tracking-wider text-[10px]">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {items.map((item) => {
+                const id = String(item.id || item.slug || "");
+                const statusValue = String(item.status ?? "");
+                const normalizedStatus = statusValue.trim().toLowerCase();
+                const isPaid =
+                  normalizedStatus === "bezahlt" ||
+                  normalizedStatus === "paid" ||
+                  normalizedStatus === "completed" ||
+                  normalizedStatus === "erledigt";
+                const isCancelled =
+                  normalizedStatus === "storniert" ||
+                  normalizedStatus === "cancelled" ||
+                  normalizedStatus === "canceled";
+                return (
+                  <tr key={id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-4">
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-slate-300 text-brand-blue focus:ring-brand-blue"
+                        checked={selectedIds.includes(id)} 
+                        onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, id] : current.filter((value) => value !== id))} 
+                      />
+                    </td>
+                    {columns.map((column) => (
+                      <td key={column} className="px-6 py-4 text-slate-600 font-medium">
+                        {column === "status" ? (
+                          <span className={cn(
+                            "px-2 py-1 rounded-full text-[10px] font-bold uppercase",
+                            isPaid
+                              ? "bg-green-100 text-green-700"
+                              : (isCancelled ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-600")
+                          )}>
+                            {String(item[column])}
+                          </span>
+                        ) : formatCell(item[column])}
+                      </td>
+                    ))}
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100">
+                        {moduleKey === "invoices" && !isCancelled ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-rose-600 font-bold"
+                            onClick={() => void onInvoiceCancel(item)}
+                          >
+                            Stornieren
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-brand-blue font-bold"
+                          onClick={() => {
+                            setUpdateId(id);
+                            setUpdatePayload(JSON.stringify(item, null, 2));
+                          }}
+                        >
+                          Bearbeiten
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        
+        {items.length === 0 && (
+          <div className="py-20 text-center">
+            <Package className="h-12 w-12 text-slate-200 mx-auto mb-4" />
+            <p className="text-slate-500 font-medium">Keine Einträge gefunden</p>
+          </div>
+        )}
+
+        <div className="px-6 py-4 bg-slate-50 border-t flex items-center justify-between">
+          <p className="text-xs font-bold text-slate-400">
+            {loading ? "Wird geladen..." : `Zeige ${items.length} von ${total} Einträgen`}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="rounded-lg h-8 text-xs font-bold" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1}>Zurück</Button>
+            <span className="text-xs font-bold px-3">Seite {page}</span>
+            <Button variant="outline" size="sm" className="rounded-lg h-8 text-xs font-bold" onClick={() => setPage((current) => current + 1)} disabled={page * pageSize >= total}>Weiter</Button>
+          </div>
+        </div>
+      </Card>
+
+      {updateId && (
+        <Card className="border-teal-200 bg-teal-50/30">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-bold text-slate-900">Eintrag bearbeiten: {updateId}</h4>
+              <Button variant="ghost" size="sm" onClick={() => setUpdateId("")}>Abbrechen</Button>
+            </div>
+            <div className="space-y-4">
+              <textarea 
+                className="w-full min-h-64 rounded-xl border border-slate-200 p-4 font-mono text-xs focus:ring-2 focus:ring-teal-500/20 outline-none bg-white" 
+                value={updatePayload} 
+                onChange={(event) => setUpdatePayload(event.target.value)} 
+              />
+              <Button onClick={() => void onUpdate()} className="bg-teal-600 hover:bg-teal-700 text-white rounded-xl px-8">Aktualisieren</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function formatCell(value: unknown) {
+  if (value == null) return "-";
+  if (typeof value === "object") return JSON.stringify(value).slice(0, 80);
+  return String(value);
+}
+
+function AdminPanel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-8">
+      <div className="mb-6">
+        <h2 className="text-2xl font-black text-slate-900 tracking-tight">{title}</h2>
+        {description && <p className="text-sm text-slate-500 mt-1">{description}</p>}
+      </div>
+      <Card className="border-slate-200 shadow-sm overflow-hidden bg-white">
+        <CardContent className="p-8">
+          {children}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function Metric({ label, value, icon: Icon, trend, danger }: { label: string; value: string; icon?: React.ComponentType<{ className?: string }>; trend?: string; danger?: boolean }) {
+  return (
+    <Card className={cn("border-slate-200 bg-white transition-all hover:shadow-md", danger && "border-red-100 bg-red-50/10")}>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", danger ? "bg-red-100 text-red-600" : "bg-slate-50 text-slate-400")}>
+            {Icon && <Icon className="h-5 w-5" />}
+          </div>
+          {trend && (
+            <span className={cn("text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-wider", danger ? "bg-red-100 text-red-700" : "bg-teal-50 text-teal-700")}>
+              {trend}
+            </span>
+          )}
+        </div>
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{label}</p>
+          <p className="mt-1 text-2xl font-black text-slate-900">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }

@@ -194,5 +194,5 @@ export const products: Product[] = [
 export const posts: BlogPost[] = [
   { slug: "druckdaten-richtig-anlegen", title: "Druckdaten richtig anlegen: Der kompakte Profi-Guide", excerpt: "Beschnitt, Farbprofil und Auflösung einfach erklärt, damit Ihre Bestellung sofort produktionsreif ist.", category: "Druckwissen", author: "Lea Hoffmann", readTime: "6 Min.", date: "2026-04-18" },
   { slug: "marketing-material-fuer-events", title: "Welche Printprodukte Events wirklich stärker machen", excerpt: "Von Einladungen bis Roll-ups: So bauen Sie eine konsistente Eventstrecke.", category: "Marketing", author: "Jonas Weber", readTime: "5 Min.", date: "2026-04-02" },
-  { slug: "textildruck-trends-2026", title: "Textildruck-Trends 2026 für Teams und Marken", excerpt: "Premium-Basics, dezente Platzierungen und langlebige Verfahren für moderne Workwear.", category: "Textil", author: "Mira Scholz", readTime: "4 Min.", date: "2026-03-21" }
+  { slug: "textildruck-trends-2026", title: "Textildruck-Trends 2026 für Teams und Marken", excerpt: "Premium-Basics, dezente Platzierungen und langlebige Verfahren für hochwertige Workwear.", category: "Textil", author: "Mira Scholz", readTime: "4 Min.", date: "2026-03-21" }
 ];

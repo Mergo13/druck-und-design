@@ -8,11 +8,12 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          ink: "#06080b",
-          charcoal: "#101217",
-          blue: "#235c99",
-          cyan: "#1eb2c4",
-          mist: "#eef4f8"
+          ink: "#0a1020",
+          charcoal: "#151c2f",
+          blue: "#1155cc",
+          cyan: "#00a7a7",
+          coral: "#ff5a3c",
+          mist: "#f2f6ff"
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -31,8 +32,8 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)"
       },
       boxShadow: {
-        premium: "0 24px 70px rgba(15, 23, 42, 0.10)",
-        soft: "0 12px 34px rgba(15, 23, 42, 0.08)"
+        premium: "0 28px 80px rgba(17, 34, 68, 0.14)",
+        soft: "0 14px 36px rgba(17, 34, 68, 0.09)"
       }
     }
   },

@@ -1,130 +1,136 @@
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Factory, Layers3, PhoneCall, Printer, ShieldCheck, Sparkles, Workflow } from "lucide-react";
-import { HeroSlideshow } from "@/components/home/hero-slideshow";
+import { promises as fs } from "fs";
+import path from "path";
+import { ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { FlipWords } from "@/components/flipwords";
+import { ClientsMarquee } from "@/components/home/clients-marquee";
+import { HeroBackgroundSlideshow } from "@/components/home/hero-background-slideshow";
+import { ScrollZoomHero } from "@/components/home/scroll-zoom-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
-import { getCategories } from "@/lib/catalog-repository";
+import { getPublicCategories } from "@/lib/catalog-repository";
+
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const platformCategories = await getCategories();
-const workflowSteps: Array<{ icon: typeof Layers3; title: string; text: string }> = [
-  { icon: Layers3, title: "Konfiguration", text: "Varianten, Attribute, Auflage und Preislogik live berechnen." },
-  { icon: ShieldCheck, title: "Druckdatenprüfung", text: "KI-gestützte Prüfung von Format, Auflösung und Beschnitt." },
-  { icon: Factory, title: "Produktionspipeline", text: "Automatisierte Fertigung in Wels mit modernster Technik." }
-];
+  const platformCategories = await getPublicCategories();
+  const homepageLogos = await getHomepageLogos();
 
   return (
     <>
-      <section className="grid-bg overflow-hidden border-b bg-[linear-gradient(180deg,#f4f8fb,#ffffff)]">
-        <div className="container-page grid min-h-[760px] items-center gap-12 py-16 lg:grid-cols-[1fr_1fr]">
-          <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-brand-blue/15 bg-white px-4 py-2 text-sm font-bold text-brand-blue shadow-soft">
-              <Sparkles className="h-4 w-4 text-brand-cyan" />
-              Vision L&T – Druck & Design
-            </span>
-            <h1 className="mt-7 text-5xl font-black leading-[1.03] text-brand-ink md:text-7xl">Ihre Ideen in Bestform. Präzise, Schnell, Visionär.</h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-muted-foreground">Wir sind Ihre Full-Service Werbeagentur und Druckerei in Wels. Von der Corporate Identity bis zum fertigen Printprodukt – alles aus einer Hand.</p>
+      <section className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
+        <HeroBackgroundSlideshow />
+        <div className="container-page relative z-10 flex min-h-screen items-center py-20">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-4 text-xs font-black uppercase tracking-[0.18em] text-white/75">
+              <span className="h-0.5 w-12 bg-brand-coral" />
+              Design · Print · Digital
+            </div>
+            <h1 className="mt-7 text-5xl font-black leading-[1.03] md:text-7xl">
+              <FlipWords
+                words={["Drucklösungen", "Werbetechnik", "Markenauftritte", "Textilveredelung"]}
+                duration={2600}
+                className="!px-0 !text-brand-cyan"
+              />
+              <span className="block">für Unternehmen.</span>
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Von der Gestaltung bis zur Produktion: Wir realisieren professionelle Markenauftritte, Werbemittel und Druckprodukte aus einer Hand.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="bg-brand-blue hover:bg-[#2d70b6]">
-                <Link href="/leistungen">Unsere Leistungen <ArrowRight className="h-4 w-4" /></Link>
+              <Button asChild size="lg">
+                <Link href="/leistungen">Jetzt Leistungen ansehen <ArrowRight className="h-4 w-4" /></Link>
               </Button>
-              <Button asChild variant="outline" size="lg"><Link href="/referenzen">Referenzen ansehen</Link></Button>
+              <Button asChild variant="outline" size="lg" className="border-white/40 bg-black/15 text-white hover:bg-black/35">
+                <Link href="/kontakt">Projekt anfragen</Link>
+              </Button>
             </div>
           </div>
-          <HeroSlideshow />
         </div>
       </section>
 
-      <section className="container-page py-16">
-        <SectionHeading eyebrow="Dienstleistungen" title="Professionelle Lösungen für Ihren Erfolg" description="Vom ersten Entwurf bis zum fertigen Produkt – wir begleiten Sie mit Expertise und Leidenschaft." />
-        <div className="mt-8 grid gap-6 sm:grid-cols-3">
-          <Link href="/druckservice" className="group rounded-2xl border bg-white p-8 transition-all hover:border-brand-blue/30 hover:shadow-premium">
-            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-mist text-brand-blue transition-colors group-hover:bg-brand-blue group-hover:text-white">
-              <Printer className="h-6 w-6" />
-            </div>
-            <h3 className="text-xl font-black">Druckservice</h3>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">High-End Printlösungen, Broschüren und Geschäftsausstattung in Spitzenqualität.</p>
-            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
-              Portfolio ansehen <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </div>
-          </Link>
-          <Link href="/werbetechnik" className="group rounded-2xl border bg-white p-8 transition-all hover:border-brand-blue/30 hover:shadow-premium">
-            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-mist text-brand-blue transition-colors group-hover:bg-brand-blue group-hover:text-white">
-              <Layers3 className="h-6 w-6" />
-            </div>
-            <h3 className="text-xl font-black">Werbetechnik</h3>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">Sichtbarkeit auf jedem Format: Banner, Schilder und Fahrzeugbeklebung.</p>
-            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
-              Projekte entdecken <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </div>
-          </Link>
-          <Link href="/werbeagentur" className="group rounded-2xl border bg-white p-8 transition-all hover:border-brand-blue/30 hover:shadow-premium">
-            <div className="mb-5 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-mist text-brand-blue transition-colors group-hover:bg-brand-blue group-hover:text-white">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <h3 className="text-xl font-black">Werbeagentur</h3>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">Kreative Konzepte, Logo-Design und strategisches Marketing für Ihre Marke.</p>
-            <div className="mt-4 flex items-center gap-2 text-sm font-bold text-brand-blue">
-              Referenzen ansehen <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </div>
-          </Link>
-        </div>
-      </section>
+      <ScrollZoomHero />
 
-      <section className="bg-brand-mist py-16">
+      <section className="bg-[linear-gradient(180deg,#eef4ff,#f8fbff)] py-16">
         <div className="container-page">
           <SectionHeading eyebrow="Kategorien" title="Unsere Kompetenzbereiche" description="Entdecken Sie unsere vielfältigen Lösungen für Ihre Werbemittel und Druckprodukte." />
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {platformCategories.slice(0, 8).map((category) => (
-              <Link href={`/${category.slug}`} key={category.slug} className="rounded-lg border bg-white p-5 transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-premium">
-                <h3 className="text-lg font-black">{category.name}</h3>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
-              </Link>
+              <Card key={category.slug} className="border border-border bg-card shadow-[0_12px_32px_rgba(15,23,42,.06)] transition hover:-translate-y-1 hover:border-foreground/20 hover:shadow-premium">
+                <CardContent className="p-5">
+                  <Link href={`/${category.slug}`} className="block">
+                    <h3 className="text-lg font-black">{category.name}</h3>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{category.description}</p>
+                  </Link>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </div>
       </section>
 
       <section className="container-page py-16">
-        <SectionHeading eyebrow="Workflow" title="Von Entwurf bis Produktion ohne Medienbruch" />
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
-          {workflowSteps.map(({ icon: Icon, title, text }) => (
-            <div key={title} className="rounded-lg border p-6 shadow-soft">
-              <Icon className="h-7 w-7 text-brand-blue" />
-              <h3 className="mt-4 text-xl font-black">{title}</h3>
-              <p className="mt-2 text-sm text-muted-foreground">{text}</p>
-            </div>
+        <SectionHeading eyebrow="Ablauf" title="So Läuft Ihr Projekt Mit Uns" />
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {[
+            { step: "01", title: "Briefing & Beratung", text: "Wir klären Ziel, Format, Material und Budget." },
+            { step: "02", title: "Design & Freigabe", text: "Sie erhalten Entwürfe und geben die Produktion frei." },
+            { step: "03", title: "Produktion & Lieferung", text: "Wir produzieren sauber und liefern termingerecht aus." }
+          ].map((item) => (
+            <Card key={item.step} className="border border-border bg-card shadow-[0_16px_42px_rgba(15,23,42,.07)]">
+              <CardContent className="p-6">
+                <Badge variant="outline" className="text-xs font-bold tracking-[0.14em] text-muted-foreground">{item.step}</Badge>
+                <h3 className="mt-3 text-xl font-black">{item.title}</h3>
+                <p className="mt-2 text-sm text-muted-foreground">{item.text}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
       </section>
 
-      <section className="bg-slate-950 py-16 text-white">
-        <div className="container-page grid gap-8 lg:grid-cols-2">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.12em] text-brand-cyan">Vertrauen</p>
-            <h2 className="mt-2 text-4xl font-black">Enterprise-ready für modernes Printgeschäft</h2>
-          </div>
-          <div className="grid gap-4">
-            {["API-ready Architektur für Order Pipeline und Kundenprojekte", "Modulare Basis für AI-Designhilfen und Personalisierung", "Infrastruktur vorbereitet für Queue-Systeme und ERP-Integration", "Skalierbare Foundation für Docker und Nextcloud-Workflows"].map((item) => (
-              <div className="flex items-start gap-3" key={item}>
-                <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" />
-                <p>{item}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <section className="container-page py-16">
+        <Card className="border border-border bg-card text-card-foreground shadow-[0_20px_56px_rgba(15,23,42,.08)]">
+          <CardContent className="p-8 md:p-12">
+            <Badge variant="outline" className="text-sm font-bold uppercase tracking-[0.12em] text-muted-foreground">Bereit Für Ihr Projekt?</Badge>
+            <h2 className="mt-3 max-w-3xl text-4xl font-black text-foreground">Sie brauchen Druck, Werbetechnik oder Design? Wir beraten Sie direkt und starten sofort mit der Umsetzung.</h2>
+            <div className="mt-6 grid gap-2 sm:grid-cols-2">
+              {["Persönliche Beratung in Wels", "Klare Angebote ohne Umwege", "Verlässliche Produktionszeiten", "Ein Ansprechpartner für alles"].map((item) => (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground" key={item}>
+                  <CheckCircle2 className="h-4 w-4 text-foreground/80" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+              <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
+              <Button asChild variant="secondary"><Link href="/leistungen">Leistungen ansehen</Link></Button>
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
-      <section className="container-page py-16">
-        <div className="rounded-lg bg-[linear-gradient(135deg,#0f172a,#115e59)] p-8 text-white md:p-12">
-          <p className="text-sm font-bold uppercase tracking-[0.12em] text-emerald-200">Bereit für Ihr Projekt?</p>
-          <h2 className="mt-2 max-w-3xl text-4xl font-black">Lassen Sie uns gemeinsam Ihre Vision realisieren. Kontaktieren Sie uns für ein unverbindliches Erstgespräch.</h2>
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-            <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
-            <Button asChild variant="secondary"><Link href="/referenzen">Referenzen entdecken</Link></Button>
-          </div>
-        </div>
-      </section>
+      <ClientsMarquee logos={homepageLogos} />
     </>
   );
+}
+
+async function getHomepageLogos() {
+  const logosDir = path.join(process.cwd(), "public", "brand", "logos");
+  try {
+    const entries = await fs.readdir(logosDir, { withFileTypes: true });
+    const allowed = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg", ".avif"]);
+    const files = entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter((name) => allowed.has(path.extname(name).toLowerCase()))
+      .sort((a, b) => a.localeCompare(b));
+
+    if (files.length) {
+      return files.map((file) => `/brand/logos/${file}`);
+    }
+  } catch {
+    // Fall back to defaults if folder does not exist yet.
+  }
+
+  return ["/brand/logo-dud.png"];
 }

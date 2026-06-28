@@ -1,119 +1,104 @@
 "use client";
 
+import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, FileCheck, Sparkles, Truck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock3, ShieldCheck, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const slides = [
   {
-    title: "Premium Flyer",
-    subtitle: "Softtouch, Naturpapier und Same-Day-Produktion",
-    accent: "bg-brand-blue",
-    metric: "24h",
-    icon: Truck
+    title: "Druckservice für Unternehmen",
+    subtitle: "Flyer, Broschüren und Geschäftsdrucksorten mit Feingefühl für Ihre Marke.",
+    image: "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1600&q=80",
+    tags: ["Flyer", "Broschüren", "Geschäftsdrucksorten"],
+    metric: "Schnelle Produktion",
+    icon: Clock3
   },
   {
-    title: "Kleidung & Textilien",
-    subtitle: "Workwear, Teams und Merch mit Live-Mockup",
-    accent: "bg-brand-cyan",
-    metric: "4.9",
+    title: "Werbetechnik & Sichtbarkeit",
+    subtitle: "Banner, Schilder und Roll-ups, die ruhig, klar und hochwertig wirken.",
+    image: "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=1600&q=80",
+    tags: ["Banner", "Schilder", "Fahrzeugbeschriftung"],
+    metric: "Montage inklusive",
     icon: Sparkles
   },
   {
-    title: "Druckdatencheck",
-    subtitle: "Automatische Prüfung vor dem Produktionsstart",
-    accent: "bg-brand-ink",
-    metric: "PDF/X",
-    icon: FileCheck
+    title: "Werbeagentur & Design",
+    subtitle: "Logo und Corporate Design mit Charakter, damit Ihr Auftritt in Erinnerung bleibt.",
+    image: "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=1600&q=80",
+    tags: ["Logo", "Corporate Design", "Kampagnen"],
+    metric: "Konzept bis Umsetzung",
+    icon: ShieldCheck
   }
 ];
 
-export function HeroSlideshow() {
+export function HeroSlideshow({ fullScreen = false }: { fullScreen?: boolean }) {
   const [active, setActive] = useState(0);
   const slide = slides[active];
   const Icon = slide.icon;
 
   useEffect(() => {
-    const timer = window.setInterval(() => setActive((current) => (current + 1) % slides.length), 4200);
+    const timer = window.setInterval(() => setActive((current) => (current + 1) % slides.length), 7600);
     return () => window.clearInterval(timer);
   }, []);
 
   return (
-    <div className="relative mx-auto w-full max-w-[560px]">
-      <div className="absolute -inset-5 rounded-[2rem] bg-[radial-gradient(circle_at_30%_20%,rgba(35,92,153,.32),transparent_38%),radial-gradient(circle_at_75%_70%,rgba(30,178,196,.22),transparent_34%)] blur-2xl" />
-      <div className="relative overflow-hidden rounded-2xl border border-white/12 bg-[#05070a]/88 p-4 shadow-[0_30px_100px_rgba(0,0,0,.45)]">
-        <div className="flex items-center justify-between border-b border-white/10 px-2 pb-4 text-white">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">Druck & Design Studio</p>
-            <p className="mt-1 font-black">Live Produktionssuite</p>
-          </div>
-          <div className="flex gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-          </div>
+    <div className={fullScreen ? "relative h-full w-full" : "relative mx-auto w-full max-w-[620px]"}>
+      <div className={fullScreen ? "relative h-full overflow-hidden bg-slate-900" : "relative overflow-hidden rounded-2xl border bg-slate-900 shadow-[0_28px_90px_rgba(3,10,18,.28)]"}>
+        <div className="absolute left-0 right-0 top-0 z-20 h-1 bg-white/20">
+          <motion.div
+            key={active}
+            className="h-full bg-brand-cyan"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 7.6, ease: "linear" }}
+          />
         </div>
-
-        <div className="relative min-h-[430px] overflow-hidden rounded-xl">
+        <div className={fullScreen ? "relative h-full min-h-screen" : "relative aspect-[4/3] min-h-[430px]"}>
           <AnimatePresence mode="wait">
             <motion.div
               key={slide.title}
-              initial={{ opacity: 0, x: 60, scale: 0.98 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -60, scale: 0.98 }}
-              transition={{ duration: 0.55, ease: "easeOut" }}
-              className="absolute inset-0 grid content-between bg-[linear-gradient(135deg,#0b0d11,#111827_58%,#07111f)] p-6 text-white"
+              initial={{ opacity: 0.2, scale: 1.03 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0.2, scale: 0.99 }}
+              transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1] }}
+              className="absolute inset-0"
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1 text-xs font-bold text-white/70">
-                    <Icon className="h-3.5 w-3.5 text-brand-cyan" /> Express ready
+              <Image src={slide.image} alt={slide.title} fill className="object-cover" sizes="(min-width: 1024px) 45vw, 100vw" priority />
+              <div className="absolute inset-0 bg-[linear-gradient(130deg,rgba(2,8,18,.64),rgba(2,8,18,.28)_44%,rgba(2,8,18,.78)_100%)]" />
+              <div className="absolute inset-0 flex flex-col justify-between p-6 text-white">
+                <div className="flex items-start justify-between gap-4">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-bold">
+                    <Icon className="h-3.5 w-3.5 text-brand-cyan" /> Studio Workflow
                   </span>
-                  <h2 className="mt-5 text-4xl font-black tracking-tight">{slide.title}</h2>
-                  <p className="mt-2 max-w-xs text-sm leading-6 text-white/58">{slide.subtitle}</p>
+                  <span className="rounded-full border border-white/25 bg-black/30 px-3 py-1 text-xs font-bold">{slide.metric}</span>
                 </div>
-                <div className="rounded-xl border border-white/10 bg-white/8 p-4 text-right">
-                  <p className="text-xs uppercase tracking-[0.18em] text-white/45">Signal</p>
-                  <p className="text-2xl font-black text-brand-cyan">{slide.metric}</p>
-                </div>
-              </div>
-
-              <div className="relative mx-auto h-56 w-72">
-                <motion.div animate={{ y: [0, -12, 0], rotate: [-4, -1, -4] }} transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }} className="absolute left-0 top-8 h-40 w-52 rounded-lg border border-white/10 bg-white p-5 shadow-2xl">
-                  <div className="h-3 w-28 rounded-full bg-[#101217]" />
-                  <div className="mt-8 h-3 rounded-full bg-brand-blue" />
-                  <div className="mt-3 h-3 w-2/3 rounded-full bg-slate-300" />
-                  <div className="mt-3 h-3 w-1/2 rounded-full bg-brand-cyan" />
-                </motion.div>
-                <motion.div animate={{ y: [0, 10, 0], rotate: [5, 2, 5] }} transition={{ repeat: Infinity, duration: 4.4, ease: "easeInOut" }} className="absolute bottom-0 right-0 h-44 w-40 rounded-lg border border-white/10 bg-[#0d1117] p-4 shadow-2xl">
-                  <div className={`h-24 rounded-md ${slide.accent}`} />
-                  <div className="mt-4 h-2 rounded-full bg-white/70" />
-                  <div className="mt-2 h-2 w-2/3 rounded-full bg-white/30" />
-                </motion.div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                {["Upload", "Check", "Print"].map((item, index) => (
-                  <div className="rounded-lg border border-white/10 bg-white/8 p-3" key={item}>
-                    <p className="text-xs text-white/45">0{index + 1}</p>
-                    <p className="mt-1 text-sm font-bold">{item}</p>
+                <div>
+                  <h2 className="max-w-[470px] text-3xl font-black leading-tight md:text-4xl">{slide.title}</h2>
+                  <p className="mt-3 max-w-[520px] text-sm text-white/85 md:text-base">{slide.subtitle}</p>
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {slide.tags.map((tag) => (
+                      <span key={tag} className="rounded-full border border-white/25 bg-black/25 px-3 py-1 text-xs font-semibold">
+                        {tag}
+                      </span>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             </motion.div>
           </AnimatePresence>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <div className="flex gap-2">
+        <div className="absolute bottom-4 left-4 right-4 z-20 flex items-center justify-between gap-3">
+          <div className="flex gap-2 rounded-full border border-white/25 bg-black/35 px-3 py-2 backdrop-blur-sm">
             {slides.map((item, index) => (
-              <button key={item.title} aria-label={item.title} onClick={() => setActive(index)} className={index === active ? "h-2 w-8 rounded-full bg-brand-blue" : "h-2 w-2 rounded-full bg-white/20"} />
+              <button key={item.title} aria-label={item.title} onClick={() => setActive(index)} className={index === active ? "h-2 w-8 rounded-full bg-brand-cyan" : "h-2 w-2 rounded-full bg-white/45"} />
             ))}
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setActive((active + slides.length - 1) % slides.length)}><ChevronLeft className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setActive((active + 1) % slides.length)}><ChevronRight className="h-4 w-4" /></Button>
+          <div className="flex gap-2 rounded-full border border-white/25 bg-black/35 p-1 backdrop-blur-sm">
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/15 hover:text-white" onClick={() => setActive((active + slides.length - 1) % slides.length)}><ChevronLeft className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" className="text-white hover:bg-white/15 hover:text-white" onClick={() => setActive((active + 1) % slides.length)}><ChevronRight className="h-4 w-4" /></Button>
           </div>
         </div>
       </div>
