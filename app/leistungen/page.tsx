@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { ShopBrowser } from "@/features/shop/shop-browser";
 import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository";
+import { getSessionUser } from "@/lib/auth";
+import { withoutPrices } from "@/lib/product-price-visibility";
 
 export const metadata: Metadata = {
   title: "Leistungen",
@@ -11,7 +13,9 @@ export default async function LeistungenPage({ searchParams }: { searchParams?: 
   const params = await searchParams;
   const initialCategory = params?.kategorie;
   const initialQuery = params?.q;
-  const [categories, products] = await Promise.all([getPublicCategories(), getPublicProducts()]);
+  const [categories, rawProducts, session] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser()]);
+  const authenticated = Boolean(session);
+  const products = authenticated ? rawProducts : rawProducts.map(withoutPrices);
 
   return (
     <section className="pb-14">
@@ -34,7 +38,7 @@ export default async function LeistungenPage({ searchParams }: { searchParams?: 
         </div>
       </div>
       <div className="container-page py-10">
-        <ShopBrowser initialCategory={initialCategory} initialQuery={initialQuery} categories={categories} products={products} />
+        <ShopBrowser initialCategory={initialCategory} initialQuery={initialQuery} categories={categories} products={products} authenticated={authenticated} />
       </div>
     </section>
   );

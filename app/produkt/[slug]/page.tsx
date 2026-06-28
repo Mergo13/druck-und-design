@@ -5,6 +5,8 @@ import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
 import { getPublicProductBySlug } from "@/lib/catalog-repository";
 import { CheckCircle2 } from "lucide-react";
+import { getSessionUser } from "@/lib/auth";
+import { withoutPrices } from "@/lib/product-price-visibility";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -14,15 +16,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const product = await getPublicProductBySlug(slug);
-  if (!product) notFound();
+  const rawProduct = await getPublicProductBySlug(slug);
+  if (!rawProduct) notFound();
+  const session = await getSessionUser();
+  const authenticated = Boolean(session);
+  const product = authenticated ? rawProduct : withoutPrices(rawProduct);
 
   const schema = {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
     description: product.seo,
-    offers: { "@type": "Offer", priceCurrency: "EUR", price: product.basePrice, availability: "https://schema.org/InStock" }
+    ...(authenticated ? { offers: { "@type": "Offer", priceCurrency: "EUR", price: product.basePrice, availability: "https://schema.org/InStock" } } : {})
   };
 
   return (
@@ -54,7 +59,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             ))}
           </div>
         </div>
-        <ProductConfigurator product={product} />
+        <ProductConfigurator product={product} authenticated={authenticated} />
       </div>
     </section>
   );

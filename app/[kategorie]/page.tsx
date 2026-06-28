@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ShopBrowser } from "@/features/shop/shop-browser";
 import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository";
+import { getSessionUser } from "@/lib/auth";
+import { withoutPrices } from "@/lib/product-price-visibility";
 
 export async function generateMetadata({ params }: { params: Promise<{ kategorie: string }> }): Promise<Metadata> {
   const { kategorie } = await params;
@@ -14,7 +16,9 @@ export async function generateMetadata({ params }: { params: Promise<{ kategorie
 
 export default async function CategoryPage({ params }: { params: Promise<{ kategorie: string }> }) {
   const { kategorie } = await params;
-  const [categories, products] = await Promise.all([getPublicCategories(), getPublicProducts()]);
+  const [categories, rawProducts, session] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser()]);
+  const authenticated = Boolean(session);
+  const products = authenticated ? rawProducts : rawProducts.map(withoutPrices);
   const category = categories.find((item) => item.slug === kategorie);
   if (!category || ["druckservice", "werbetechnik", "werbeagentur", "kleidung-textilien", "leistungen"].includes(kategorie)) notFound();
 
@@ -25,7 +29,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ kateg
         <h1 className="mt-2 text-4xl font-black">{category.name}</h1>
         <p className="mt-3 max-w-3xl text-muted-foreground">{category.description} Konfigurieren Sie Format, Papier, Auflage und Lieferzeit mit transparenten Preisen und professionellem Druckdatencheck.</p>
       </div>
-      <ShopBrowser initialCategory={category.slug} categories={categories} products={products} />
+      <ShopBrowser initialCategory={category.slug} categories={categories} products={products} authenticated={authenticated} />
     </section>
   );
 }

@@ -53,6 +53,8 @@ export function CartQuoteView() {
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [state, setState] = useState<"idle" | "sending" | "ok" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("dud_cart");
@@ -68,12 +70,19 @@ export function CartQuoteView() {
         if (prof.shippingAddress && prof.shippingAddress !== prof.billingAddress) {
           setUseSeparateShipping(true);
         }
+        setAuthenticated(true);
+        setAuthChecked(true);
         return;
       }
 
       const res = await fetch("/api/auth/session");
-      if (!res.ok) return;
+      if (!res.ok) {
+        setAuthChecked(true);
+        return;
+      }
       const payload = await res.json() as { authenticated?: boolean; user?: { email?: string; fullName?: string; company?: string } };
+      setAuthenticated(Boolean(payload.authenticated));
+      setAuthChecked(true);
       if (payload.user?.email) setCustomerEmail(payload.user.email);
       if (payload.user?.fullName) setCustomerName(payload.user.fullName);
       else if (payload.user?.company) setCustomerName(payload.user.company);
@@ -247,6 +256,23 @@ export function CartQuoteView() {
     }
     setState("ok");
     setMessage(`Bestellung gespeichert: ${orderPayload.id}`);
+  }
+
+  if (!authChecked) {
+    return <div className="container-page py-20 text-center text-sm font-semibold text-muted-foreground">Kundenkonto wird geprüft...</div>;
+  }
+
+  if (!authenticated) {
+    return (
+      <section className="container-page py-20 text-center">
+        <h1 className="text-4xl font-black text-brand-ink">Bitte zuerst anmelden</h1>
+        <p className="mx-auto mt-4 max-w-xl text-muted-foreground">Preise, Warenkorb und Bestellung stehen registrierten Kunden nach der Anmeldung zur Verfügung.</p>
+        <div className="mt-7 flex justify-center gap-3">
+          <Button asChild><Link href="/login?next=/warenkorb">Anmelden</Link></Button>
+          <Button asChild variant="outline"><Link href="/registrierung">Konto erstellen</Link></Button>
+        </div>
+      </section>
+    );
   }
 
   return (
