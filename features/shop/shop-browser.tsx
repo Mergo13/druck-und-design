@@ -8,7 +8,7 @@ import { ProductCard } from "@/components/product/product-card";
 import { Button } from "@/components/ui/button";
 import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
 
-export function ShopBrowser({ initialCategory, initialQuery, categories, products }: { initialCategory?: string; initialQuery?: string; categories: ProductCategory[]; products: ProductCatalogItem[] }) {
+export function ShopBrowser({ initialCategory, initialQuery, categories, products, authenticated }: { initialCategory?: string; initialQuery?: string; categories: ProductCategory[]; products: ProductCatalogItem[]; authenticated: boolean }) {
   const [query, setQuery] = useState(initialQuery ?? "");
   const [category, setCategory] = useState(initialCategory ?? "alle");
   const [sort, setSort] = useState("beliebt");
@@ -64,8 +64,8 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
           </div>
           <select suppressHydrationWarning value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-brand-ink outline-none focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/10">
             <option value="beliebt">Beliebtheit</option>
-            <option value="preis-auf">Preis: niedrig zuerst</option>
-            <option value="preis-ab">Preis: hoch zuerst</option>
+            {authenticated ? <option value="preis-auf">Preis: niedrig zuerst</option> : null}
+            {authenticated ? <option value="preis-ab">Preis: hoch zuerst</option> : null}
             <option value="name">Name A-Z</option>
           </select>
         </div>
@@ -79,7 +79,8 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
             >
               <ProductCard
                 product={product}
-                onAddToCart={addToCart}
+                showPrices={authenticated}
+                onAddToCart={authenticated ? addToCart : undefined}
               />
             </motion.div>
           ))}

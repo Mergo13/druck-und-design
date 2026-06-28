@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { deleteProduct, getProductBySlug, getPublicProductBySlug } from "@/lib/catalog-repository";
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { requireModulePermission } from "@/lib/admin-permissions";
+import { getSessionUser } from "@/lib/auth";
+import { withoutPrices } from "@/lib/product-price-visibility";
 
 export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -13,7 +15,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   }
   const product = scope === "admin" ? await getProductBySlug(slug) : await getPublicProductBySlug(slug);
   if (!product) return NextResponse.json({ message: "Nicht gefunden" }, { status: 404 });
-  return NextResponse.json(product);
+  if (scope === "admin") return NextResponse.json(product);
+  const session = await getSessionUser();
+  return NextResponse.json(session ? product : withoutPrices(product));
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ slug: string }> }) {

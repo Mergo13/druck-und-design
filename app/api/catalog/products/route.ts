@@ -3,6 +3,8 @@ import { getCategories, getProducts, getPublicProducts, upsertProduct } from "@/
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { requireModulePermission } from "@/lib/admin-permissions";
 import type { ProductCatalogItem } from "@/types/print-platform";
+import { getSessionUser } from "@/lib/auth";
+import { withoutPrices } from "@/lib/product-price-visibility";
 
 export async function GET(request: Request) {
   const scope = new URL(request.url).searchParams.get("scope");
@@ -12,7 +14,9 @@ export async function GET(request: Request) {
     if (!permission.ok) return NextResponse.json({ message: permission.message }, { status: permission.status });
     return NextResponse.json(await getProducts());
   }
-  return NextResponse.json(await getPublicProducts());
+  const products = await getPublicProducts();
+  const session = await getSessionUser();
+  return NextResponse.json(session ? products : products.map(withoutPrices));
 }
 
 export async function POST(request: Request) {

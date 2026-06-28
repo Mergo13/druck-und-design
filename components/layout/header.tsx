@@ -213,7 +213,7 @@ export function Header() {
                         <p className="mt-1 text-xs text-muted-foreground">{item.short}</p>
                         <div className="mt-2 flex items-center justify-between text-xs">
                           <span className="rounded-full bg-slate-100 px-2 py-0.5">{item.category}</span>
-                          <span className="font-semibold text-brand-blue">ab {formatEuro(item.basePrice)}</span>
+                          <span className="font-semibold text-brand-blue">{authenticated ? `ab ${formatEuro(item.basePrice)}` : "Preis nach Anmeldung"}</span>
                         </div>
                       </Link>
                     )) : null}

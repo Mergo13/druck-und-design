@@ -14,7 +14,7 @@ const maxFileSize = 50 * 1024 * 1024;
 const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
 const PRINT_CHECK_FEE = Number(process.env.NEXT_PUBLIC_PRINT_CHECK_FEE_EUR ?? "9.99");
 
-export function ProductConfigurator({ product }: { product: ProductCatalogItem }) {
+export function ProductConfigurator({ product, authenticated }: { product: ProductCatalogItem; authenticated: boolean }) {
   const router = useRouter();
   const firstVariant = product.variants[0];
   const productOptions = useMemo(() => {
@@ -261,9 +261,9 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
-          <h2 className="text-2xl font-black">{formatEuro(currentPrice)}</h2>
+          <h2 className="text-2xl font-black">{authenticated ? formatEuro(currentPrice) : "Preis nach Anmeldung"}</h2>
           <p className="text-sm text-muted-foreground">Konfiguration inkl. Datencheck</p>
-          <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p>
+          {authenticated ? <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p> : null}
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
           <CalendarCheck className="ml-auto h-4 w-4 text-primary" />
@@ -459,14 +459,14 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
             checked={printCheckRequested}
             onChange={(event) => setPrintCheckRequested(event.target.checked)}
           />
-          Profi Print-Check (KI + manuell) + {formatEuro(PRINT_CHECK_FEE)}
+          Profi Print-Check (KI + manuell){authenticated ? ` + ${formatEuro(PRINT_CHECK_FEE)}` : ""}
         </label>
         <p className="mt-1 text-xs text-muted-foreground">Wird als Zusatzleistung berechnet (Abholung oder Versand).</p>
       </div>
-      <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
+      {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
         In den Warenkorb
-      </Button>
-      <Button
+      </Button> : <Button asChild className="mt-6 w-full" size="lg"><a href="/login">Anmelden und Preise sehen</a></Button>}
+      {authenticated ? <Button
         className="mt-3 w-full"
         size="lg"
         variant="outline"
@@ -479,7 +479,7 @@ export function ProductConfigurator({ product }: { product: ProductCatalogItem }
         }}
       >
         Jetzt kaufen
-      </Button>
+      </Button> : null}
       {cartMessage ? <p className="mt-3 text-center text-xs text-fuchsia-700">{cartMessage}</p> : null}
       <p className="mt-3 text-center text-xs text-muted-foreground">Wir beraten Sie gerne zu Materialien und Veredelungen.</p>
     </aside>

@@ -15,11 +15,13 @@ type CardProduct = Product | ProductCatalogItem;
 
 export function ProductCard({
   product,
+  showPrices = true,
   isSelected = false,
   onToggleSelect,
   onAddToCart
 }: {
   product: CardProduct;
+  showPrices?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (slug: string) => void;
   onAddToCart?: (slug: string) => void;
@@ -56,9 +58,15 @@ export function ProductCard({
           <Link href={`/produkt/${product.slug}`} className="mt-4 block text-xl font-black text-brand-ink transition hover:text-brand-blue">{product.name}</Link>
           <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">{product.short}</p>
           <div className="mt-5 flex items-center justify-between">
-            <p className="text-lg font-black text-brand-blue">{priceLabel}</p>
+            {showPrices ? (
+              <p className="text-lg font-black text-brand-blue">{priceLabel}</p>
+            ) : (
+              <Link href="/login" className="text-sm font-black text-brand-blue underline decoration-brand-cyan underline-offset-4">
+                Für Preise anmelden
+              </Link>
+            )}
           </div>
-          {onAddToCart ? (
+          {onAddToCart && showPrices ? (
             <motion.button
               type="button"
               whileTap={{ scale: 0.98 }}
@@ -103,6 +111,8 @@ export function ProductCard({
                 </AnimatePresence>
               </motion.span>
             </motion.button>
+          ) : !showPrices ? (
+            <Button asChild className="mt-4 w-full"><Link href="/login">Anmelden und Preise sehen</Link></Button>
           ) : null}
           {onToggleSelect ? (
             <Button
