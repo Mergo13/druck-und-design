@@ -1,72 +1,48 @@
-import { createHmac, randomInt } from "crypto";
-import { promises as fs } from "fs";
-import path from "path";
+import { createHmac, randomInt, timingSafeEqual } from "crypto";
 import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 
-const storePath = path.join(process.cwd(), "data", "admin-2fa-codes.json");
 const ttlSeconds = 10 * 60;
 
-type StoredCode = {
-  email: string;
-  codeHash: string;
-  expiresAt: number;
-  createdAt: number;
-  attempts: number;
-};
+function getSecret() {
+  const secret = process.env.AUTH_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") throw new Error("AUTH_SECRET fehlt.");
+  return "dev-insecure-secret-change-me";
+}
 
 function codeHash(email: string, code: string) {
-  const secret = process.env.AUTH_SECRET?.trim() || "dev-insecure-secret-change-me";
-  return createHmac("sha256", secret).update(`${email}|${code}`).digest("hex");
-}
-
-async function readStore() {
-  const raw = await fs.readFile(storePath, "utf8").catch(() => "[]");
-  try {
-    return JSON.parse(raw) as StoredCode[];
-  } catch {
-    return [] as StoredCode[];
-  }
-}
-
-async function writeStore(rows: StoredCode[]) {
-  await fs.mkdir(path.dirname(storePath), { recursive: true });
-  await fs.writeFile(storePath, JSON.stringify(rows, null, 2), "utf8");
+  return createHmac("sha256", getSecret()).update(`${email}|${code}`).digest("hex");
 }
 
 export async function issueAdmin2FACode(email: string) {
   const normalized = email.trim().toLowerCase();
   const code = String(randomInt(100000, 999999));
-  const now = Math.floor(Date.now() / 1000);
-  const rows = await readStore();
-  const filtered = rows.filter((row) => row.email !== normalized && row.expiresAt > now);
-  filtered.push({
-    email: normalized,
-    codeHash: codeHash(normalized, code),
-    expiresAt: now + ttlSeconds,
-    createdAt: now,
-    attempts: 0
+  const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+  await prisma.adminTwoFactorCode.upsert({
+    where: { email: normalized },
+    update: { codeHash: codeHash(normalized, code), expiresAt, attempts: 0 },
+    create: { email: normalized, codeHash: codeHash(normalized, code), expiresAt, attempts: 0 }
   });
-  await writeStore(filtered);
-  return { code, expiresAt: now + ttlSeconds };
+  return { code, expiresAt: Math.floor(expiresAt.getTime() / 1000) };
 }
 
 export async function verifyAdmin2FACode(email: string, code: string) {
   const normalized = email.trim().toLowerCase();
-  const now = Math.floor(Date.now() / 1000);
-  const rows = await readStore();
-  const idx = rows.findIndex((row) => row.email === normalized && row.expiresAt > now);
-  if (idx < 0) return false;
-  const row = rows[idx];
-  if (row.attempts >= 5) return false;
-  const valid = row.codeHash === codeHash(normalized, code.trim());
-  row.attempts += 1;
+  const row = await prisma.adminTwoFactorCode.findUnique({ where: { email: normalized } });
+  if (!row || row.expiresAt.getTime() < Date.now() || row.attempts >= 5) return false;
+
+  const actual = Buffer.from(codeHash(normalized, code.trim()), "hex");
+  const expected = Buffer.from(row.codeHash, "hex");
+  const valid = actual.length === expected.length && timingSafeEqual(actual, expected);
   if (valid) {
-    const next = rows.filter((entry) => entry.email !== normalized);
-    await writeStore(next);
+    await prisma.adminTwoFactorCode.delete({ where: { email: normalized } });
     return true;
   }
-  rows[idx] = row;
-  await writeStore(rows);
+  await prisma.adminTwoFactorCode.update({
+    where: { email: normalized },
+    data: { attempts: { increment: 1 } }
+  });
   return false;
 }
 
@@ -77,12 +53,14 @@ export async function sendAdmin2FACode(email: string, code: string) {
   const smtpPass = process.env.SMTP_PASS?.trim();
   const fromEmail = process.env.SMTP_FROM_EMAIL?.trim() || smtpUser || "kontakt@druck-und-design.at";
   if (!smtpHost || !smtpUser || !smtpPass) {
-    logger.warn({ email, code }, "SMTP not configured for admin 2FA; using development fallback");
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("SMTP muss für Admin-2FA konfiguriert sein.");
+    }
+    logger.warn({ email }, "SMTP not configured for admin 2FA; using development fallback");
     return { sent: false as const };
   }
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const nodemailer = require("nodemailer");
-  const transporter = nodemailer.createTransport({
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.default.createTransport({
     host: smtpHost,
     port: smtpPort,
     secure: smtpPort === 465,

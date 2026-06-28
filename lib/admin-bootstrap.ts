@@ -63,11 +63,18 @@ export async function ensureAdminBootstrap() {
     });
   }
 
-  const configuredAdminEmail = process.env.NEXT_PUBLIC_ADMIN_EMAIL?.trim().toLowerCase();
+  const configuredAdminEmails = (process.env.ADMIN_EMAILS || process.env.NEXT_PUBLIC_ADMIN_EMAIL || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  if (process.env.NODE_ENV === "production" && configuredAdminEmails.length === 0) {
+    throw new Error("ADMIN_EMAILS muss in Produktion mindestens eine Admin-E-Mail enthalten.");
+  }
   const adminEmails = Array.from(
     new Set(
-      [configuredAdminEmail, "mergoiza@mail.com"]
-        .filter((value): value is string => Boolean(value))
+      process.env.NODE_ENV === "production"
+        ? configuredAdminEmails
+        : [...configuredAdminEmails, "mergoiza@mail.com", "izairimergim@gmail.com"]
     )
   );
 

@@ -10,7 +10,7 @@ const features = [
   {
     icon: Printer,
     title: "High-End Druck",
-    description: "Modernste Offset- und Digitaldruckmaschinen für brillante Ergebnisse auf verschiedensten Materialien."
+    description: "Offset- und Digitaldruckmaschinen für brillante Ergebnisse auf verschiedensten Materialien."
   },
   {
     icon: Zap,

@@ -6,7 +6,12 @@ const SESSION_COOKIE = "dud_session";
 const ADMIN_2FA_COOKIE = "dud_admin_2fa";
 
 function getSecret() {
-  return process.env.AUTH_SECRET?.trim() || "dev-insecure-secret-change-me";
+  const secret = process.env.AUTH_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET muss in Produktion gesetzt sein.");
+  }
+  return "dev-insecure-secret-change-me";
 }
 
 function b64(input: string) {

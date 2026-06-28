@@ -68,7 +68,7 @@ export function WerbeagenturPricingSection() {
             <Sparkles className="h-3.5 w-3.5" />
             Webentwicklung Preise
           </p>
-          <h2 className="mt-4 text-3xl font-black md:text-5xl">Premium Pakete fuer moderne Webprojekte</h2>
+          <h2 className="mt-4 text-3xl font-black md:text-5xl">Premium Pakete fuer Webprojekte</h2>
           <p className="mt-4 text-sm text-slate-300 md:text-base">Sera-inspirierte Preisstruktur mit klarem Leistungsumfang, skalierbar von Website bis individueller Software.</p>
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             {serviceTags.map((tag) => (

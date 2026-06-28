@@ -14,13 +14,28 @@ export default async function LeistungenPage({ searchParams }: { searchParams?: 
   const [categories, products] = await Promise.all([getPublicCategories(), getPublicProducts()]);
 
   return (
-    <section className="container-page py-10">
-      <div className="mb-8 rounded-lg border bg-white p-6 shadow-soft md:p-8">
-        <p className="font-bold text-primary">Shop</p>
-        <h1 className="mt-2 text-4xl font-black">Leistungen & Produkte</h1>
-        <p className="mt-3 max-w-2xl text-muted-foreground">Minimal, schnell und direkt kaufbar. Wählen Sie Produkte, legen Sie sie in den Warenkorb und bestellen Sie bequem online.</p>
+    <section className="pb-14">
+      <div className="relative overflow-hidden bg-brand-ink text-white">
+        <div className="grid-bg absolute inset-0 opacity-20" />
+        <div className="container-page relative grid min-h-[370px] items-end gap-8 py-14 lg:grid-cols-[1fr_auto]">
+          <div>
+            <p className="inline-flex border-l-4 border-brand-coral bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.14em] text-white">Online Shop</p>
+            <h1 className="mt-5 max-w-4xl text-5xl font-black leading-[1.02] md:text-7xl">Druckprodukte, die Eindruck machen.</h1>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-white/70">Hochwertig produziert, klar konfiguriert und zuverlässig geliefert. Für Unternehmen, Marken und Menschen mit Anspruch.</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 lg:w-[380px]">
+            {[["24h", "Express"], ["300+", "Varianten"], ["4,9", "Bewertung"]].map(([value, label]) => (
+              <div className="border-t-2 border-brand-coral pt-3" key={label}>
+                <p className="text-2xl font-black">{value}</p>
+                <p className="mt-1 text-xs font-bold uppercase text-white/55">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-      <ShopBrowser initialCategory={initialCategory} initialQuery={initialQuery} categories={categories} products={products} />
+      <div className="container-page py-10">
+        <ShopBrowser initialCategory={initialCategory} initialQuery={initialQuery} categories={categories} products={products} />
+      </div>
     </section>
   );
 }

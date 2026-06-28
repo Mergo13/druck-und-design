@@ -14,6 +14,8 @@ export type AdminModuleKey =
   | "backups"
   | "security"
   | "categories"
-  | "products";
+  | "products"
+  | "audit"
+  | "crm-pending";
 
 export type ModulePermission = "view" | "create" | "update" | "delete";

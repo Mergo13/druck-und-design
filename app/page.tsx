@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { promises as fs } from "fs";
 import path from "path";
-import { ArrowRight, CheckCircle2, PhoneCall, Sparkles } from "lucide-react";
+import { ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { FlipWords } from "@/components/flipwords";
 import { ClientsMarquee } from "@/components/home/clients-marquee";
 import { HeroBackgroundSlideshow } from "@/components/home/hero-background-slideshow";
-import { HighlightCarousel } from "@/components/home/highlight-carousel";
 import { ScrollZoomHero } from "@/components/home/scroll-zoom-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getPublicCategories } from "@/lib/catalog-repository";
@@ -25,20 +24,19 @@ export default async function HomePage() {
         <HeroBackgroundSlideshow />
         <div className="container-page relative z-10 flex min-h-screen items-center py-20">
           <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/35 bg-white/12 px-4 py-2 text-sm font-bold shadow-[0_8px_28px_rgba(0,0,0,.25)] backdrop-blur">
-              <Sparkles className="h-4 w-4 text-brand-cyan" />
-              druck&design studio
-            </span>
+            <div className="flex items-center gap-4 text-xs font-black uppercase tracking-[0.18em] text-white/75">
+              <span className="h-0.5 w-12 bg-brand-coral" />
+              Design · Print · Digital
+            </div>
             <h1 className="mt-7 text-5xl font-black leading-[1.03] md:text-7xl">
-              <span className="block">Moderne</span>
               <FlipWords
-                words={["Druckservice", "Werbetechnik", "Werbeagentur", "Textildruck"]}
+                words={["Drucklösungen", "Werbetechnik", "Markenauftritte", "Textilveredelung"]}
                 duration={2600}
                 className="!px-0 !text-brand-cyan"
               />
               <span className="block">für Unternehmen.</span>
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Wir verkaufen hochwertige Printprodukte, sichtbare Werbetechnik und kreatives Design, damit Ihr Auftritt professionell wirkt und Ergebnisse bringt.</p>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Von der Gestaltung bis zur Produktion: Wir realisieren professionelle Markenauftritte, Werbemittel und Druckprodukte aus einer Hand.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
                 <Link href="/leistungen">Jetzt Leistungen ansehen <ArrowRight className="h-4 w-4" /></Link>
@@ -88,10 +86,6 @@ export default async function HomePage() {
             </Card>
           ))}
         </div>
-      </section>
-
-      <section className="container-page py-12">
-        <HighlightCarousel />
       </section>
 
       <section className="container-page py-16">

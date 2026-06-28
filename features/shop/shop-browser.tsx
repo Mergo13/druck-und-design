@@ -43,26 +43,26 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
 
   return (
     <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
-      <aside className="glass-panel h-fit rounded-xl p-5">
-        <div className="flex items-center gap-2 font-black"><SlidersHorizontal className="h-5 w-5" /> Filter</div>
+      <aside className="glass-panel h-fit rounded-lg border-slate-200/80 p-5 shadow-[0_14px_35px_rgba(17,34,68,.07)]">
+        <div className="flex items-center gap-2 font-black text-brand-ink"><span className="grid h-9 w-9 place-items-center rounded-md bg-brand-blue text-white"><SlidersHorizontal className="h-4 w-4" /></span> Kategorien</div>
         <div className="mt-5 grid gap-2">
-          <button onClick={() => setCategory("alle")} className={category === "alle" ? "rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-bold text-white" : "rounded-md px-3 py-2 text-left text-sm font-bold hover:bg-muted"}>Alle Produkte</button>
+          <button onClick={() => setCategory("alle")} className={category === "alle" ? "rounded-md border border-brand-blue bg-brand-blue px-3 py-2.5 text-left text-sm font-bold text-white shadow-[0_8px_18px_rgba(17,85,204,.2)]" : "rounded-md border border-transparent px-3 py-2.5 text-left text-sm font-bold text-slate-600 hover:border-slate-200 hover:bg-brand-mist hover:text-brand-blue"}>Alle Produkte</button>
           {categories.map((item) => (
-            <button onClick={() => setCategory(item.slug)} key={item.slug} className={category === item.slug ? "rounded-md bg-slate-950 px-3 py-2 text-left text-sm font-bold text-white" : "rounded-md px-3 py-2 text-left text-sm font-bold hover:bg-muted"}>{item.name}</button>
+            <button onClick={() => setCategory(item.slug)} key={item.slug} className={category === item.slug ? "rounded-md border border-brand-blue bg-brand-blue px-3 py-2.5 text-left text-sm font-bold text-white shadow-[0_8px_18px_rgba(17,85,204,.2)]" : "rounded-md border border-transparent px-3 py-2.5 text-left text-sm font-bold text-slate-600 hover:border-slate-200 hover:bg-brand-mist hover:text-brand-blue"}>{item.name}</button>
           ))}
         </div>
-        <div className="mt-6 rounded-lg bg-muted p-4">
-          <p className="font-bold">Express verfügbar</p>
+        <div className="mt-6 rounded-md border-l-4 border-brand-coral bg-[#fff5f2] p-4">
+          <p className="font-black text-brand-ink">Express verfügbar</p>
           <p className="mt-1 text-sm text-muted-foreground">Same-Day-Produkte sind in der Ergebnisliste markiert.</p>
         </div>
       </aside>
       <div>
-        <div className="glass-panel flex flex-col gap-3 rounded-xl p-4 md:flex-row md:items-center">
-          <div className="flex flex-1 items-center gap-2 rounded-md border px-3">
-            <Search className="h-4 w-4 text-muted-foreground" />
+        <div className="glass-panel flex flex-col gap-3 rounded-lg border-slate-200/80 p-4 shadow-[0_14px_35px_rgba(17,34,68,.07)] md:flex-row md:items-center">
+          <div className="flex flex-1 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 transition focus-within:border-brand-blue focus-within:ring-4 focus-within:ring-brand-blue/10">
+            <Search className="h-4 w-4 text-brand-blue" />
             <input suppressHydrationWarning value={query} onChange={(event) => setQuery(event.target.value)} className="h-11 flex-1 text-sm outline-none" placeholder="Produkt, Material oder Anwendung suchen" />
           </div>
-          <select suppressHydrationWarning value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-md border bg-white px-3 text-sm">
+          <select suppressHydrationWarning value={sort} onChange={(event) => setSort(event.target.value)} className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold text-brand-ink outline-none focus:border-brand-blue focus:ring-4 focus:ring-brand-blue/10">
             <option value="beliebt">Beliebtheit</option>
             <option value="preis-auf">Preis: niedrig zuerst</option>
             <option value="preis-ab">Preis: hoch zuerst</option>
@@ -84,7 +84,7 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
             </motion.div>
           ))}
         </div>
-        <div className="glass-panel mt-8 rounded-xl p-4">
+        <div className="glass-panel mt-8 rounded-lg border-slate-200/80 p-5">
           <p className="text-sm font-bold">Ihr Einkauf</p>
           <p className="mt-1 text-xs text-muted-foreground">Produkte direkt in den Warenkorb legen und danach im Checkout bestellen.</p>
           <div className="mt-4 flex flex-wrap gap-3">
@@ -93,7 +93,7 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
             </Button>
           </div>
           {submitMessage ? (
-            <p className={submitState === "error" ? "mt-2 text-xs text-red-600" : "mt-2 text-xs text-fuchsia-700"}>{submitMessage}</p>
+            <p className={submitState === "error" ? "mt-2 text-xs text-red-600" : "mt-2 text-xs font-bold text-brand-blue"}>{submitMessage}</p>
           ) : null}
         </div>
       </div>

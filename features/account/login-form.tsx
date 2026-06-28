@@ -29,7 +29,10 @@ export function LoginForm() {
       setLoading(false);
       return;
     }
-    const nextPath = searchParams.get("next") || "/leistungen";
+    const requestedPath = searchParams.get("next");
+    const nextPath = requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+      ? requestedPath
+      : "/leistungen";
     router.push(nextPath);
     router.refresh();
   }

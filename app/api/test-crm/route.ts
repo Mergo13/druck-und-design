@@ -2,8 +2,14 @@
 
 import { NextResponse } from "next/server";
 import { createCRMInvoice } from "@/lib/crm";
+import { requireModulePermission } from "@/lib/admin-permissions";
 
 export async function GET() {
+    if (process.env.NODE_ENV === "production") {
+        return NextResponse.json({ message: "Not found." }, { status: 404 });
+    }
+    const permission = await requireModulePermission("invoices", "create");
+    if (!permission.ok) return NextResponse.json({ message: permission.message }, { status: permission.status });
     try {
         const result = await createCRMInvoice({
             customer: "Test Customer",

@@ -130,9 +130,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ modu
 
     const paidOrderIds = new Set(paidOrders.map((order) => order.id));
     const paidOrdersById = new Map(paidOrders.map((order) => [order.id, order]));
-    let syncRows: Array<{ orderId?: string; invoiceId?: string }> = [];
+    let syncRows: Array<{ orderId?: string; invoiceId?: string; invoiceNumber?: string }> = [];
     try {
-      syncRows = JSON.parse(syncRowsRaw) as Array<{ orderId?: string; invoiceId?: string }>;
+      syncRows = JSON.parse(syncRowsRaw) as Array<{ orderId?: string; invoiceId?: string; invoiceNumber?: string }>;
     } catch {
       syncRows = [];
     }
@@ -171,7 +171,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ modu
         return {
           id: String(row.invoiceId ?? orderId),
           invoice_id: String(row.invoiceId ?? orderId),
-          invoice_number: row.invoiceNumber ?? "",
+          invoice_number: (row as any).invoiceNumber ?? "",
           customer: paidOrder?.customer ?? "",
           amount: Number(paidOrder?.total ?? 0),
           total: Number(paidOrder?.total ?? 0),

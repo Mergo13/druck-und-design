@@ -2,7 +2,7 @@
 
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { Alert, Box, Button, Card, CardContent, Grid, IconButton, TextField as MuiTextField, Typography } from "@mui/material";
 import Image from "next/image";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
@@ -43,7 +43,8 @@ type AdminRecord = RaRecord & {
   name?: string;
 };
 
-const apiUrl = "/api/catalog";
+const catalogApiUrl = "/api/catalog";
+const catalogResources = new Set(["products", "categories"]);
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -58,25 +59,44 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 const dataProvider = {
-  getList: async (resource: string) => {
-    const data = await fetchJson<AdminRecord[]>(`${apiUrl}/${resource}`);
-    return {
-      data: data.map((item) => ({ ...item, visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })),
-      total: data.length
-    };
+  getList: async (resource: string, params: { pagination?: { page: number; perPage: number }; filter?: Record<string, unknown> }) => {
+    if (catalogResources.has(resource)) {
+      const data = await fetchJson<AdminRecord[]>(`${catalogApiUrl}/${resource}?scope=admin`);
+      return {
+        data: data.map((item) => ({ ...item, visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })),
+        total: data.length
+      };
+    }
+    const query = new URLSearchParams({
+      page: String(params.pagination?.page ?? 1),
+      pageSize: String(params.pagination?.perPage ?? 25)
+    });
+    const q = params.filter?.q;
+    const status = params.filter?.status;
+    if (typeof q === "string" && q) query.set("q", q);
+    if (typeof status === "string" && status) query.set("status", status);
+    const payload = await fetchJson<{ items: AdminRecord[]; total: number }>(`/api/admin/modules/${resource}?${query}`);
+    return { data: payload.items.map((item) => ({ ...item, id: item.id })), total: payload.total };
   },
   getOne: async (resource: string, params: { id: string }) => {
-    const data = await fetchJson<AdminRecord>(`${apiUrl}/${resource}/${params.id}`);
-    return { data: { ...data, visible: data.visible ?? true, published: data.published ?? true, id: data.slug ?? data.id } };
+    if (catalogResources.has(resource)) {
+      const data = await fetchJson<AdminRecord>(`${catalogApiUrl}/${resource}/${params.id}?scope=admin`);
+      return { data: { ...data, visible: data.visible ?? true, published: data.published ?? true, id: data.slug ?? data.id } };
+    }
+    const payload = await fetchJson<{ items: AdminRecord[] }>(`/api/admin/modules/${resource}?q=${encodeURIComponent(params.id)}&page=1&pageSize=100`);
+    const item = payload.items.find((entry) => String(entry.id) === String(params.id));
+    if (!item) throw new Error("Datensatz nicht gefunden.");
+    return { data: { ...item, id: item.id } };
   },
   getMany: async (resource: string, params: { ids: string[] }) => {
-    const items = await Promise.all(params.ids.map((id) => fetchJson<AdminRecord>(`${apiUrl}/${resource}/${id}`)));
-    return { data: items.map((item) => ({ ...item, visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })) };
+    const items = await Promise.all(params.ids.map((id) => dataProvider.getOne(resource, { id })));
+    return { data: items.map((item) => item.data) };
   },
   getManyReference: async () => ({ data: [], total: 0 }),
   create: async (resource: string, params: { data: AdminRecord }) => {
     const { id: _id, ...payload } = params.data;
-    const data = await fetchJson<AdminRecord>(`${apiUrl}/${resource}`, {
+    const endpoint = catalogResources.has(resource) ? `${catalogApiUrl}/${resource}` : `/api/admin/modules/${resource}`;
+    const data = await fetchJson<AdminRecord>(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -86,11 +106,14 @@ const dataProvider = {
   update: async (resource: string, params: { id: string; data: AdminRecord; previousData?: AdminRecord }) => {
     const merged = { ...(params.previousData ?? {}), ...params.data };
     const { id: _id, ...rest } = merged;
+    const isCatalog = catalogResources.has(resource);
     const payload = resource === "categories"
       ? { ...rest, slug: typeof rest.slug === "string" && rest.slug ? rest.slug : params.id, originalSlug: params.id }
-      : { ...rest, slug: params.id };
-    const data = await fetchJson<AdminRecord>(`${apiUrl}/${resource}`, {
-      method: "POST",
+      : resource === "products"
+        ? { ...rest, slug: params.id }
+        : { id: params.id, data: rest };
+    const data = await fetchJson<AdminRecord>(isCatalog ? `${catalogApiUrl}/${resource}` : `/api/admin/modules/${resource}`, {
+      method: isCatalog ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
@@ -98,10 +121,29 @@ const dataProvider = {
   },
   updateMany: async () => ({ data: [] }),
   delete: async (resource: string, params: { id: string }) => {
-    await fetchJson(`${apiUrl}/${resource}/${params.id}`, { method: "DELETE" });
+    if (catalogResources.has(resource)) {
+      await fetchJson(`${catalogApiUrl}/${resource}/${params.id}`, { method: "DELETE" });
+    } else {
+      await fetchJson(`/api/admin/modules/${resource}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [params.id] })
+      });
+    }
     return { data: { id: params.id } };
   },
-  deleteMany: async () => ({ data: [] })
+  deleteMany: async (resource: string, params: { ids: string[] }) => {
+    if (catalogResources.has(resource)) {
+      await Promise.all(params.ids.map((id) => fetchJson(`${catalogApiUrl}/${resource}/${id}`, { method: "DELETE" })));
+    } else {
+      await fetchJson(`/api/admin/modules/${resource}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: params.ids })
+      });
+    }
+    return { data: params.ids };
+  }
 } as unknown as DataProvider;
 
 function DashboardCard({ label, value }: { label: string; value: string }) {
@@ -218,14 +260,14 @@ function AdminDashboardHome() {
 
   return (
     <Grid container spacing={2.5}>
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Typography variant="h5">DUD Studio Admin</Typography>
         <Typography variant="body2" color="text.secondary">Schnellzugriffe für den täglichen Betrieb.</Typography>
       </Grid>
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Grid container spacing={1.5}>
           {tools.map((tool) => (
-            <Grid item xs={12} sm={6} md={4} key={tool.path}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={tool.path}>
               <Button
                 fullWidth
                 variant={tool.color === "inherit" ? "outlined" : "contained"}
@@ -239,13 +281,13 @@ function AdminDashboardHome() {
           ))}
         </Grid>
       </Grid>
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <DashboardCard label="Products" value={String(productsTotal ?? 0)} />
       </Grid>
-      <Grid item xs={12} md={6}>
+      <Grid size={{ xs: 12, md: 6 }}>
         <DashboardCard label="Categories" value={String(categoriesTotal ?? 0)} />
       </Grid>
-      <Grid item xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Card>
           <CardContent>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
@@ -265,10 +307,10 @@ function AdminDashboardHome() {
             </Box>
 
             <Grid container spacing={1.5} sx={{ mt: 0.25 }}>
-              <Grid item xs={12} md={3}><DashboardCard label="Brutto Umsatz" value={formatCurrency(grossRevenue)} /></Grid>
-              <Grid item xs={12} md={3}><DashboardCard label={`Netto (bei ${vatPercent}%)`} value={formatCurrency(netRevenue)} /></Grid>
-              <Grid item xs={12} md={3}><DashboardCard label="MwSt Betrag" value={formatCurrency(taxAmount)} /></Grid>
-              <Grid item xs={12} md={3}><DashboardCard label="Ø Bestellwert" value={formatCurrency(averageOrder)} /></Grid>
+              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Brutto Umsatz" value={formatCurrency(grossRevenue)} /></Grid>
+              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label={`Netto (bei ${vatPercent}%)`} value={formatCurrency(netRevenue)} /></Grid>
+              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="MwSt Betrag" value={formatCurrency(taxAmount)} /></Grid>
+              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Ø Bestellwert" value={formatCurrency(averageOrder)} /></Grid>
             </Grid>
 
             <Box sx={{ mt: 2, border: "1px solid #e2e8f0", borderRadius: 2, p: 2 }}>
@@ -318,7 +360,7 @@ function AdminDashboardHome() {
       </Grid>
 
       {loadingStats ? (
-        <Grid item xs={12}>
+        <Grid size={{ xs: 12 }}>
           <Typography variant="caption" color="text.secondary">Analytics wird geladen...</Typography>
         </Grid>
       ) : null}
@@ -342,6 +384,275 @@ function ProductList() {
       </Datagrid>
     </List>
   );
+}
+
+function OrdersList() {
+  return (
+    <List sort={{ field: "createdAt", order: "DESC" }}>
+      <Datagrid rowClick="edit">
+        <TextField source="id" label="Bestellung" />
+        <TextField source="customer" label="Kunde" />
+        <TextField source="email" label="E-Mail" />
+        <NumberField source="total" label="Summe" options={{ style: "currency", currency: "EUR" }} />
+        <TextField source="status" label="Status" />
+        <DateField source="createdAt" label="Eingang" showTime />
+        <EditButton />
+      </Datagrid>
+    </List>
+  );
+}
+
+function OrderEdit() {
+  return (
+    <Edit>
+      <SimpleForm>
+        <TextInput source="id" disabled />
+        <TextInput source="customer" label="Kunde" validate={[required()]} />
+        <TextInput source="email" label="E-Mail" />
+        <NumberInput source="total" label="Summe" disabled />
+        <SelectInput source="status" choices={[
+          { id: "Anfrage", name: "Anfrage" },
+          { id: "Neu", name: "Neu" },
+          { id: "Bezahlt", name: "Bezahlt" },
+          { id: "In Prüfung", name: "In Prüfung" },
+          { id: "In Produktion", name: "In Produktion" },
+          { id: "Versendet", name: "Versendet" },
+          { id: "Storniert", name: "Storniert" }
+        ]} />
+        <TextInput source="billingAddress" label="Rechnungsadresse" multiline />
+        <TextInput source="shippingAddress" label="Lieferadresse" multiline />
+      </SimpleForm>
+    </Edit>
+  );
+}
+
+function InvoicesList() {
+  return (
+    <List sort={{ field: "issuedAt", order: "DESC" }}>
+      <Datagrid rowClick="edit">
+        <TextField source="id" label="Rechnung" />
+        <TextField source="customer" label="Kunde" />
+        <NumberField source="amount" label="Betrag" options={{ style: "currency", currency: "EUR" }} />
+        <TextField source="status" label="Status" />
+        <DateField source="issuedAt" label="Ausgestellt" />
+        <EditButton />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function InvoiceForm() {
+  return (
+    <>
+      <TextInput source="id" label="Rechnungsnummer" validate={[required()]} />
+      <TextInput source="customer" label="Kunde" validate={[required()]} />
+      <NumberInput source="amount" label="Betrag" min={0} validate={[required()]} />
+      <SelectInput source="status" defaultValue="Offen" choices={[
+        { id: "Offen", name: "Offen" },
+        { id: "Bezahlt", name: "Bezahlt" },
+        { id: "Überfällig", name: "Überfällig" },
+        { id: "Storniert", name: "Storniert" }
+      ]} />
+      <TextInput source="dueDate" label="Fälligkeitsdatum (ISO)" />
+    </>
+  );
+}
+
+function InvoiceEdit() {
+  return <Edit><SimpleForm><InvoiceForm /></SimpleForm></Edit>;
+}
+
+function InvoiceCreate() {
+  return <Create><SimpleForm><InvoiceForm /></SimpleForm></Create>;
+}
+
+function QuotesList() {
+  return (
+    <List sort={{ field: "createdAt", order: "DESC" }}>
+      <Datagrid rowClick="edit">
+        <TextField source="customer" label="Kunde" />
+        <TextField source="email" label="E-Mail" />
+        <NumberField source="amount" label="Betrag" options={{ style: "currency", currency: "EUR" }} />
+        <TextField source="status" label="Status" />
+        <DateField source="createdAt" label="Erstellt" />
+        <EditButton />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function QuoteForm() {
+  return (
+    <>
+      <TextInput source="customer" label="Kunde" validate={[required()]} />
+      <TextInput source="email" label="E-Mail" type="email" validate={[required()]} />
+      <NumberInput source="amount" label="Betrag" min={0} validate={[required()]} />
+      <SelectInput source="status" defaultValue="draft" choices={[
+        { id: "draft", name: "Entwurf" },
+        { id: "sent", name: "Gesendet" },
+        { id: "accepted", name: "Angenommen" },
+        { id: "rejected", name: "Abgelehnt" }
+      ]} />
+      <TextInput source="note" label="Notiz" multiline />
+    </>
+  );
+}
+
+function QuoteEdit() {
+  return <Edit><SimpleForm><QuoteForm /></SimpleForm></Edit>;
+}
+
+function QuoteCreate() {
+  return <Create><SimpleForm><QuoteForm /></SimpleForm></Create>;
+}
+
+function FileUploadsList() {
+  return (
+    <List sort={{ field: "createdAt", order: "DESC" }}>
+      <Datagrid rowClick="edit">
+        <TextField source="name" label="Name" />
+        <TextField source="email" label="E-Mail" />
+        <TextField source="topic" label="Thema" />
+        <TextField source="status" label="Status" />
+        <DateField source="createdAt" label="Eingang" showTime />
+        <EditButton />
+      </Datagrid>
+    </List>
+  );
+}
+
+function FileUploadEdit() {
+  return (
+    <Edit>
+      <SimpleForm>
+        <TextInput source="name" label="Name" disabled />
+        <TextInput source="email" label="E-Mail" disabled />
+        <TextInput source="topic" label="Thema" disabled />
+        <TextInput source="message" label="Nachricht" multiline disabled />
+        <SelectInput source="status" choices={[
+          { id: "new", name: "Neu" },
+          { id: "in-progress", name: "In Bearbeitung" },
+          { id: "completed", name: "Erledigt" }
+        ]} />
+      </SimpleForm>
+    </Edit>
+  );
+}
+
+function CouponsList() {
+  return (
+    <List>
+      <Datagrid rowClick="edit">
+        <TextField source="code" label="Code" />
+        <TextField source="discountType" label="Art" />
+        <NumberField source="discountValue" label="Wert" />
+        <BooleanField source="active" label="Aktiv" />
+        <NumberField source="usedCount" label="Verwendet" />
+        <EditButton />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function CouponForm() {
+  return (
+    <>
+      <TextInput source="code" label="Code" validate={[required()]} />
+      <SelectInput source="discountType" defaultValue="percent" choices={[
+        { id: "percent", name: "Prozent" },
+        { id: "fixed", name: "Fixbetrag" }
+      ]} />
+      <NumberInput source="discountValue" label="Rabattwert" min={0} validate={[required()]} />
+      <BooleanInput source="active" label="Aktiv" defaultValue />
+      <NumberInput source="usageLimit" label="Nutzungslimit" min={1} />
+    </>
+  );
+}
+
+function CouponEdit() {
+  return <Edit><SimpleForm><CouponForm /></SimpleForm></Edit>;
+}
+
+function CouponCreate() {
+  return <Create><SimpleForm><CouponForm /></SimpleForm></Create>;
+}
+
+function ReviewsList() {
+  return (
+    <List>
+      <Datagrid rowClick="edit">
+        <TextField source="customer" label="Kunde" />
+        <NumberField source="rating" label="Bewertung" />
+        <TextField source="comment" label="Kommentar" />
+        <BooleanField source="published" label="Veröffentlicht" />
+        <EditButton />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function ReviewEdit() {
+  return (
+    <Edit>
+      <SimpleForm>
+        <TextInput source="customer" label="Kunde" validate={[required()]} />
+        <NumberInput source="rating" label="Bewertung" min={1} max={5} validate={[required()]} />
+        <TextInput source="comment" label="Kommentar" multiline validate={[required()]} />
+        <BooleanInput source="published" label="Veröffentlicht" />
+      </SimpleForm>
+    </Edit>
+  );
+}
+
+function NewsletterList() {
+  return (
+    <List>
+      <Datagrid>
+        <TextField source="email" label="E-Mail" />
+        <BooleanField source="active" label="Aktiv" />
+        <DateField source="createdAt" label="Registriert" />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function ShippingList() {
+  return (
+    <List>
+      <Datagrid rowClick="edit">
+        <TextField source="name" label="Versandart" />
+        <NumberField source="price" label="Preis" options={{ style: "currency", currency: "EUR" }} />
+        <NumberField source="etaDays" label="Tage" />
+        <BooleanField source="active" label="Aktiv" />
+        <EditButton />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function ShippingForm() {
+  return (
+    <>
+      <TextInput source="name" label="Versandart" validate={[required()]} />
+      <NumberInput source="price" label="Preis" min={0} validate={[required()]} />
+      <NumberInput source="etaDays" label="Lieferzeit in Tagen" min={0} validate={[required()]} />
+      <BooleanInput source="active" label="Aktiv" defaultValue />
+    </>
+  );
+}
+
+function ShippingEdit() {
+  return <Edit><SimpleForm><ShippingForm /></SimpleForm></Edit>;
+}
+
+function ShippingCreate() {
+  return <Create><SimpleForm><ShippingForm /></SimpleForm></Create>;
 }
 
 function ProductImageUploadControls() {
@@ -514,7 +825,7 @@ function ProductCategoryPropertiesControl() {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch("/api/catalog/categories");
+        const res = await fetch("/api/catalog/categories?scope=admin");
         if (!res.ok) return;
         const payload = await res.json() as Array<{ slug: string; properties?: Array<{ name: string; values: string[] }> }>;
         setCategories(payload);
@@ -1182,24 +1493,24 @@ function LayoutStudioPage() {
 
       {layout === "magazine" ? (
         <Grid container spacing={2}>
-          <Grid item xs={12} md={8}>{showNews ? <DashboardCard label="News" value="Hero + list" /> : null}</Grid>
-          <Grid item xs={12} md={4}>{showHighlights ? <DashboardCard label="Highlights" value="Sidebar cards" /> : null}</Grid>
-          <Grid item xs={12}>{showCta ? <DashboardCard label="CTA" value="Bottom banner" /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 8 }}>{showNews ? <DashboardCard label="News" value="Hero + list" /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 4 }}>{showHighlights ? <DashboardCard label="Highlights" value="Sidebar cards" /> : null}</Grid>
+          <Grid size={{ xs: 12 }}>{showCta ? <DashboardCard label="CTA" value="Bottom banner" /> : null}</Grid>
         </Grid>
       ) : null}
 
       {layout === "split" ? (
         <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>{showNews ? <DashboardCard label="News Feed" value="Left column" /> : null}</Grid>
-          <Grid item xs={12} md={6}>{showHighlights ? <DashboardCard label="Highlights + CTA" value={showCta ? "Right stacked modules" : "Right highlights only"} /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 6 }}>{showNews ? <DashboardCard label="News Feed" value="Left column" /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 6 }}>{showHighlights ? <DashboardCard label="Highlights + CTA" value={showCta ? "Right stacked modules" : "Right highlights only"} /> : null}</Grid>
         </Grid>
       ) : null}
 
       {layout === "grid" ? (
         <Grid container spacing={2}>
-          {showNews ? <Grid item xs={12} md={4}><DashboardCard label="News Cards" value="3-column grid" /></Grid> : null}
-          {showHighlights ? <Grid item xs={12} md={4}><DashboardCard label="Highlights" value="KPI cards" /></Grid> : null}
-          {showCta ? <Grid item xs={12} md={4}><DashboardCard label="CTA Block" value="Action module" /></Grid> : null}
+          {showNews ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="News Cards" value="3-column grid" /></Grid> : null}
+          {showHighlights ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Highlights" value="KPI cards" /></Grid> : null}
+          {showCta ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="CTA Block" value="Action module" /></Grid> : null}
         </Grid>
       ) : null}
     </AdminToolShell>
@@ -1299,7 +1610,7 @@ function WerbungToolPage() {
             const configured = Boolean(value);
             const preview = value.length > 18 ? `${value.slice(0, 8)}...${value.slice(-6)}` : value;
             return (
-              <Grid item xs={12} sm={6} key={item.key}>
+              <Grid size={{ xs: 12, sm: 6 }} key={item.key}>
                 <Card variant="outlined">
                   <CardContent sx={{ py: 1.5 }}>
                     <Typography variant="subtitle2">{item.label}</Typography>
@@ -1373,9 +1684,9 @@ function WerbungToolPage() {
               </Box>
             </Box>
             <Grid container spacing={1.25} sx={{ mt: 0.2 }}>
-              <Grid item xs={12} md={4}><DashboardCard label="Umsatz" value={formatCurrency(revenue)} /></Grid>
-              <Grid item xs={12} md={4}><DashboardCard label="Bestellungen" value={String(filteredOrders.length)} /></Grid>
-              <Grid item xs={12} md={4}><DashboardCard label="Ø Warenkorb" value={formatCurrency(avg)} /></Grid>
+              <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Umsatz" value={formatCurrency(revenue)} /></Grid>
+              <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Bestellungen" value={String(filteredOrders.length)} /></Grid>
+              <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Ø Warenkorb" value={formatCurrency(avg)} /></Grid>
             </Grid>
             <Box sx={{ mt: 1.5, height: 170, display: "flex", alignItems: "flex-end", gap: 0.7 }}>
               {chartBuckets.map((bucket) => (
@@ -1497,19 +1808,19 @@ function CRMToolPage() {
         </Box>
 
         <Grid container spacing={1.25}>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <DashboardCard label="Stripe Bestellungen" value={String(payload?.summary.stripeOrders ?? 0)} />
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <DashboardCard label="CRM synchronisiert" value={String(payload?.summary.crmSynced ?? 0)} />
           </Grid>
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <DashboardCard label="CRM ausstehend" value={String(payload?.summary.crmPending ?? 0)} />
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <DashboardCard label="Umsatz synchronisiert" value={formatCurrency(payload?.summary.syncedRevenue ?? 0)} />
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <DashboardCard label="Umsatz ausstehend" value={formatCurrency(payload?.summary.pendingRevenue ?? 0)} />
           </Grid>
         </Grid>
@@ -1601,6 +1912,7 @@ function CRMToolPage() {
 
 export function ReactAdminDashboard() {
   return (
+    <div className="mx-auto w-full max-w-[1600px]">
     <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin">
       <CustomRoutes>
         <Route path="/tools/maintenance" element={<MaintenanceToolPage />} />
@@ -1615,6 +1927,15 @@ export function ReactAdminDashboard() {
       </CustomRoutes>
       <Resource name="products" list={ProductList} edit={ProductEdit} create={ProductCreate} icon={Inventory2Icon} />
       <Resource name="categories" list={CategoryList} edit={CategoryEdit} create={CategoryCreate} icon={LocalOfferIcon} />
+      <Resource name="orders" options={{ label: "Bestellungen" }} list={OrdersList} edit={OrderEdit} />
+      <Resource name="quotes" options={{ label: "Angebote" }} list={QuotesList} edit={QuoteEdit} create={QuoteCreate} />
+      <Resource name="invoices" options={{ label: "Rechnungen" }} list={InvoicesList} edit={InvoiceEdit} create={InvoiceCreate} />
+      <Resource name="fileUploads" options={{ label: "Datei-Uploads" }} list={FileUploadsList} edit={FileUploadEdit} />
+      <Resource name="coupons" options={{ label: "Gutscheine" }} list={CouponsList} edit={CouponEdit} create={CouponCreate} />
+      <Resource name="reviews" options={{ label: "Bewertungen" }} list={ReviewsList} edit={ReviewEdit} />
+      <Resource name="newsletter" options={{ label: "Newsletter" }} list={NewsletterList} />
+      <Resource name="shipping" options={{ label: "Versandarten" }} list={ShippingList} edit={ShippingEdit} create={ShippingCreate} />
     </Admin>
+    </div>
   );
 }

@@ -71,6 +71,12 @@ export function AccountDashboard() {
     billingAddress: "",
     shippingAddress: ""
   });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [passwordMessage, setPasswordMessage] = useState({ text: "", type: "info" as "info" | "success" | "error" });
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [activeSearchField, setActiveSearchField] = useState<"billing" | "shipping" | null>(null);
 
@@ -180,6 +186,38 @@ export function AccountDashboard() {
         </div>
       </section>
     );
+  }
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordMessage({ text: "Passwörter stimmen nicht überein", type: "error" });
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordMessage({ text: "Das Passwort muss mindestens 6 Zeichen lang sein", type: "error" });
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordMessage({ text: data.message || "Fehler beim Ändern des Passworts", type: "error" });
+      } else {
+        setPasswordMessage({ text: "Passwort erfolgreich geändert", type: "success" });
+        setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      }
+    } catch (err) {
+      setPasswordMessage({ text: "Netzwerkfehler", type: "error" });
+    }
   }
 
   return (
@@ -313,7 +351,7 @@ export function AccountDashboard() {
                   )) : (
                     <div className="col-span-full rounded-md border border-dashed p-8 text-center">
                       <p className="text-sm text-muted-foreground">Keine Bestellungen gefunden.</p>
-                      <Button asChild variant="link" className="mt-2">
+                      <Button asChild variant="outline" className="mt-2">
                         <Link href="/">Jetzt im Shop stöbern</Link>
                       </Button>
                     </div>
@@ -562,9 +600,55 @@ export function AccountDashboard() {
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-black md:text-xl">Sicherheit</h2>
                 </div>
-                <div className="rounded-md border bg-background p-4 text-sm text-muted-foreground">
-                  <p>Ihre Sitzung ist aktiv.</p>
-                  <p className="mt-1">Nutzen Sie ein starkes Passwort und melden Sie sich auf fremden Geraeten immer ab.</p>
+                <div className="rounded-md border bg-background p-4 text-sm">
+                  <form onSubmit={handlePasswordChange} className="max-w-md space-y-4">
+                    <h3 className="font-bold text-foreground">Passwort ändern</h3>
+                    
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase text-muted-foreground">Aktuelles Passwort</label>
+                      <input
+                        type="password"
+                        required
+                        value={passwordForm.currentPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase text-muted-foreground">Neues Passwort</label>
+                      <input
+                        type="password"
+                        required
+                        value={passwordForm.newPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase text-muted-foreground">Neues Passwort bestätigen</label>
+                      <input
+                        type="password"
+                        required
+                        value={passwordForm.confirmPassword}
+                        onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                        className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+
+                    {passwordMessage.text && (
+                      <p className={`text-xs font-bold ${passwordMessage.type === "error" ? "text-rose-600" : "text-emerald-600"}`}>
+                        {passwordMessage.text}
+                      </p>
+                    )}
+
+                    <Button type="submit" size="sm">Passwort aktualisieren</Button>
+                  </form>
+                  <div className="mt-6 border-t pt-4 text-muted-foreground">
+                    <p>Ihre Sitzung ist aktiv.</p>
+                    <p className="mt-1">Nutzen Sie ein starkes Passwort und melden Sie sich auf fremden Geraeten immer ab.</p>
+                  </div>
                 </div>
               </section>
             </main>

@@ -43,5 +43,5 @@ Copy the printed `whsec_...` and put it into `STRIPE_WEBHOOK_SECRET`.
 ## 5) Verify result
 
 - Successful payment redirects to `/checkout/erfolg`.
-- Webhook writes order into `data/platform-db.json` with ID format:
+- Webhook writes the paid order into the configured Prisma/libSQL database with ID format:
   - `STRIPE-<checkout_session_id>`

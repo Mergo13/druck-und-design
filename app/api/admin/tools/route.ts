@@ -29,7 +29,6 @@ function getEnvLocalPath() {
   return path.join(process.cwd(), ".env.local");
 }
 
-const storefrontControlPath = path.join(process.cwd(), "data", "storefront-control.json");
 const crmSyncPath = path.join(process.cwd(), "data", "crm-invoice-sync.json");
 type CrmSyncRow = {
   stripeSessionId: string;
@@ -40,22 +39,6 @@ type CrmSyncRow = {
   invoiceNumber?: string;
   pdfUrl?: string;
 };
-
-async function readStorefrontControlExtra() {
-  const raw = await fs.readFile(storefrontControlPath, "utf8").catch(() => "");
-  if (!raw) return { maintenanceAvailableAt: "" };
-  try {
-    const parsed = JSON.parse(raw) as { maintenanceAvailableAt?: string };
-    return { maintenanceAvailableAt: parsed.maintenanceAvailableAt ?? "" };
-  } catch {
-    return { maintenanceAvailableAt: "" };
-  }
-}
-
-async function writeStorefrontControlExtra(payload: { maintenanceAvailableAt: string }) {
-  await fs.mkdir(path.dirname(storefrontControlPath), { recursive: true });
-  await fs.writeFile(storefrontControlPath, JSON.stringify(payload, null, 2), "utf8");
-}
 
 async function readCrmSyncRows() {
   const raw = await fs.readFile(crmSyncPath, "utf8").catch(() => "[]");
@@ -143,6 +126,20 @@ function setEnvValue(content: string, key: string, value: string) {
   return lines.join("\n");
 }
 
+function runtimeValues(keys: readonly string[], parsed: Record<string, string>) {
+  return Object.fromEntries(keys.map((key) => [
+    key,
+    process.env.NODE_ENV === "production" ? (process.env[key] ?? "") : (parsed[key] ?? process.env[key] ?? "")
+  ]));
+}
+
+function productionFilesystemResponse() {
+  return NextResponse.json(
+    { message: "Diese Einstellung wird in Produktion über die Deployment-Umgebung verwaltet." },
+    { status: 409 }
+  );
+}
+
 async function requirePermission(module: "usersRoles" | "backups" | "activityLogs" | "security" | "invoices", permission: "view" | "create" | "update") {
   await ensureAdminBootstrap();
   const allowed = await requireModulePermission(module, permission);
@@ -160,14 +157,13 @@ export async function GET(request: Request) {
     const permission = await requirePermission("usersRoles", "view");
     if ("response" in permission) return permission.response;
     const storeControl = await prisma.storeControlSetting.findUnique({ where: { id: "store-control" } });
-    const extra = await readStorefrontControlExtra();
     return NextResponse.json({
       storeControl: {
         maintenanceMode: Boolean(storeControl?.maintenanceMode),
         vacationMode: Boolean(storeControl?.vacationMode),
         disableCheckout: Boolean(storeControl?.disableCheckout),
         announcementBar: storeControl?.announcementBar ?? "",
-        maintenanceAvailableAt: extra.maintenanceAvailableAt
+        maintenanceAvailableAt: storeControl?.maintenanceAvailableAt ?? ""
       }
     });
   }
@@ -217,7 +213,7 @@ export async function GET(request: Request) {
     const envPath = getEnvLocalPath();
     const content = await fs.readFile(envPath, "utf8").catch(() => "");
     const parsed = parseEnv(content);
-    const smtp = Object.fromEntries(ENV_KEYS.map((key) => [key, parsed[key] ?? ""]));
+    const smtp = runtimeValues(ENV_KEYS, parsed);
     return NextResponse.json({ smtp });
   }
 
@@ -234,7 +230,7 @@ export async function GET(request: Request) {
     const envPath = getEnvLocalPath();
     const content = await fs.readFile(envPath, "utf8").catch(() => "");
     const parsed = parseEnv(content);
-    const ga = Object.fromEntries(GA_ENV_KEYS.map((key) => [key, parsed[key] ?? ""]));
+    const ga = runtimeValues(GA_ENV_KEYS, parsed);
     return NextResponse.json({ ga });
   }
 
@@ -244,7 +240,7 @@ export async function GET(request: Request) {
     const envPath = getEnvLocalPath();
     const content = await fs.readFile(envPath, "utf8").catch(() => "");
     const parsed = parseEnv(content);
-    const marketing = Object.fromEntries(MARKETING_ENV_KEYS.map((key) => [key, parsed[key] ?? ""]));
+    const marketing = runtimeValues(MARKETING_ENV_KEYS, parsed);
     return NextResponse.json({ marketing });
   }
 
@@ -310,19 +306,18 @@ export async function POST(request: Request) {
     const permission = await requirePermission("usersRoles", "update");
     if ("response" in permission) return permission.response;
 
-    const updates: { maintenanceMode?: boolean; vacationMode?: boolean; disableCheckout?: boolean; announcementBar?: string | null } = {};
+    const updates: { maintenanceMode?: boolean; vacationMode?: boolean; disableCheckout?: boolean; announcementBar?: string | null; maintenanceAvailableAt?: string | null } = {};
     if (typeof body.maintenanceMode === "boolean") updates.maintenanceMode = body.maintenanceMode;
     if (typeof body.vacationMode === "boolean") updates.vacationMode = body.vacationMode;
     if (typeof body.disableCheckout === "boolean") updates.disableCheckout = body.disableCheckout;
     if (typeof body.announcementBar === "string") updates.announcementBar = body.announcementBar;
     const maintenanceAvailableAt = typeof body.maintenanceAvailableAt === "string" ? body.maintenanceAvailableAt : "";
+    updates.maintenanceAvailableAt = maintenanceAvailableAt || null;
 
     const updated = await prisma.storeControlSetting.update({
       where: { id: "store-control" },
       data: updates
     });
-    await writeStorefrontControlExtra({ maintenanceAvailableAt });
-
     await writeAuditLog({
       actorEmail: permission.sessionUser.email,
       module: "usersRoles",
@@ -345,6 +340,7 @@ export async function POST(request: Request) {
   if (action === "email") {
     const permission = await requirePermission("usersRoles", "update");
     if ("response" in permission) return permission.response;
+    if (process.env.NODE_ENV === "production") return productionFilesystemResponse();
     const envPath = getEnvLocalPath();
     const current = await fs.readFile(envPath, "utf8").catch(() => "");
     let next = current;
@@ -385,6 +381,7 @@ export async function POST(request: Request) {
   if (action === "ga-config") {
     const permission = await requirePermission("usersRoles", "update");
     if ("response" in permission) return permission.response;
+    if (process.env.NODE_ENV === "production") return productionFilesystemResponse();
     const envPath = getEnvLocalPath();
     const current = await fs.readFile(envPath, "utf8").catch(() => "");
     let next = current;
@@ -405,6 +402,7 @@ export async function POST(request: Request) {
   if (action === "marketing-config") {
     const permission = await requirePermission("usersRoles", "update");
     if ("response" in permission) return permission.response;
+    if (process.env.NODE_ENV === "production") return productionFilesystemResponse();
     const envPath = getEnvLocalPath();
     const current = await fs.readFile(envPath, "utf8").catch(() => "");
     let next = current;
@@ -423,6 +421,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "backup") {
+    if (process.env.NODE_ENV === "production") return productionFilesystemResponse();
     const permission = await requirePermission("backups", "create");
     if ("response" in permission) return permission.response;
     const label = typeof body.label === "string" && body.label.trim() ? body.label.trim() : `backup-${Date.now()}`;
@@ -453,6 +452,7 @@ export async function POST(request: Request) {
   }
 
   if (action === "shutdown") {
+    if (process.env.NODE_ENV === "production") return productionFilesystemResponse();
     const permission = await requirePermission("security", "create");
     if ("response" in permission) return permission.response;
     const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : "Manual admin request";

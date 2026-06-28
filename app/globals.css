@@ -3,22 +3,22 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 99%;
-  --foreground: 222 47% 11%;
+  --background: 220 33% 99%;
+  --foreground: 224 52% 9%;
   --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --primary: 222 84% 4.9%;
+  --card-foreground: 224 52% 9%;
+  --primary: 217 84% 44%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 222 47% 11%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 215 16% 47%;
-  --accent: 220 14% 96%;
-  --accent-foreground: 222 47% 11%;
-  --border: 220 13% 91%;
-  --input: 220 13% 91%;
-  --ring: 215 20% 65%;
-  --radius: 0.75rem;
+  --secondary: 220 38% 96%;
+  --secondary-foreground: 224 52% 9%;
+  --muted: 220 38% 96%;
+  --muted-foreground: 219 15% 42%;
+  --accent: 9 100% 62%;
+  --accent-foreground: 0 0% 100%;
+  --border: 220 24% 89%;
+  --input: 220 24% 89%;
+  --ring: 217 84% 44%;
+  --radius: 0.625rem;
 }
 
 .dark {
@@ -43,8 +43,9 @@
 html { scroll-behavior: smooth; }
 body {
   color: hsl(var(--foreground));
-  background: hsl(var(--background));
-  font-family: inherit;
+  background:
+    linear-gradient(180deg, #f4f7ff 0, #ffffff 340px, #f8fafc 100%);
+  font-family: Manrope, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
   transition: background-color .2s ease, color .2s ease;
   text-rendering: optimizeLegibility;
@@ -62,8 +63,8 @@ body {
 }
 
 .surface {
-  border: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 10px 30px rgba(15, 23, 42, 0.06);
@@ -81,23 +82,23 @@ body {
 }
 
 .glass-panel {
-  border: 1px solid hsl(var(--border));
-  background: color-mix(in oklab, hsl(var(--card)) 92%, transparent);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.94);
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.04),
     0 12px 24px rgba(15, 23, 42, 0.07);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(16px);
 }
 
 .shadow-premium {
   box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    0 10px 22px rgba(15, 23, 42, 0.08),
-    0 20px 40px rgba(15, 23, 42, 0.06);
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 18px 45px rgba(17, 34, 68, 0.10),
+    0 36px 80px rgba(17, 85, 204, 0.06);
 }
 
 .text-gradient {
-  background: linear-gradient(130deg, #0f172a 0%, #334155 100%);
+  background: linear-gradient(120deg, #0a1020 0%, #1155cc 58%, #00a7a7 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

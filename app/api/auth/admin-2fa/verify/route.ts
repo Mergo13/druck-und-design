@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { createAdmin2FAToken, getAdmin2FACookieName, getSessionUser } from "@/lib/auth";
 import { verifyAdmin2FACode } from "@/lib/admin-2fa";
+import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(request: Request) {
   const sessionUser = await getSessionUser();
   if (!sessionUser?.email) {
     return NextResponse.json({ message: "Nicht eingeloggt." }, { status: 401 });
+  }
+  await ensureAdminBootstrap();
+  const admin = await prisma.adminUser.findUnique({ where: { email: sessionUser.email } });
+  if (!admin?.active) {
+    return NextResponse.json({ message: "Kein aktiver Admin-Zugang." }, { status: 403 });
   }
   const body = await request.json().catch(() => ({})) as { code?: string };
   const code = body.code?.trim() ?? "";

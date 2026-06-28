@@ -10,5 +10,11 @@ yarn-debug.log*
 yarn-error.log*
 .DS_Store
 .idea
+dev.db
+dev.db-journal
+data/admin-2fa-codes.json
+data/crm-invoice-sync.json
+data/crm-pending-orders.json
+data/storefront-control.json
 
 /lib/generated/prisma

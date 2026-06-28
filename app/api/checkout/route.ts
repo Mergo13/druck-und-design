@@ -89,6 +89,7 @@ export async function POST(request: Request) {
         currency: "eur",
         product_data: {
           name: "Bearbeitung & Verpackung",
+          description: "Pauschale für Bearbeitung und Verpackung"
         },
         unit_amount: Math.round(processingFee * 100),
       },
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
         currency: "eur",
         product_data: {
           name: body?.shippingName || "Versandkosten",
+          description: "Standard Versand"
         },
         unit_amount: Math.round(shippingCost * 100),
       },

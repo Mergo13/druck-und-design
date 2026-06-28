@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, Search, User, ShoppingCart, X, ArrowRight, Store, Newspaper, MessageCircle } from "lucide-react";
+import { Menu, Search, User, ShoppingCart, X, ArrowRight, Store, Newspaper, MessageCircle, Palette, PanelsTopLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { createElement, type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -10,10 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatEuro } from "@/lib/utils";
 import { navigationItems } from "@/data/navigation";
-import type { ProductCatalogItem, ProductCategory } from "@/types/print-platform";
+import type { ProductCatalogItem } from "@/types/print-platform";
 
 const navIconByHref: Record<string, ComponentType<{ className?: string }>> = {
   "/leistungen": Store,
+  "/werbeagentur": Palette,
+  "/werbetechnik": PanelsTopLeft,
   "/news": Newspaper,
   "/kontakt": MessageCircle
 };
@@ -22,7 +24,6 @@ export function Header() {
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith("/admin");
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [authenticated, setAuthenticated] = useState(false);
   const [cartCount, setCartCount] = useState(0);
@@ -52,7 +53,6 @@ export function Header() {
       setCartCount(entries.reduce((sum, item) => sum + (item.quantity || 0), 0));
     };
 
-    fetch("/api/catalog/categories").then((res) => res.json()).then((data: ProductCategory[]) => setCategories(data)).catch(() => setCategories([]));
     fetch("/api/catalog/products").then((res) => res.json()).then((data: ProductCatalogItem[]) => setProducts(data)).catch(() => setProducts([]));
     fetch("/api/auth/session").then((res) => res.json()).then((data: { authenticated: boolean }) => setAuthenticated(Boolean(data.authenticated))).catch(() => setAuthenticated(false));
     syncCartCount();
@@ -130,7 +130,7 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/70 bg-white/65 text-brand-ink shadow-[0_8px_28px_rgba(15,23,42,0.08)] backdrop-blur-2xl">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-200/80 bg-white/88 text-brand-ink shadow-[0_10px_35px_rgba(17,34,68,0.08)] backdrop-blur-2xl">
       <div className="container-page">
         <div className="flex min-h-[4.5rem] items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
@@ -147,13 +147,13 @@ export function Header() {
                 <Link
                   key={item.href + item.label}
                   href={item.href}
-                  className={isActive ? "group relative rounded-lg px-4 py-2 text-sm font-semibold text-slate-900" : "group relative rounded-lg px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-white/75 hover:text-slate-900"}
+                  className={isActive ? "group relative rounded-md bg-brand-mist px-4 py-2 text-sm font-bold text-brand-blue" : "group relative rounded-md px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-brand-mist hover:text-brand-blue"}
                 >
                   <span className="inline-flex items-center gap-2">
                     {navIconByHref[item.href] ? createElement(navIconByHref[item.href], { className: "h-4 w-4" }) : null}
                     {item.label}
                   </span>
-                  <span className={isActive ? "absolute bottom-1 left-4 right-4 h-0.5 rounded bg-slate-900" : "absolute bottom-1 left-4 right-4 h-0.5 origin-left scale-x-0 rounded bg-slate-900/80 transition-transform duration-300 group-hover:scale-x-100"} />
+                  <span className={isActive ? "absolute bottom-0 left-4 right-4 h-0.5 rounded bg-brand-coral" : "absolute bottom-0 left-4 right-4 h-0.5 origin-left scale-x-0 rounded bg-brand-coral transition-transform duration-300 group-hover:scale-x-100"} />
                 </Link>
               );
             })}
@@ -162,11 +162,11 @@ export function Header() {
             <div ref={searchBoxRef} className="relative hidden lg:block">
               <form
                 action="/suche"
-                className="h-10 w-44 items-center gap-2 rounded-full border border-transparent bg-gradient-to-r from-fuchsia-200/70 via-orange-200/70 to-pink-200/70 p-[1px] lg:flex xl:w-56"
+                className="h-11 w-44 items-center gap-2 rounded-full border border-slate-200 bg-white shadow-[0_4px_14px_rgba(17,34,68,.06)] transition focus-within:border-brand-blue focus-within:ring-4 focus-within:ring-brand-blue/10 lg:flex xl:w-56"
                 onSubmit={() => saveRecentSearch(searchText)}
               >
                 <div className="flex h-full w-full items-center gap-2 rounded-full bg-white px-3">
-                <Search className="h-4 w-4 text-slate-500" />
+                <Search className="h-4 w-4 text-brand-blue" />
                 <input
                   ref={searchInputRef}
                   suppressHydrationWarning
@@ -337,23 +337,12 @@ export function Header() {
                 </>
               )}
             </nav>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div>
               {!authenticated ? (
                 <Link href="/login" onClick={() => setMobileOpen(false)} className="rounded-lg bg-slate-900 p-4 text-sm font-bold text-white">
                   Einloggen
                 </Link>
               ) : null}
-              {categories.slice(0, 4).map((category) => (
-                <Link
-                  key={category.slug}
-                  href={`/${category.slug}`}
-                  onClick={() => setMobileOpen(false)}
-                  className="rounded-lg bg-brand-mist p-4 text-sm"
-                >
-                  <strong>{category.name}</strong>
-                  <p className="mt-1 leading-5 text-muted-foreground">{category.description}</p>
-                </Link>
-              ))}
             </div>
           </div>
         </motion.div>

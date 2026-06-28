@@ -43,19 +43,20 @@ export function ProductCard({
   }
 
   return (
-    <motion.div whileHover={{ y: -6 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
-      <Card className="h-full overflow-hidden">
+    <motion.div whileHover={{ y: -7 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
+      <Card className="group h-full overflow-hidden border-slate-200/80 bg-white shadow-[0_12px_35px_rgba(17,34,68,.08)] hover:border-brand-blue/30 hover:shadow-[0_25px_55px_rgba(17,85,204,.13)]">
         <div className="relative aspect-[4/3] overflow-hidden bg-brand-mist">
-          <Image src={image} alt={`${product.name} Demo-Bild`} fill className="object-cover transition duration-500 hover:scale-105" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" />
+          <Image src={image} alt={`${product.name} Demo-Bild`} fill className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" />
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-brand-ink/25 to-transparent" />
         </div>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            {product.tags.map((tag) => <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold" key={tag}>{tag}</span>)}
+            {product.tags.map((tag, index) => <span className={index === 0 ? "rounded-full bg-brand-coral/10 px-2.5 py-1 text-xs font-bold text-[#d8442a]" : "rounded-full bg-brand-mist px-2.5 py-1 text-xs font-bold text-brand-blue"} key={tag}>{tag}</span>)}
           </div>
-          <Link href={`/produkt/${product.slug}`} className="mt-4 block text-xl font-black hover:text-primary">{product.name}</Link>
+          <Link href={`/produkt/${product.slug}`} className="mt-4 block text-xl font-black text-brand-ink transition hover:text-brand-blue">{product.name}</Link>
           <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">{product.short}</p>
           <div className="mt-5 flex items-center justify-between">
-            <p className="text-sm font-bold text-muted-foreground">{priceLabel}</p>
+            <p className="text-lg font-black text-brand-blue">{priceLabel}</p>
           </div>
           {onAddToCart ? (
             <motion.button
@@ -67,7 +68,7 @@ export function ProductCard({
               <motion.span
                 className={added
                   ? "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(16,185,129,.28)]"
-                  : "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[linear-gradient(135deg,#1d4ed8,#0f766e)] text-sm font-semibold text-white shadow-[0_10px_22px_rgba(29,78,216,.26)]"}
+                  : "inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-[#0d47b5] bg-brand-blue text-sm font-bold text-white shadow-[0_10px_24px_rgba(17,85,204,.28),inset_0_1px_0_rgba(255,255,255,.2)] transition hover:bg-[#0d47b5]"}
                 animate={{
                   scale: added ? [1, 1.03, 1] : 1
                 }}

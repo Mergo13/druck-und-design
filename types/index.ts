@@ -53,6 +53,9 @@ export type Order = {
   shippingAddress?: string;
   vatId?: string;
   company?: string;
+  shippingCost?: number;
+  shippingName?: string;
+  processingFee?: number;
 };
 
 export type UserAccount = {
