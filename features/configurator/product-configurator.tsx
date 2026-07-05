@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
-import type { ProductCatalogItem } from "@/types/print-platform";
+import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
@@ -64,12 +64,8 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
   const [printCheckRequested, setPrintCheckRequested] = useState(false);
-  const [categoryProperties, setCategoryProperties] = useState<Array<{ name: string; values: string[] }>>([]);
+  const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
   const currentQuantity = Number(config.auflage ?? fixedQuantitySteps[0]);
-  const currentPrice = useMemo(() => {
-    if (!firstVariant) return product.basePrice;
-    return calculateVariantPrice(product, firstVariant.id, Number.isFinite(currentQuantity) ? currentQuantity : 1, config);
-  }, [config, currentQuantity, firstVariant, product]);
 
   useEffect(() => {
     return () => {
@@ -82,7 +78,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       try {
         const res = await fetch("/api/catalog/categories");
         if (!res.ok) return;
-        const categories = await res.json() as Array<{ slug: string; properties?: Array<{ name: string; values: string[] }> }>;
+        const categories = await res.json() as Array<{ slug: string; properties?: ProductCategoryProperty[] }>;
         const category = categories.find((entry) => entry.slug === product.category);
         setCategoryProperties(category?.properties ?? []);
       } catch {
@@ -96,6 +92,13 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
     if (!enabled.size) return [];
     return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
   }, [categoryProperties, product.enabledCategoryProperties]);
+  const currentPrice = useMemo(() => {
+    const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
+    const productPrice = firstVariant
+      ? calculateVariantPrice(product, firstVariant.id, quantity, config)
+      : product.basePrice;
+    return Math.round((productPrice + calculateCategoryPropertiesPrice(enabledProperties, quantity)) * 100) / 100;
+  }, [config, currentQuantity, enabledProperties, firstVariant, product]);
 
   async function validateAndSetFile(file?: File) {
     setUploadError("");

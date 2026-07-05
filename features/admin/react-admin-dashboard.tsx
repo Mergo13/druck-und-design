@@ -943,6 +943,8 @@ function CategoryEdit() {
         <ArrayInput source="properties" label="Eigenschaften">
           <SimpleFormIterator inline>
             <TextInput source="name" label="Name" placeholder="z.B. Papier" />
+            <NumberInput source="basePrice" label="Basispreis (€)" min={0} step={0.01} />
+            <NumberInput source="stepPrice" label="Stück-/Schrittpreis (€)" min={0} step={0.01} />
             <ArrayInput source="values" label="Werte">
               <SimpleFormIterator inline>
                 <TextInput source="" label="Wert" placeholder="z.B. A4 hochformat" />
@@ -969,6 +971,8 @@ function CategoryCreate() {
         <ArrayInput source="properties" label="Eigenschaften">
           <SimpleFormIterator inline>
             <TextInput source="name" label="Name" placeholder="z.B. Papier" />
+            <NumberInput source="basePrice" label="Basispreis (€)" min={0} step={0.01} />
+            <NumberInput source="stepPrice" label="Stück-/Schrittpreis (€)" min={0} step={0.01} />
             <ArrayInput source="values" label="Werte">
               <SimpleFormIterator inline>
                 <TextInput source="" label="Wert" placeholder="z.B. A4 hochformat" />

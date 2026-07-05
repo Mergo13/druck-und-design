@@ -1,4 +1,4 @@
-import type { AutomationJob, FileCheckResult, ProductCatalogItem } from "@/types/print-platform";
+import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 
 export function calculateVariantPrice(product: ProductCatalogItem, variantId: string, quantity: number, selectedOptions: Record<string, string>) {
   const variant = product.variants.find((item) => item.id === variantId) ?? product.variants[0];
@@ -10,6 +10,16 @@ export function calculateVariantPrice(product: ProductCatalogItem, variantId: st
     return sum + (match?.priceModifier ?? 0);
   }, 0);
   return Math.round((base + unit * quantity + optionPrice) * 100) / 100;
+}
+
+export function calculateCategoryPropertiesPrice(properties: ProductCategoryProperty[], quantity: number) {
+  const safeQuantity = Number.isFinite(quantity) ? Math.max(1, quantity) : 1;
+  const price = properties.reduce((sum, property) => {
+    const basePrice = Math.max(0, Number(property.basePrice) || 0);
+    const stepPrice = Math.max(0, Number(property.stepPrice) || 0);
+    return sum + basePrice + stepPrice * safeQuantity;
+  }, 0);
+  return Math.round(price * 100) / 100;
 }
 
 export function runMockPreflight(

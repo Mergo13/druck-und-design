@@ -85,7 +85,14 @@ export const moduleCreateSchemas = {
     visible: z.boolean().optional(),
     published: z.boolean().optional(),
     quantitySteps: z.array(z.number()).optional(),
-    defaultPropertyTemplate: z.string().optional()
+    defaultPropertyTemplate: z.string().optional(),
+    logo: z.string().optional(),
+    properties: z.array(z.object({
+      name: z.string().min(1),
+      values: z.array(z.string().min(1)),
+      basePrice: z.number().nonnegative().optional(),
+      stepPrice: z.number().nonnegative().optional()
+    })).optional()
   }),
   products: z.object({
     slug: z.string().min(1),

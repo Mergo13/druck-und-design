@@ -71,7 +71,7 @@ Der Token darf ausschließlich serverseitig in `.env` gespeichert werden. Nach e
 Falls die API-Antwort keine PDF-URL (`pdf_url`, `invoice_pdf`, `download_url` oder `file_url`) liefert, zusätzlich den dokumentierten CRM-PDF-Endpunkt konfigurieren:
 
 ```env
-CRM_INVOICE_PDF_URL_TEMPLATE=https://dud.ussuri-rudd.ts.net/PDF-ENDPUNKT/{invoice_id}
+CRM_INVOICE_PDF_URL_TEMPLATE=https://dud.ussuri-rudd.ts.net/pages/rechnung_pdf.php?id={invoice_id}
 ```
 
 Vor dem Livebetrieb eine Stripe-Testzahlung durchführen und anschließend CRM-Rechnung, Rechnungsnummer und PDF im Kundenkonto prüfen.
