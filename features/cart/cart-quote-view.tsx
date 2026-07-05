@@ -55,6 +55,8 @@ export function CartQuoteView() {
   const [message, setMessage] = useState("");
   const [authChecked, setAuthChecked] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [printApprovalAccepted, setPrintApprovalAccepted] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("dud_cart");
@@ -172,6 +174,11 @@ export function CartQuoteView() {
       setMessage("Der Warenkorb ist leer.");
       return;
     }
+    if (!legalAccepted || !printApprovalAccepted) {
+      setState("error");
+      setMessage("Bitte bestätigen Sie die Bedingungen und die Druckfreigabe.");
+      return;
+    }
     setState("sending");
     setMessage("Weiterleitung zu Stripe...");
     const response = await fetch("/api/checkout", {
@@ -188,7 +195,9 @@ export function CartQuoteView() {
         shippingAddress: useSeparateShipping ? profile?.shippingAddress : profile?.billingAddress,
         shippingCost,
         shippingName: selectedRate?.name,
-        processingFee: PROCESSING_FEE
+        processingFee: PROCESSING_FEE,
+        legalAccepted,
+        printApprovalAccepted
       })
     });
     if (!response.ok) {
@@ -210,6 +219,11 @@ export function CartQuoteView() {
     if (!hasItems) {
       setState("error");
       setMessage("Der Warenkorb ist leer.");
+      return;
+    }
+    if (!legalAccepted || !printApprovalAccepted) {
+      setState("error");
+      setMessage("Bitte bestätigen Sie die Bedingungen und die Druckfreigabe.");
       return;
     }
     setState("sending");
@@ -246,7 +260,9 @@ export function CartQuoteView() {
         shippingAddress: useSeparateShipping ? profile?.shippingAddress : profile?.billingAddress,
         shippingCost,
         shippingName: selectedRate?.name,
-        processingFee: PROCESSING_FEE
+        processingFee: PROCESSING_FEE,
+        legalAccepted,
+        printApprovalAccepted
       })
     });
     if (!response.ok) {
@@ -495,15 +511,40 @@ export function CartQuoteView() {
               <span className="text-xl font-black text-gradient">{formatEuro(grandTotal)}</span>
             </div>
 
-            <Button className="mt-5 w-full" onClick={() => void startStripeCheckout()} disabled={state === "sending"}>
+            <div className="mt-5 grid gap-3 border-y border-slate-200 py-4">
+              <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={legalAccepted}
+                  onChange={(event) => setLegalAccepted(event.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-brand-blue"
+                />
+                <span>
+                  Ich habe die <Link className="font-bold text-brand-blue hover:underline" href="/agb" target="_blank">Allgemeinen Geschäftsbedingungen</Link>, die{" "}
+                  <Link className="font-bold text-brand-blue hover:underline" href="/datenschutz" target="_blank">Datenschutzbestimmungen</Link> sowie die{" "}
+                  <Link className="font-bold text-brand-blue hover:underline" href="/druckdaten-hinweise" target="_blank">Druckdaten- und Produktionshinweise</Link> gelesen und akzeptiere diese.
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={printApprovalAccepted}
+                  onChange={(event) => setPrintApprovalAccepted(event.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-brand-blue"
+                />
+                <span>Ich bestätige die Druckfreigabe. Layout, Texte, Maße, Farben, Bilder, Logos und sonstige Inhalte wurden geprüft. Nach der Freigabe übernehme ich die Verantwortung für Fehler in den freigegebenen Daten.</span>
+              </label>
+            </div>
+
+            <Button className="mt-5 w-full" onClick={() => void startStripeCheckout()} disabled={state === "sending" || !legalAccepted || !printApprovalAccepted}>
               {state === "sending" ? "Bitte warten..." : "Zahlungspflichtig bestellen"}
             </Button>
-            <Button className="mt-2 w-full" variant="outline" onClick={() => void placeOrderWithoutPayment()} disabled={state === "sending"}>
+            <Button className="mt-2 w-full" variant="outline" onClick={() => void placeOrderWithoutPayment()} disabled={state === "sending" || !legalAccepted || !printApprovalAccepted}>
               Bestellung ohne Zahlung speichern
             </Button>
             {message ? <p className={state === "error" ? "mt-3 text-xs text-red-600" : "mt-3 text-xs text-fuchsia-700"}>{message}</p> : null}
             <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-              Mit Abschluss stimmen Sie unseren Bedingungen zu. Sie können Ihre Daten vor dem Bezahlen jederzeit ändern.
+              Ihre Bestätigung wird zusammen mit dem Auftrag dokumentiert. Sie können Ihre Daten vor dem Bezahlen jederzeit ändern.
             </p>
           </div>
         </aside>

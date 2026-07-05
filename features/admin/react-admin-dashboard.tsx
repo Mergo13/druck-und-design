@@ -778,7 +778,7 @@ function ProductEdit() {
         <ProductImageUploadControls />
         <TextInput source="slug" validate={[required()]} />
         <TextInput source="name" validate={[required()]} />
-        <TextInput source="category" validate={[required()]} />
+        <ProductCategorySelect />
         <TextInput source="short" multiline />
         <TextInput source="description" multiline />
         <TextInput source="seo" multiline />
@@ -800,7 +800,7 @@ function ProductCreate() {
         <ProductImageUploadControls />
         <TextInput source="slug" validate={[required()]} />
         <TextInput source="name" validate={[required()]} />
-        <TextInput source="category" validate={[required()]} />
+        <ProductCategorySelect />
         <TextInput source="short" multiline />
         <TextInput source="description" multiline />
         <TextInput source="seo" multiline />
@@ -812,6 +812,30 @@ function ProductCreate() {
         <ProductCategoryPropertiesControl />
       </SimpleForm>
     </Create>
+  );
+}
+
+function ProductCategorySelect() {
+  const { data = [], isPending } = useGetList("categories", {
+    pagination: { page: 1, perPage: 100 },
+    sort: { field: "name", order: "ASC" }
+  });
+
+  return (
+    <SelectInput
+      source="category"
+      label="Kategorie"
+      choices={data.map((category) => ({
+        id: String(category.slug ?? category.id),
+        name: String(category.name ?? category.slug ?? category.id)
+      }))}
+      optionText="name"
+      optionValue="id"
+      validate={[required()]}
+      isLoading={isPending}
+      emptyText="Kategorie auswählen"
+      fullWidth
+    />
   );
 }
 

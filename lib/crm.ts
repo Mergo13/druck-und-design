@@ -24,6 +24,7 @@ export type CRMInvoiceOrder = {
   shipping_cost?: number;
   shipping_name?: string;
   processing_fee?: number;
+  footer_text?: string;
 };
 
 type CRMInvoiceOrderRequest = CRMInvoiceOrder & {

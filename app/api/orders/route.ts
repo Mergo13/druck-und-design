@@ -22,7 +22,9 @@ const orderRequestSchema = z.object({
   shippingAddress: z.string().max(2000).optional(),
   shippingCost: z.number().nonnegative().max(100000).optional(),
   shippingName: z.string().max(200).optional(),
-  processingFee: z.number().nonnegative().max(100000).optional()
+  processingFee: z.number().nonnegative().max(100000).optional(),
+  legalAccepted: z.literal(true),
+  printApprovalAccepted: z.literal(true)
 });
 
 export async function GET() {
@@ -80,7 +82,15 @@ export async function POST(request: Request) {
       processingFee: body.processingFee,
       total,
       status: "Anfrage",
-      items: body.items
+      items: body.items.map((item) => ({
+        ...item,
+        config: {
+          ...item.config,
+          Rechtsgrundlage: "AGB, Datenschutz und Druckdaten-Hinweise akzeptiert",
+          Druckfreigabe: "Erteilt",
+          Freigabezeitpunkt: new Date().toISOString()
+        }
+      }))
     }
   });
 

@@ -8,6 +8,7 @@ import { createCRMInvoice } from "@/lib/crm";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import type { Order } from "@/types";
+import { LEGAL_DOCUMENT_FOOTER } from "@/lib/legal";
 
 function parseStackLocation(error: unknown) {
   if (!(error instanceof Error) || !error.stack) {
@@ -125,7 +126,9 @@ export async function POST(request: Request) {
           config: {
             checkout_session: session.id,
             zahlung: "stripe",
-            description: line.description || ""
+            description: line.description || "",
+            AGB: session.metadata?.legalAcceptedAt ? `Akzeptiert am ${session.metadata.legalAcceptedAt}` : "Nicht dokumentiert",
+            Druckfreigabe: session.metadata?.printApprovalAcceptedAt ? `Erteilt am ${session.metadata.printApprovalAcceptedAt}` : "Nicht dokumentiert"
           }
         };
       });
@@ -291,6 +294,7 @@ export async function POST(request: Request) {
         shipping_cost: session.metadata?.shippingCost ? Number(session.metadata.shippingCost) : 0,
         shipping_name: session.metadata?.shippingName || "",
         processing_fee: session.metadata?.processingFee ? Number(session.metadata.processingFee) : 0,
+        footer_text: LEGAL_DOCUMENT_FOOTER,
         total: Number(total.toFixed(2)),
         items: items.map((item) => ({
           description: item.name,

@@ -8,14 +8,12 @@ export async function GET() {
     return NextResponse.json({ message: "Nicht authentifiziert" }, { status: 401 });
   }
 
-  const crmPdfTemplate = process.env.CRM_INVOICE_PDF_URL_TEMPLATE?.trim();
   const invoices = await prisma.adminInvoice.findMany({
     where: { email: session.email.trim().toLowerCase() },
     orderBy: { issuedAt: "desc" }
   });
 
   return NextResponse.json(invoices.map((invoice) => {
-    const hasRemotePdf = Boolean(invoice.pdfUrl || (crmPdfTemplate && invoice.externalInvoiceId));
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber || invoice.id,
@@ -23,9 +21,7 @@ export async function GET() {
       createdAt: invoice.issuedAt.toISOString(),
       amount: invoice.amount,
       status: invoice.status,
-      pdfUrl: hasRemotePdf
-        ? `/api/user/invoices/pdf?invoiceId=${encodeURIComponent(invoice.id)}`
-        : undefined,
+      pdfUrl: `/api/user/invoices/pdf?invoiceId=${encodeURIComponent(invoice.id)}`,
       source: invoice.source
     };
   }));

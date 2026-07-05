@@ -10,8 +10,8 @@ const cols: Array<Array<{ label: string; href: string }>> = [
   ],
   [
     { label: "Service", href: "/faq" },
-    { label: "Druckdaten", href: "/faq" },
-    { label: "Versand", href: "/versand-lieferung" },
+    { label: "Druckdaten-Hinweise", href: "/druckdaten-hinweise" },
+    { label: "Lieferung & Zahlung", href: "/lieferung-zahlung" },
     { label: "FAQ", href: "/faq" }
   ],
   [
@@ -23,7 +23,8 @@ const cols: Array<Array<{ label: string; href: string }>> = [
     { label: "Rechtliches", href: "/impressum" },
     { label: "Impressum", href: "/impressum" },
     { label: "Datenschutz", href: "/datenschutz" },
-    { label: "AGB", href: "/agb" }
+    { label: "AGB", href: "/agb" },
+    { label: "Widerruf / Rücktritt", href: "/widerruf" }
   ]
 ];
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createInvoicePdf } from "@/lib/invoice-pdf";
 
 function isAllowedPdfUrl(rawUrl: string, crmApiUrl: string) {
   try {
@@ -40,36 +41,66 @@ export async function GET(request: Request) {
       ? template.replace("{invoice_id}", encodeURIComponent(invoice.externalInvoiceId))
       : ""
   );
-  if (!crmApiUrl || !crmToken || !pdfUrl) {
-    return NextResponse.json({ message: "CRM-PDF-Konfiguration fehlt" }, { status: 503 });
-  }
-  if (!isAllowedPdfUrl(pdfUrl, crmApiUrl)) {
-    return NextResponse.json({ message: "Ungültige PDF-Quelle" }, { status: 400 });
-  }
-
-  try {
-    const crmRes = await fetch(pdfUrl, {
-      headers: {
-        Authorization: `Bearer ${crmToken}`,
-        Accept: "application/pdf,application/octet-stream"
-      },
-      cache: "no-store"
-    });
-    if (!crmRes.ok) {
-      return NextResponse.json({ message: `CRM-PDF konnte nicht geladen werden (${crmRes.status})` }, { status: 502 });
-    }
-
-    return new NextResponse(await crmRes.arrayBuffer(), {
-      headers: {
-        "Content-Type": crmRes.headers.get("content-type") || "application/pdf",
-        "Content-Disposition": crmRes.headers.get("content-disposition") || `inline; filename="rechnung-${invoice.invoiceNumber || invoice.id}.pdf"`,
-        "Cache-Control": "private, no-store"
+  if (crmApiUrl && crmToken && pdfUrl && isAllowedPdfUrl(pdfUrl, crmApiUrl)) {
+    try {
+      const crmRes = await fetch(pdfUrl, {
+        headers: {
+          Authorization: `Bearer ${crmToken}`,
+          Accept: "application/pdf,application/octet-stream"
+        },
+        cache: "no-store"
+      });
+      if (crmRes.ok) {
+        return new NextResponse(await crmRes.arrayBuffer(), {
+          headers: {
+            "Content-Type": crmRes.headers.get("content-type") || "application/pdf",
+            "Content-Disposition": crmRes.headers.get("content-disposition") || `inline; filename="rechnung-${invoice.invoiceNumber || invoice.id}.pdf"`,
+            "Cache-Control": "private, no-store"
+          }
+        });
       }
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { message: "CRM-PDF-Abruf fehlgeschlagen", detail: error instanceof Error ? error.message : String(error) },
-      { status: 502 }
-    );
+    } catch {
+      // Fall back to the locally generated invoice PDF.
+    }
   }
+
+  const [order, company] = await Promise.all([
+    invoice.orderId ? prisma.adminOrder.findUnique({ where: { id: invoice.orderId } }) : null,
+    prisma.companyInformation.findUnique({ where: { id: "company" } })
+  ]);
+  const rawItems = Array.isArray(order?.items) ? order.items as Array<Record<string, unknown>> : [];
+  const items = rawItems.map((item) => ({
+    name: String(item.name || item.description || "Druckleistung"),
+    quantity: Math.max(1, Number(item.quantity || item.qty || 1)),
+    unitPrice: Math.max(0, Number(item.price || item.unitPrice || 0))
+  }));
+  const pdf = await createInvoicePdf({
+    invoiceNumber: invoice.invoiceNumber || invoice.id,
+    issuedAt: invoice.issuedAt,
+    customer: invoice.customer,
+    email: invoice.email,
+    billingAddress: order?.billingAddress,
+    orderId: invoice.orderId,
+    amount: invoice.amount,
+    status: invoice.status,
+    company: {
+      name: company?.name || "druck&design studio",
+      legalName: company?.legalName,
+      email: company?.email || "service@druckdesignstudio.at",
+      phone: company?.phone,
+      vatId: company?.vatId || "ATU73973239",
+      address: company?.address || "Roseggerstraße 11, 4600 Wels, Österreich",
+      website: company?.website || "druck-und-design.at"
+    },
+    items
+  });
+
+  const pdfBody = new Uint8Array(pdf).buffer;
+  return new NextResponse(pdfBody, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="rechnung-${invoice.invoiceNumber || invoice.id}.pdf"`,
+      "Cache-Control": "private, no-store"
+    }
+  });
 }
