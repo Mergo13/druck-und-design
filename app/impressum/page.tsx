@@ -1,65 +1,58 @@
+import type { Metadata } from "next";
 import { LegalPage } from "@/components/legal-page";
+
+export const metadata: Metadata = {
+  title: "Impressum",
+  description: "Anbieterkennzeichnung und Kontaktdaten von druck&design studio in Wels."
+};
 
 export default function ImpressumPage() {
   return (
     <LegalPage title="Impressum">
-      <div className="grid gap-8 sm:grid-cols-2">
+      <section className="grid gap-8 md:grid-cols-2">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">druck&design studio</h2>
-          <p className="mt-2">
-            Mergim Izairi<br />
+          <h2 className="text-xl font-black text-brand-ink">Medieninhaber und Diensteanbieter</h2>
+          <p className="mt-3">
+            <strong>druck&design studio</strong><br />
+            Inhaber: Mergim Izairi<br />
             Roseggerstraße 11<br />
-            4600 Wels | Austria
+            4600 Wels, Österreich
           </p>
         </div>
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Unternehmensgegenstand</h2>
-          <p className="mt-2 text-sm leading-relaxed">
-            Drucker und Druckformenherstellung, eingeschränkt auf Drucker beschränkt auf die Herstellung von Kopien mittels automatischer Kopier-Vervielfältigungsgeräte & Werbeagentur
+          <h2 className="text-xl font-black text-brand-ink">Kontakt</h2>
+          <p className="mt-3">
+            Telefon: <a className="text-brand-blue hover:underline" href="tel:+43724263239">07242 63 2 39</a><br />
+            E-Mail: <a className="text-brand-blue hover:underline" href="mailto:service@druckdesignstudio.at">service@druckdesignstudio.at</a><br />
+            Website: druck-und-design.at
           </p>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-10 border-t pt-10">
-        <h2 className="text-xl font-bold text-slate-900">Kontaktdaten</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="font-bold">Telefon</p>
-            <p>07242 63 2 39</p>
-          </div>
-          <div>
-            <p className="font-bold">E-Mail</p>
-            <p>service@druckdesignstudio.at</p>
-          </div>
+      <section>
+        <h2 className="text-xl font-black text-brand-ink">Unternehmens- und Gewerbeangaben</h2>
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          <p><strong>UID-Nummer:</strong><br />ATU73973239</p>
+          <p><strong>Mitgliedschaft:</strong><br />Wirtschaftskammer Österreich</p>
+          <p><strong>Zuständige Behörde:</strong><br />Magistrat der Stadt Wels</p>
+          <p><strong>Anwendbare Vorschriften:</strong><br />Gewerbeordnung, abrufbar über ris.bka.gv.at</p>
         </div>
-      </div>
+      </section>
 
-      <div className="mt-10 grid gap-8 border-t pt-10 text-sm sm:grid-cols-2">
-        <div>
-          <p className="font-bold text-slate-900">UID-Nr.</p>
-          <p>ATU73973239</p>
-        </div>
-        <div>
-          <p className="font-bold text-slate-900">Behörde & Mitgliedschaften</p>
-          <p>Bezirkshauptmannschaft Wels</p>
-          <p>Mitglied der WKÖ</p>
-        </div>
-      </div>
+      <section>
+        <h2 className="text-xl font-black text-brand-ink">Unternehmensgegenstand</h2>
+        <p className="mt-3">Druckerei und Copyservice, Werbeagentur, Grafik- und Webdesign, Programmierung, Werbetechnik, Herstellung und Vertrieb von Druckprodukten, Aufklebern, Roll-ups, Folierungen, Schildern, Textilien und Werbematerialien sowie Onlinehandel.</p>
+      </section>
 
-      <div className="mt-10 border-t pt-10">
-        <h2 className="text-xl font-bold text-slate-900">Streitbeilegung</h2>
-        <p className="mt-4 text-sm">
-          Verbraucher haben die Möglichkeit, Beschwerden an die Online-Streitbeilegungsplattform der EU zu richten:{" "}
-          <a href="http://ec.europa.eu/odr" target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:underline">
-            http://ec.europa.eu/odr
-          </a>. Sie können allfällige Beschwerde auch an die oben angegebene E-Mail-Adresse richten.
-        </p>
-      </div>
+      <section>
+        <h2 className="text-xl font-black text-brand-ink">Grundlegende Richtung</h2>
+        <p className="mt-3">Information über Produkte und Dienstleistungen von druck&design studio sowie Bereitstellung eines Onlineangebots für Druck, Gestaltung, Werbung und digitale Leistungen.</p>
+      </section>
 
-      <div className="mt-10 border-t pt-10">
-        <h2 className="text-xl font-bold text-slate-900">Bildnachweise</h2>
-        <p className="mt-4 text-sm">https://stock.adobe.com</p>
-      </div>
+      <section>
+        <h2 className="text-xl font-black text-brand-ink">Haftung und Urheberrecht</h2>
+        <p className="mt-3">Die Inhalte dieser Website werden sorgfältig gepflegt. Für externe Links sind deren Betreiber verantwortlich. Inhalte, Gestaltung, Bilder und Marken sind urheber- oder kennzeichenrechtlich geschützt; eine Verwendung außerhalb der gesetzlichen Grenzen bedarf der Zustimmung des jeweiligen Rechteinhabers.</p>
+      </section>
     </LegalPage>
   );
 }

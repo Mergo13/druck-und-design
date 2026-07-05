@@ -43,10 +43,15 @@ export async function POST(request: Request) {
     shippingCost?: number;
     shippingName?: string;
     processingFee?: number;
+    legalAccepted?: boolean;
+    printApprovalAccepted?: boolean;
   } | null;
   const items = body?.items ?? [];
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ message: "Warenkorb ist leer." }, { status: 400 });
+  }
+  if (body?.legalAccepted !== true || body?.printApprovalAccepted !== true) {
+    return NextResponse.json({ message: "AGB, Datenschutz, Druckdaten-Hinweise und Druckfreigabe müssen bestätigt werden." }, { status: 400 });
   }
 
   const stripe = new Stripe(stripeSecret);
@@ -143,7 +148,9 @@ export async function POST(request: Request) {
       shippingAddress: effectiveShippingAddress,
       shippingCost: String(shippingCost),
       shippingName: body?.shippingName || "",
-      processingFee: String(processingFee)
+      processingFee: String(processingFee),
+      legalAcceptedAt: new Date().toISOString(),
+      printApprovalAcceptedAt: new Date().toISOString()
     }
   });
 

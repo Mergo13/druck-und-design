@@ -8,6 +8,7 @@ import { createCRMInvoice } from "@/lib/crm";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import type { Order } from "@/types";
+import { LEGAL_DOCUMENT_FOOTER } from "@/lib/legal";
 
 function parseStackLocation(error: unknown) {
   if (!(error instanceof Error) || !error.stack) {
@@ -125,7 +126,9 @@ export async function POST(request: Request) {
           config: {
             checkout_session: session.id,
             zahlung: "stripe",
-            description: line.description || ""
+            description: line.description || "",
+            AGB: session.metadata?.legalAcceptedAt ? `Akzeptiert am ${session.metadata.legalAcceptedAt}` : "Nicht dokumentiert",
+            Druckfreigabe: session.metadata?.printApprovalAcceptedAt ? `Erteilt am ${session.metadata.printApprovalAcceptedAt}` : "Nicht dokumentiert"
           }
         };
       });
@@ -264,6 +267,11 @@ export async function POST(request: Request) {
       if (!customerEmail) {
         logger.warn({ stripeSessionId: session.id, customerName, metadata: session.metadata }, "CRM invoice aborted: missing customer email for Stripe session, order still saved.");
       } else {
+        const persistedInvoice = await prisma.adminInvoice.findUnique({ where: { orderId } });
+        if (persistedInvoice) {
+          logger.info({ stripeSessionId: session.id, orderId, invoiceId: persistedInvoice.id }, "CRM invoice already persisted; skipping duplicate CRM call");
+          return NextResponse.json({ received: true });
+        }
         const syncState = await readCrmSyncState();
         const alreadySynced = syncState.some((entry) => entry.stripeSessionId === session.id);
         if (alreadySynced) {
@@ -286,6 +294,7 @@ export async function POST(request: Request) {
         shipping_cost: session.metadata?.shippingCost ? Number(session.metadata.shippingCost) : 0,
         shipping_name: session.metadata?.shippingName || "",
         processing_fee: session.metadata?.processingFee ? Number(session.metadata.processingFee) : 0,
+        footer_text: LEGAL_DOCUMENT_FOOTER,
         total: Number(total.toFixed(2)),
         items: items.map((item) => ({
           description: item.name,
@@ -302,6 +311,32 @@ export async function POST(request: Request) {
         );
         try {
           const crmInvoice = await createCRMInvoice(crmPayload);
+          await prisma.adminInvoice.upsert({
+            where: { id: crmInvoice.invoice_id },
+            update: {
+              customer: customerDisplay,
+              email: customerEmail.toLowerCase(),
+              orderId,
+              externalInvoiceId: crmInvoice.invoice_id,
+              invoiceNumber: crmInvoice.invoice_number,
+              pdfUrl: crmInvoice.pdf_url,
+              source: "crm",
+              amount: Number(total.toFixed(2)),
+              status: "Bezahlt"
+            },
+            create: {
+              id: crmInvoice.invoice_id,
+              customer: customerDisplay,
+              email: customerEmail.toLowerCase(),
+              orderId,
+              externalInvoiceId: crmInvoice.invoice_id,
+              invoiceNumber: crmInvoice.invoice_number,
+              pdfUrl: crmInvoice.pdf_url,
+              source: "crm",
+              amount: Number(total.toFixed(2)),
+              status: "Bezahlt"
+            }
+          });
           syncState.push({
             stripeSessionId: session.id,
             syncedAt: new Date().toISOString(),
@@ -309,10 +344,7 @@ export async function POST(request: Request) {
             customerEmail,
             invoiceId: crmInvoice?.invoice_id ? String(crmInvoice.invoice_id) : undefined,
             invoiceNumber: crmInvoice?.invoice_number ? String(crmInvoice.invoice_number) : undefined,
-            pdfUrl: (crmInvoice as { pdf_url?: string; invoice_pdf?: string; download_url?: string; file_url?: string })?.pdf_url
-              || (crmInvoice as { pdf_url?: string; invoice_pdf?: string; download_url?: string; file_url?: string })?.invoice_pdf
-              || (crmInvoice as { pdf_url?: string; invoice_pdf?: string; download_url?: string; file_url?: string })?.download_url
-              || (crmInvoice as { pdf_url?: string; invoice_pdf?: string; download_url?: string; file_url?: string })?.file_url
+            pdfUrl: crmInvoice.pdf_url
           });
           await writeCrmSyncState(syncState);
           logger.info({ sessionId: session.id, orderId, crmInvoice }, "CRM invoice created successfully");

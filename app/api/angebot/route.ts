@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { LEGAL_DOCUMENT_FOOTER } from "@/lib/legal";
 
 type AngebotItem = {
   slug: string;
@@ -53,7 +54,9 @@ export async function POST(request: Request) {
     ...lines,
     "",
     "Hinweise:",
-    body.notes?.trim() || "-"
+    body.notes?.trim() || "-",
+    "",
+    LEGAL_DOCUMENT_FOOTER
   ].join("\n");
 
   await transporter.sendMail({

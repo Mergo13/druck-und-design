@@ -48,6 +48,13 @@ export type ProductVariant = {
   priceRules: PriceRule[];
 };
 
+export type ProductCategoryProperty = {
+  name: string;
+  values: string[];
+  basePrice?: number;
+  stepPrice?: number;
+};
+
 export type ProductCategory = {
   slug: MainCategory;
   name: string;
@@ -57,10 +64,7 @@ export type ProductCategory = {
   quantitySteps?: number[];
   defaultPropertyTemplate?: string;
   logo?: string;
-  properties?: Array<{
-    name: string;
-    values: string[];
-  }>;
+  properties?: ProductCategoryProperty[];
 };
 
 export type ProductCatalogItem = {

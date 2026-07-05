@@ -24,6 +24,7 @@ export type CRMInvoiceOrder = {
   shipping_cost?: number;
   shipping_name?: string;
   processing_fee?: number;
+  footer_text?: string;
 };
 
 type CRMInvoiceOrderRequest = CRMInvoiceOrder & {
@@ -37,12 +38,17 @@ type CRMInvoiceSuccessResponse = {
   invoice_id: number | string;
   client_id: number | string;
   invoice_number: string | number;
+  pdf_url?: string;
+  invoice_pdf?: string;
+  download_url?: string;
+  file_url?: string;
 };
 
 export type CRMInvoiceResult = {
   invoice_id: string;
   client_id: string;
   invoice_number: string;
+  pdf_url?: string;
 };
 
 type CreateCRMInvoiceOptions = {
@@ -159,7 +165,8 @@ function normalizeCRMResponse(payload: unknown): CRMInvoiceResult {
   return {
     invoice_id: String(response.invoice_id),
     client_id: String(response.client_id),
-    invoice_number: String(response.invoice_number)
+    invoice_number: String(response.invoice_number),
+    pdf_url: response.pdf_url || response.invoice_pdf || response.download_url || response.file_url
   };
 }
 
