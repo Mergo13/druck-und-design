@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { createInvoicePdf } from "@/lib/invoice-pdf";
+import { createVoucherPdf } from "@/lib/voucher-pdf";
 
 function isAllowedPdfUrl(rawUrl: string, crmApiUrl: string) {
   try {
@@ -31,6 +32,30 @@ export async function GET(request: Request) {
   });
   if (!invoice) {
     return NextResponse.json({ message: "Rechnung nicht gefunden" }, { status: 404 });
+  }
+
+  if (invoice.source === "coupon") {
+    const [coupon, company] = await Promise.all([
+      prisma.coupon.findFirst({ where: { code: invoice.invoiceNumber || invoice.id.replace(/^GUT-/, "") } }),
+      prisma.companyInformation.findUnique({ where: { id: "company" } })
+    ]);
+    const pdf = await createVoucherPdf({
+      code: invoice.invoiceNumber || coupon?.code || invoice.id,
+      discountType: coupon?.discountType || "fixed",
+      discountValue: coupon?.discountValue ?? invoice.amount,
+      customer: invoice.customer,
+      email: invoice.email,
+      validUntil: coupon?.endsAt,
+      company
+    });
+    const pdfBody = new Uint8Array(pdf).buffer;
+    return new NextResponse(pdfBody, {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="gutschein-${invoice.invoiceNumber || invoice.id}.pdf"`,
+        "Cache-Control": "private, no-store"
+      }
+    });
   }
 
   const crmApiUrl = process.env.CRM_API_URL?.trim();

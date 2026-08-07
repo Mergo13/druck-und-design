@@ -571,7 +571,7 @@ function CouponsList() {
   );
 }
 
-function CouponForm() {
+function CouponForm({ includeDelivery = false }: { includeDelivery?: boolean }) {
   return (
     <>
       <TextInput source="code" label="Code" validate={[required()]} />
@@ -582,6 +582,14 @@ function CouponForm() {
       <NumberInput source="discountValue" label="Rabattwert" min={0} validate={[required()]} />
       <BooleanInput source="active" label="Aktiv" defaultValue />
       <NumberInput source="usageLimit" label="Nutzungslimit" min={1} />
+      {includeDelivery ? (
+        <>
+          <TextInput source="recipientEmail" label="Empfänger E-Mail" type="email" helperText="Optional: erstellt den Gutschein direkt im Kundenkonto und/oder sendet PDF per E-Mail." />
+          <TextInput source="recipientName" label="Empfänger Name" />
+          <BooleanInput source="deliverToDashboard" label="Im Kundenkonto anzeigen" defaultValue />
+          <BooleanInput source="sendPdfEmail" label="PDF per E-Mail senden" />
+        </>
+      ) : null}
     </>
   );
 }
@@ -591,7 +599,7 @@ function CouponEdit() {
 }
 
 function CouponCreate() {
-  return <Create><SimpleForm><CouponForm /></SimpleForm></Create>;
+  return <Create><SimpleForm><CouponForm includeDelivery /></SimpleForm></Create>;
 }
 
 function ReviewsList() {

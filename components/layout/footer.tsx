@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ShopStatusBadge } from "@/components/layout/shop-status-badge";
 
 const cols: Array<Array<{ label: string; href: string }>> = [
   [
@@ -37,10 +38,7 @@ export function Footer() {
             <Image src="/brand/logo-dud.png" alt="druck&design studio" width={320} height={65} className="h-9 w-auto object-contain md:h-10" />
           </Link>
           <p className="mt-4 max-w-sm text-sm leading-6 text-slate-600">Ihr Partner für Druckproduktion, Werbetechnik und Design. Digital, präzise und zuverlässig aus Wels.</p>
-          <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            Online Shop aktiv
-          </div>
+          <ShopStatusBadge />
         </div>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {cols.map((col) => (

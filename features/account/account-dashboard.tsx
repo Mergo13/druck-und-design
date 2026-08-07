@@ -42,6 +42,7 @@ function projectStatusClass(status: string) {
 function invoiceStatusClass(status: string) {
   if (status === "Bezahlt") return "bg-emerald-100 text-emerald-700";
   if (status === "Offen") return "bg-amber-100 text-amber-700";
+  if (status === "Gutschein") return "bg-sky-100 text-sky-700";
   return "bg-rose-100 text-rose-700";
 }
 
@@ -361,13 +362,13 @@ export function AccountDashboard() {
 
               <section id="invoices">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-base font-black md:text-xl">Rechnungen</h2>
+                  <h2 className="text-base font-black md:text-xl">Rechnungen & Gutscheine</h2>
                 </div>
                 <div className="glass-panel overflow-x-auto rounded-xl">
                   <table className="w-full min-w-[640px] text-sm">
                     <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                       <tr>
-                        <th className="px-4 py-3">Rechnung</th>
+                        <th className="px-4 py-3">Dokument</th>
                         <th className="px-4 py-3">Bestellung</th>
                         <th className="px-4 py-3">Datum</th>
                         <th className="px-4 py-3">Betrag</th>
@@ -392,7 +393,7 @@ export function AccountDashboard() {
                               <Button asChild size="sm" variant="outline" className="h-8 gap-1 text-xs">
                                 <a href={invoice.pdfUrl} target="_blank" rel="noreferrer">
                                   <Download className="h-3.5 w-3.5" />
-                                  PDF
+                                  {invoice.source === "coupon" ? "Gutschein" : "PDF"}
                                 </a>
                               </Button>
                             ) : (
@@ -403,7 +404,7 @@ export function AccountDashboard() {
                       ))}
                       {invoicesData.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Keine Rechnungen vorhanden.</td>
+                          <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Keine Rechnungen oder Gutscheine vorhanden.</td>
                         </tr>
                       )}
                     </tbody>
