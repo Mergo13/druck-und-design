@@ -5,12 +5,13 @@ import { ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { FlipWords } from "@/components/flipwords";
 import { ClientsMarquee } from "@/components/home/clients-marquee";
 import { HeroBackgroundSlideshow } from "@/components/home/hero-background-slideshow";
 import { ScrollZoomHero } from "@/components/home/scroll-zoom-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getPublicCategories } from "@/lib/catalog-repository";
+import { StructuredData } from "@/components/structured-data";
+import { localBusinessJsonLd } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,17 @@ export default async function HomePage() {
 
   return (
     <>
+      <StructuredData
+        data={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "@id": "https://druck-und-design.at/#website",
+          url: "https://druck-und-design.at/",
+          name: "druck&design studio",
+          inLanguage: "de-AT",
+          publisher: localBusinessJsonLd()
+        }}
+      />
       <section className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
         <HeroBackgroundSlideshow />
         <div className="container-page relative z-10 flex min-h-screen items-center py-20">
@@ -29,20 +41,18 @@ export default async function HomePage() {
               Design · Print · Digital
             </div>
             <h1 className="mt-7 text-5xl font-black leading-[1.03] md:text-7xl">
-              <FlipWords
-                words={["Drucklösungen", "Werbetechnik", "Markenauftritte", "Textilveredelung"]}
-                duration={2600}
-                className="!px-0 !text-brand-cyan"
-              />
-              <span className="block">für Unternehmen.</span>
+              Druckerei, Werbetechnik & Werbeagentur in Wels
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Von der Gestaltung bis zur Produktion: Wir realisieren professionelle Markenauftritte, Werbemittel und Druckprodukte aus einer Hand.</p>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Design, Digitaldruck, Großformat, Beschriftung, Textildruck und Webdesign - von der Idee bis zur fertigen Umsetzung.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/leistungen">Jetzt Leistungen ansehen <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/leistungen">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="border-white/40 bg-black/15 text-white hover:bg-black/35">
-                <Link href="/kontakt">Projekt anfragen</Link>
+                <Link href="/kontakt">Angebot anfragen</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="border-white/40 bg-black/15 text-white hover:bg-black/35">
+                <Link href="/kontakt">Projekt starten</Link>
               </Button>
             </div>
           </div>
@@ -53,7 +63,7 @@ export default async function HomePage() {
 
       <section className="bg-[linear-gradient(180deg,#eef4ff,#f8fbff)] py-16">
         <div className="container-page">
-          <SectionHeading eyebrow="Kategorien" title="Unsere Kompetenzbereiche" description="Entdecken Sie unsere vielfältigen Lösungen für Ihre Werbemittel und Druckprodukte." />
+          <SectionHeading eyebrow="Kategorien" title="Was möchten Sie produzieren?" description="Druckprodukte, Werbetechnik, Textilien und digitale Leistungen direkt aus dem bestehenden Shop-Katalog." />
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {platformCategories.slice(0, 8).map((category) => (
               <Card key={category.slug} className="border border-border bg-card shadow-[0_12px_32px_rgba(15,23,42,.06)] transition hover:-translate-y-1 hover:border-foreground/20 hover:shadow-premium">

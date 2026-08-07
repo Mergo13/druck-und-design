@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { calculateCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 
@@ -97,7 +97,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
-    return Math.round((productPrice + calculateCategoryPropertiesPrice(enabledProperties, quantity)) * 100) / 100;
+    return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
   }, [config, currentQuantity, enabledProperties, firstVariant, product]);
 
   async function validateAndSetFile(file?: File) {
@@ -296,15 +296,18 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
             <span className="text-sm font-bold">{property.name}</span>
             <select
               suppressHydrationWarning
-              value={config[`eigenschaft:${property.name}`] ?? property.values[0]}
+              value={config[`eigenschaft:${property.name}`] ?? normalizePropertyValue(property.values[0]).value}
               onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
               className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             >
-              {property.values.map((value) => (
-                <option key={value} value={value}>
-                  {value}
+              {property.values.map((entry) => {
+                const option = normalizePropertyValue(entry);
+                return (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
-              ))}
+                );
+              })}
             </select>
           </label>
         ))}
@@ -487,6 +490,11 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       <p className="mt-3 text-center text-xs text-muted-foreground">Wir beraten Sie gerne zu Materialien und Veredelungen.</p>
     </aside>
   );
+}
+
+function normalizePropertyValue(value: ProductCategoryProperty["values"][number]) {
+  if (typeof value === "string") return { value, label: value };
+  return { value: value.value, label: value.label || value.value };
 }
 
 async function getImageDimensions(file: File) {

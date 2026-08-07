@@ -11,7 +11,19 @@ import { withoutPrices } from "@/lib/product-price-visibility";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getPublicProductBySlug(slug);
-  return { title: product?.name ?? "Produkt", description: product?.seo };
+  return {
+    title: product ? `${product.name} online konfigurieren` : "Produkt",
+    description: product?.seo,
+    alternates: { canonical: `/produkt/${slug}` },
+    openGraph: product ? {
+      title: `${product.name} | druck&design studio`,
+      description: product.seo,
+      url: `/produkt/${slug}`,
+      type: "website",
+      locale: "de_AT",
+      images: [{ url: product.heroImage, alt: product.name }]
+    } : undefined
+  };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -27,6 +39,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     "@type": "Product",
     name: product.name,
     description: product.seo,
+    image: product.heroImage,
+    brand: { "@type": "Brand", name: "druck&design studio" },
     ...(authenticated ? { offers: { "@type": "Offer", priceCurrency: "EUR", price: product.basePrice, availability: "https://schema.org/InStock" } } : {})
   };
 

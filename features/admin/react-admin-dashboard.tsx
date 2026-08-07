@@ -43,6 +43,19 @@ type AdminRecord = RaRecord & {
   name?: string;
 };
 
+function normalizeCatalogRecordForAdmin(record: AdminRecord): AdminRecord {
+  if (!Array.isArray(record.properties)) return record;
+  return {
+    ...record,
+    properties: record.properties.map((property: { values?: unknown[] }) => ({
+      ...property,
+      values: Array.isArray(property.values)
+        ? property.values.map((value) => typeof value === "string" ? { value } : value)
+        : []
+    }))
+  };
+}
+
 const catalogApiUrl = "/api/catalog";
 const catalogResources = new Set(["products", "categories"]);
 
@@ -63,7 +76,7 @@ const dataProvider = {
     if (catalogResources.has(resource)) {
       const data = await fetchJson<AdminRecord[]>(`${catalogApiUrl}/${resource}?scope=admin`);
       return {
-        data: data.map((item) => ({ ...item, visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })),
+        data: data.map((item) => normalizeCatalogRecordForAdmin({ ...item, visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })),
         total: data.length
       };
     }
@@ -81,7 +94,7 @@ const dataProvider = {
   getOne: async (resource: string, params: { id: string }) => {
     if (catalogResources.has(resource)) {
       const data = await fetchJson<AdminRecord>(`${catalogApiUrl}/${resource}/${params.id}?scope=admin`);
-      return { data: { ...data, visible: data.visible ?? true, published: data.published ?? true, id: data.slug ?? data.id } };
+      return { data: normalizeCatalogRecordForAdmin({ ...data, visible: data.visible ?? true, published: data.published ?? true, id: data.slug ?? data.id }) };
     }
     const payload = await fetchJson<{ items: AdminRecord[] }>(`/api/admin/modules/${resource}?q=${encodeURIComponent(params.id)}&page=1&pageSize=100`);
     const item = payload.items.find((entry) => String(entry.id) === String(params.id));
@@ -177,6 +190,7 @@ function AdminDashboardHome() {
 
   const tools = [
     { label: "Wartungsmodus", path: "/tools/maintenance", color: "primary" as const },
+    { label: "Online Shop", path: "/tools/online-shop", color: "primary" as const },
     { label: "Urlaubsmodus", path: "/tools/vacation", color: "primary" as const },
     { label: "E-Mail Konfiguration", path: "/tools/email", color: "primary" as const },
     { label: "Upload-Ordner", path: "/tools/uploads", color: "primary" as const },
@@ -844,14 +858,14 @@ function ProductCategoryPropertiesControl() {
   const { setValue } = useFormContext();
   const categorySlug = useWatch({ name: "category" }) as string | undefined;
   const selected = (useWatch({ name: "enabledCategoryProperties" }) as string[] | undefined) ?? [];
-  const [categories, setCategories] = useState<Array<{ slug: string; properties?: Array<{ name: string; values: string[] }> }>>([]);
+  const [categories, setCategories] = useState<Array<{ slug: string; properties?: Array<{ name: string; values: Array<string | { value: string; label?: string; basePrice?: number; stepPrice?: number }> }> }>>([]);
 
   useEffect(() => {
     void (async () => {
       try {
         const res = await fetch("/api/catalog/categories?scope=admin");
         if (!res.ok) return;
-        const payload = await res.json() as Array<{ slug: string; properties?: Array<{ name: string; values: string[] }> }>;
+        const payload = await res.json() as Array<{ slug: string; properties?: Array<{ name: string; values: Array<string | { value: string; label?: string; basePrice?: number; stepPrice?: number }> }> }>;
         setCategories(payload);
       } catch {
         notify("Kategorien konnten nicht geladen werden.", { type: "warning" });
@@ -919,6 +933,26 @@ function CategoryList() {
   );
 }
 
+function CategoryPropertiesInput() {
+  return (
+    <ArrayInput source="properties" label="Eigenschaften">
+      <SimpleFormIterator inline>
+        <TextInput source="name" label="Name" placeholder="z.B. Papier" />
+        <NumberInput source="basePrice" label="Fallback Basispreis (€)" min={0} step={0.01} />
+        <NumberInput source="stepPrice" label="Fallback Stückpreis (€)" min={0} step={0.01} />
+        <ArrayInput source="values" label="Werte mit Preis">
+          <SimpleFormIterator inline>
+            <TextInput source="value" label="Wert" placeholder="z.B. 170g Bilderdruck" />
+            <TextInput source="label" label="Label" placeholder="optional" />
+            <NumberInput source="basePrice" label="Basispreis (€)" min={0} step={0.01} />
+            <NumberInput source="stepPrice" label="Stückpreis (€)" min={0} step={0.01} />
+          </SimpleFormIterator>
+        </ArrayInput>
+      </SimpleFormIterator>
+    </ArrayInput>
+  );
+}
+
 function CategoryEdit() {
   return (
     <Edit>
@@ -940,18 +974,7 @@ function CategoryEdit() {
             { id: "marketing-service", name: "Marketing Service" }
           ]}
         />
-        <ArrayInput source="properties" label="Eigenschaften">
-          <SimpleFormIterator inline>
-            <TextInput source="name" label="Name" placeholder="z.B. Papier" />
-            <NumberInput source="basePrice" label="Basispreis (€)" min={0} step={0.01} />
-            <NumberInput source="stepPrice" label="Stück-/Schrittpreis (€)" min={0} step={0.01} />
-            <ArrayInput source="values" label="Werte">
-              <SimpleFormIterator inline>
-                <TextInput source="" label="Wert" placeholder="z.B. A4 hochformat" />
-              </SimpleFormIterator>
-            </ArrayInput>
-          </SimpleFormIterator>
-        </ArrayInput>
+        <CategoryPropertiesInput />
       </SimpleForm>
     </Edit>
   );
@@ -968,18 +991,7 @@ function CategoryCreate() {
         <BooleanInput source="published" label="Veröffentlicht" />
         <CategoryImageUploadControls />
         <TextInput source="logo" label="Bild URL" />
-        <ArrayInput source="properties" label="Eigenschaften">
-          <SimpleFormIterator inline>
-            <TextInput source="name" label="Name" placeholder="z.B. Papier" />
-            <NumberInput source="basePrice" label="Basispreis (€)" min={0} step={0.01} />
-            <NumberInput source="stepPrice" label="Stück-/Schrittpreis (€)" min={0} step={0.01} />
-            <ArrayInput source="values" label="Werte">
-              <SimpleFormIterator inline>
-                <TextInput source="" label="Wert" placeholder="z.B. A4 hochformat" />
-              </SimpleFormIterator>
-            </ArrayInput>
-          </SimpleFormIterator>
-        </ArrayInput>
+        <CategoryPropertiesInput />
       </SimpleForm>
     </Create>
   );
@@ -1192,6 +1204,51 @@ function VacationToolPage() {
       </Typography>
     </AdminToolShell>
   );
+}
+
+function OnlineShopToolPage() {
+  const notify = useNotify();
+  const { settings, loading, updateStoreControl } = useStoreSettings();
+  const checkoutDisabled = Boolean(settings?.storeControl.disableCheckout);
+  const shopActive = !checkoutDisabled;
+
+  async function toggle() {
+    try {
+      await updateStoreControl({ disableCheckout: shopActive });
+      notify(shopActive ? "Online Shop deaktiviert. Checkout und neue Transaktionen sind gesperrt." : "Online Shop aktiviert.", {
+        type: shopActive ? "warning" : "success"
+      });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+    }
+  }
+
+  return (
+    <AdminToolShell
+      title="Online Shop"
+      description="Steuert, ob Kunden neue Bestellungen und Stripe-Zahlungen starten können."
+    >
+      <Alert severity={shopActive ? "success" : "error"} sx={{ mb: 2 }}>
+        Status: {shopActive ? "AKTIV - Bestellungen und Zahlungen sind möglich." : "DEAKTIVIERT - Checkout, Transaktionen und neue Bestellungen sind gesperrt."}
+      </Alert>
+      <Button
+        variant="contained"
+        color={shopActive ? "success" : "error"}
+        size="large"
+        onClick={() => void toggle()}
+        disabled={loading}
+      >
+        {shopActive ? "Online Shop aktiv" : "Online Shop deaktiviert"}
+      </Button>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        Ein Klick wechselt den Status. Bei deaktiviertem Shop bleibt der Katalog sichtbar, aber `/api/checkout` blockiert jede Zahlung.
+      </Typography>
+    </AdminToolShell>
+  );
+}
+
+function CheckoutLockToolPage() {
+  return <OnlineShopToolPage />;
 }
 
 function EmailConfigToolPage() {
@@ -1754,7 +1811,14 @@ function WerbungToolPage() {
 function CRMToolPage() {
   const notify = useNotify();
   const [loading, setLoading] = useState(true);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configSaving, setConfigSaving] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [crmConfig, setCrmConfig] = useState({
+    CRM_API_URL: "",
+    CRM_API_TOKEN: ""
+  });
+  const [crmConfigured, setCrmConfigured] = useState({ url: false, token: false });
   const [payload, setPayload] = useState<{
     summary: {
       stripeOrders: number;
@@ -1766,6 +1830,48 @@ function CRMToolPage() {
     recentSyncs: Array<{ stripeSessionId: string; syncedAt: string; orderId: string }>;
     pending: Array<{ id: string; customer: string; total: number; createdAt: string }>;
   } | null>(null);
+
+  async function loadConfig() {
+    setConfigLoading(true);
+    try {
+      const res = await fetch("/api/admin/tools?action=crm-config");
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ""}`);
+      }
+      const json = await res.json() as {
+        crm: { CRM_API_URL: string; CRM_API_TOKEN: string };
+        configured: { url: boolean; token: boolean };
+      };
+      setCrmConfig(json.crm);
+      setCrmConfigured(json.configured);
+    } catch (error) {
+      notify(`CRM API Konfiguration konnte nicht geladen werden. ${error instanceof Error ? error.message : "Unbekannter Fehler"}`, { type: "error" });
+    } finally {
+      setConfigLoading(false);
+    }
+  }
+
+  async function saveConfig() {
+    setConfigSaving(true);
+    try {
+      const res = await fetch("/api/admin/tools?action=crm-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(crmConfig)
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ""}`);
+      }
+      notify("Webshop Order API gespeichert.", { type: "success" });
+      await loadConfig();
+    } catch (error) {
+      notify(`CRM API Konfiguration konnte nicht gespeichert werden. ${error instanceof Error ? error.message : "Unbekannter Fehler"}`, { type: "error" });
+    } finally {
+      setConfigSaving(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -1796,6 +1902,7 @@ function CRMToolPage() {
   }
 
   useEffect(() => {
+    void loadConfig();
     void load();
   }, []);
 
@@ -1823,6 +1930,63 @@ function CRMToolPage() {
   return (
     <AdminToolShell title="CRM" description="Rechnungen, Sync-Status und Umsatz-Kalkulationen für CRM-Anbindung.">
       <Box sx={{ display: "grid", gap: 1.5 }}>
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="subtitle2">Webshop Order API</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.6 }}>
+              Ziel-Endpoint für Webshop-Bestellungen. Requests werden als JSON mit Bearer Token gesendet.
+            </Typography>
+            <Box sx={{ mt: 1.5, display: "grid", gap: 1.25 }}>
+              <MuiTextField
+                size="small"
+                label="API URL"
+                placeholder="https://example.com/api/webshop/orders"
+                value={crmConfig.CRM_API_URL}
+                disabled={configLoading || configSaving}
+                onChange={(event) => setCrmConfig((current) => ({ ...current, CRM_API_URL: event.target.value }))}
+                fullWidth
+              />
+              <MuiTextField
+                size="small"
+                label="Bearer Token"
+                type="password"
+                placeholder={crmConfigured.token ? "Gespeichert - leer lassen zum Beibehalten" : "Token eingeben"}
+                value={crmConfig.CRM_API_TOKEN}
+                disabled={configLoading || configSaving}
+                onFocus={() => {
+                  if (crmConfig.CRM_API_TOKEN === "********") {
+                    setCrmConfig((current) => ({ ...current, CRM_API_TOKEN: "" }));
+                  }
+                }}
+                onChange={(event) => setCrmConfig((current) => ({ ...current, CRM_API_TOKEN: event.target.value }))}
+                fullWidth
+              />
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                <Button variant="contained" onClick={() => void saveConfig()} disabled={configLoading || configSaving}>
+                  {configSaving ? "Speichert..." : "Webshop Order API speichern"}
+                </Button>
+                <Typography variant="caption" color={crmConfigured.url && crmConfigured.token ? "success.main" : "error.main"}>
+                  {crmConfigured.url && crmConfigured.token ? "API URL und Token sind konfiguriert." : "API URL oder Token fehlt."}
+                </Typography>
+              </Box>
+              <Box component="pre" sx={{ m: 0, p: 1.5, borderRadius: 1, bgcolor: "#0f172a", color: "#e2e8f0", overflowX: "auto", fontSize: 12, lineHeight: 1.6 }}>
+{`{
+  "email": "kunde@example.com",
+  "customer": "Webshop Kunde",
+  "total": 129.90,
+  "items": [
+    {
+      "description": "Produktname",
+      "qty": 1,
+      "price": 129.90
+    }
+  ]
+}`}
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
           <Button variant="contained" onClick={() => void load()} disabled={loading}>
             CRM Sync Status laden
@@ -1944,6 +2108,8 @@ export function ReactAdminDashboard() {
     <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin">
       <CustomRoutes>
         <Route path="/tools/maintenance" element={<MaintenanceToolPage />} />
+        <Route path="/tools/online-shop" element={<OnlineShopToolPage />} />
+        <Route path="/tools/checkout-lock" element={<CheckoutLockToolPage />} />
         <Route path="/tools/vacation" element={<VacationToolPage />} />
         <Route path="/tools/email" element={<EmailConfigToolPage />} />
         <Route path="/tools/uploads" element={<UploadFoldersToolPage />} />

@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Check, Info, ShoppingCart } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { Settings2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatEuro } from "@/lib/utils";
@@ -17,32 +16,15 @@ export function ProductCard({
   product,
   showPrices = true,
   isSelected = false,
-  onToggleSelect,
-  onAddToCart
+  onToggleSelect
 }: {
   product: CardProduct;
   showPrices?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (slug: string) => void;
-  onAddToCart?: (slug: string) => void;
 }) {
-  const [added, setAdded] = useState(false);
   const image = "heroImage" in product ? product.heroImage : product.image;
   const priceLabel = "basePrice" in product ? `Ab ${formatEuro(product.basePrice)}` : "Preis auf Anfrage";
-
-  function handleAddToCart(event: React.MouseEvent<HTMLButtonElement>) {
-    if (!onAddToCart) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    window.dispatchEvent(new CustomEvent("dud-fly-to-cart", {
-      detail: {
-        x: rect.left + rect.width / 2,
-        y: rect.top + rect.height / 2
-      }
-    }));
-    onAddToCart(product.slug);
-    setAdded(true);
-    window.setTimeout(() => setAdded(false), 1200);
-  }
 
   return (
     <motion.div whileHover={{ y: -7 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
@@ -66,51 +48,10 @@ export function ProductCard({
               </Link>
             )}
           </div>
-          {onAddToCart && showPrices ? (
-            <motion.button
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              className="mt-4 w-full overflow-hidden rounded-lg"
-              onClick={handleAddToCart}
-            >
-              <motion.span
-                className={added
-                  ? "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(16,185,129,.28)]"
-                  : "inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-[#0d47b5] bg-brand-blue text-sm font-bold text-white shadow-[0_10px_24px_rgba(17,85,204,.28),inset_0_1px_0_rgba(255,255,255,.2)] transition hover:bg-[#0d47b5]"}
-                animate={{
-                  scale: added ? [1, 1.03, 1] : 1
-                }}
-                transition={{ duration: 0.32, ease: "easeOut" }}
-              >
-                <AnimatePresence mode="wait" initial={false}>
-                  {added ? (
-                    <motion.span
-                      key="added"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.18 }}
-                      className="inline-flex items-center gap-2"
-                    >
-                      <Check className="h-4 w-4" />
-                      Hinzugefügt
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="default"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -4 }}
-                      transition={{ duration: 0.18 }}
-                      className="inline-flex items-center gap-2"
-                    >
-                      <ShoppingCart className="h-4 w-4" />
-                      In den Warenkorb
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </motion.span>
-            </motion.button>
+          {showPrices ? (
+            <Button asChild className="mt-4 w-full bg-brand-blue hover:bg-[#0d47b5]">
+              <Link href={`/produkt/${product.slug}`}><Settings2 className="h-4 w-4" /> Konfigurieren</Link>
+            </Button>
           ) : !showPrices ? (
             <Button asChild className="mt-4 w-full"><Link href="/login">Anmelden und Preise sehen</Link></Button>
           ) : null}
@@ -124,7 +65,6 @@ export function ProductCard({
               {isSelected ? "Ausgewählt" : "Produkt auswählen"}
             </Button>
           ) : null}
-          <Button asChild variant="outline" className="mt-3 w-full hover:bg-brand-mist hover:text-brand-blue"><Link href={`/produkt/${product.slug}`}><Info className="h-4 w-4" /> Details ansehen</Link></Button>
         </CardContent>
       </Card>
     </motion.div>

@@ -89,7 +89,15 @@ export const moduleCreateSchemas = {
     logo: z.string().optional(),
     properties: z.array(z.object({
       name: z.string().min(1),
-      values: z.array(z.string().min(1)),
+      values: z.array(z.union([
+        z.string().min(1),
+        z.object({
+          value: z.string().min(1),
+          label: z.string().optional(),
+          basePrice: z.number().nonnegative().optional(),
+          stepPrice: z.number().nonnegative().optional()
+        })
+      ])),
       basePrice: z.number().nonnegative().optional(),
       stepPrice: z.number().nonnegative().optional()
     })).optional()

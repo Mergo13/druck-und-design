@@ -22,6 +22,30 @@ export function calculateCategoryPropertiesPrice(properties: ProductCategoryProp
   return Math.round(price * 100) / 100;
 }
 
+export function calculateSelectedCategoryPropertiesPrice(
+  properties: ProductCategoryProperty[],
+  quantity: number,
+  selectedOptions: Record<string, string>
+) {
+  const safeQuantity = Number.isFinite(quantity) ? Math.max(1, quantity) : 1;
+  const price = properties.reduce((sum, property) => {
+    const selected = selectedOptions[`eigenschaft:${property.name}`];
+    const firstValue = property.values[0];
+    const defaultValue = typeof firstValue === "string" ? firstValue : firstValue?.value;
+    const selectedValue = selected || defaultValue || "";
+    const match = property.values.find((entry) => (typeof entry === "string" ? entry : entry.value) === selectedValue);
+    if (!match || typeof match === "string") {
+      const basePrice = Math.max(0, Number(property.basePrice) || 0);
+      const stepPrice = Math.max(0, Number(property.stepPrice) || 0);
+      return sum + basePrice + stepPrice * safeQuantity;
+    }
+    const basePrice = Math.max(0, Number(match.basePrice ?? property.basePrice) || 0);
+    const stepPrice = Math.max(0, Number(match.stepPrice ?? property.stepPrice) || 0);
+    return sum + basePrice + stepPrice * safeQuantity;
+  }, 0);
+  return Math.round(price * 100) / 100;
+}
+
 export function runMockPreflight(
   filename: string,
   input?: { fileSizeBytes?: number; mimeType?: string; widthPx?: number; heightPx?: number; targetFormat?: string; colorModelHint?: "RGB" | "CMYK" | "Unknown" }

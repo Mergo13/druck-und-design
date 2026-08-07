@@ -12,12 +12,10 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
   const [query, setQuery] = useState(initialQuery ?? "");
   const [category, setCategory] = useState(initialCategory ?? "alle");
   const [sort, setSort] = useState("beliebt");
-  const [submitState, setSubmitState] = useState<"idle" | "ok" | "error">("idle");
-  const [submitMessage, setSubmitMessage] = useState("");
 
   const filtered = useMemo(() => {
     const result = products.filter((product) => {
-      const matchesCategory = category === "alle" || product.category === category || category === "same-day" && product.production.expressAvailable;
+      const matchesCategory = category === "alle" || product.category === category;
       const matchesQuery = [product.name, product.short, product.seo].join(" ").toLowerCase().includes(query.toLowerCase());
       return matchesCategory && matchesQuery;
     });
@@ -26,20 +24,6 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
     if (sort === "name") return result.sort((a, b) => a.name.localeCompare(b.name, "de"));
     return result.sort((a, b) => b.rating - a.rating);
   }, [category, products, query, sort]);
-
-  function addToCart(slug: string) {
-    const product = products.find((item) => item.slug === slug);
-    if (!product) return;
-    const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{ slug: string; name: string; quantity: number; category: string; unitPrice?: number }>;
-    const merged = [...existing];
-    const found = merged.find((entry) => entry.slug === product.slug);
-    if (found) found.quantity += 1;
-    else merged.push({ slug: product.slug, name: product.name, quantity: 1, category: product.category, unitPrice: product.basePrice });
-    localStorage.setItem("dud_cart", JSON.stringify(merged));
-    window.dispatchEvent(new Event("dud-cart-updated"));
-    setSubmitState("ok");
-    setSubmitMessage(`${product.name} wurde in den Warenkorb gelegt.`);
-  }
 
   return (
     <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
@@ -50,10 +34,6 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
           {categories.map((item) => (
             <button onClick={() => setCategory(item.slug)} key={item.slug} className={category === item.slug ? "rounded-md border border-brand-blue bg-brand-blue px-3 py-2.5 text-left text-sm font-bold text-white shadow-[0_8px_18px_rgba(17,85,204,.2)]" : "rounded-md border border-transparent px-3 py-2.5 text-left text-sm font-bold text-slate-600 hover:border-slate-200 hover:bg-brand-mist hover:text-brand-blue"}>{item.name}</button>
           ))}
-        </div>
-        <div className="mt-6 rounded-md border-l-4 border-brand-coral bg-[#fff5f2] p-4">
-          <p className="font-black text-brand-ink">Express verfügbar</p>
-          <p className="mt-1 text-sm text-muted-foreground">Same-Day-Produkte sind in der Ergebnisliste markiert.</p>
         </div>
       </aside>
       <div>
@@ -80,22 +60,18 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
               <ProductCard
                 product={product}
                 showPrices={authenticated}
-                onAddToCart={authenticated ? addToCart : undefined}
               />
             </motion.div>
           ))}
         </div>
         <div className="glass-panel mt-8 rounded-lg border-slate-200/80 p-5">
           <p className="text-sm font-bold">Ihr Einkauf</p>
-          <p className="mt-1 text-xs text-muted-foreground">Produkte direkt in den Warenkorb legen und danach im Checkout bestellen.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Produkte zuerst konfigurieren, danach mit korrektem Preis in den Warenkorb legen.</p>
           <div className="mt-4 flex flex-wrap gap-3">
             <Button asChild variant="outline">
               <Link href="/warenkorb">Zum Warenkorb</Link>
             </Button>
           </div>
-          {submitMessage ? (
-            <p className={submitState === "error" ? "mt-2 text-xs text-red-600" : "mt-2 text-xs font-bold text-brand-blue"}>{submitMessage}</p>
-          ) : null}
         </div>
       </div>
     </div>
