@@ -9,8 +9,16 @@ export async function generateMetadata({ params }: { params: Promise<{ kategorie
   const { kategorie } = await params;
   const category = (await getPublicCategories()).find((item) => item.slug === kategorie);
   return {
-    title: category?.name ?? "Kategorie",
-    description: category?.description
+    title: category ? `${category.name} Wels` : "Kategorie",
+    description: category ? `${category.description} Online konfigurieren und bei druck&design studio in Wels anfragen oder bestellen.` : undefined,
+    alternates: { canonical: `/${kategorie}` },
+    openGraph: category ? {
+      title: `${category.name} Wels | druck&design studio`,
+      description: category.description,
+      url: `/${kategorie}`,
+      type: "website",
+      locale: "de_AT"
+    } : undefined
   };
 }
 

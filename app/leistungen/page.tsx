@@ -28,7 +28,7 @@ export default async function LeistungenPage({ searchParams }: { searchParams?: 
             <p className="mt-5 max-w-2xl text-lg leading-8 text-white/70">Hochwertig produziert, klar konfiguriert und zuverlässig geliefert. Für Unternehmen, Marken und Menschen mit Anspruch.</p>
           </div>
           <div className="grid grid-cols-3 gap-3 lg:w-[380px]">
-            {[["24h", "Express"], ["300+", "Varianten"], ["4,9", "Bewertung"]].map(([value, label]) => (
+            {[["Online", "Konfigurator"], ["DB", "Preise"], ["Wels", "Beratung"]].map(([value, label]) => (
               <div className="border-t-2 border-brand-coral pt-3" key={label}>
                 <p className="text-2xl font-black">{value}</p>
                 <p className="mt-1 text-xs font-bold uppercase text-white/55">{label}</p>

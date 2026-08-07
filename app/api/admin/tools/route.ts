@@ -24,6 +24,10 @@ const MARKETING_ENV_KEYS = [
   "NEXT_PUBLIC_META_PIXEL_ID",
   "GOOGLE_SITE_VERIFICATION"
 ] as const;
+const CRM_ENV_KEYS = [
+  "CRM_API_URL",
+  "CRM_API_TOKEN"
+] as const;
 
 function getEnvLocalPath() {
   return path.join(process.cwd(), ".env.local");
@@ -207,6 +211,25 @@ export async function GET(request: Request) {
     });
   }
 
+  if (action === "crm-config") {
+    const permission = await requirePermission("invoices", "view");
+    if ("response" in permission) return permission.response;
+    const envPath = getEnvLocalPath();
+    const content = await fs.readFile(envPath, "utf8").catch(() => "");
+    const parsed = parseEnv(content);
+    const crm = runtimeValues(CRM_ENV_KEYS, parsed);
+    return NextResponse.json({
+      crm: {
+        CRM_API_URL: crm.CRM_API_URL,
+        CRM_API_TOKEN: crm.CRM_API_TOKEN ? "********" : ""
+      },
+      configured: {
+        url: Boolean(crm.CRM_API_URL),
+        token: Boolean(crm.CRM_API_TOKEN)
+      }
+    });
+  }
+
   if (action === "email") {
     const permission = await requirePermission("usersRoles", "view");
     if ("response" in permission) return permission.response;
@@ -335,6 +358,31 @@ export async function POST(request: Request) {
         maintenanceAvailableAt
       }
     });
+  }
+
+  if (action === "crm-config") {
+    const permission = await requirePermission("invoices", "update");
+    if ("response" in permission) return permission.response;
+    if (process.env.NODE_ENV === "production") return productionFilesystemResponse();
+    const envPath = getEnvLocalPath();
+    const current = await fs.readFile(envPath, "utf8").catch(() => "");
+    let next = current;
+    const rawUrl = body.CRM_API_URL;
+    const rawToken = body.CRM_API_TOKEN;
+    if (typeof rawUrl === "string") {
+      next = setEnvValue(next, "CRM_API_URL", rawUrl.trim());
+    }
+    if (typeof rawToken === "string" && rawToken.trim() && rawToken.trim() !== "********") {
+      next = setEnvValue(next, "CRM_API_TOKEN", rawToken.trim());
+    }
+    await fs.writeFile(envPath, next.endsWith("\n") ? next : `${next}\n`, "utf8");
+    await writeAuditLog({
+      actorEmail: permission.sessionUser.email,
+      module: "invoices",
+      action: "crm-config-update",
+      payload: { CRM_API_URL: typeof rawUrl === "string" ? rawUrl.trim() : undefined, CRM_API_TOKEN: rawToken ? "[redacted]" : undefined }
+    });
+    return NextResponse.json({ success: true });
   }
 
   if (action === "email") {

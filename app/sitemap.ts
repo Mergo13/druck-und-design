@@ -1,9 +1,10 @@
 import type { MetadataRoute } from "next";
 import { posts } from "@/data/products";
 import { getCategories, getProducts } from "@/lib/catalog-repository";
+import { localSeoPages, siteUrl } from "@/lib/seo";
 
 function getBaseUrl() {
-  return (process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3010").replace(/\/+$/, "");
+  return (process.env.NEXT_PUBLIC_APP_URL?.trim() || siteUrl).replace(/\/+$/, "");
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -27,7 +28,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/impressum",
     "/datenschutz",
     "/agb",
-    "/ueber-uns"
+    "/ueber-uns",
+    "/llms.txt"
   ];
 
   const [categories, products] = await Promise.all([
@@ -53,6 +55,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         changeFrequency: "weekly" as const,
         priority: 0.75
       })),
+    ...localSeoPages.map((page) => ({
+      url: `${baseUrl}/${page.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.82
+    })),
     ...products
       .filter((product) => product.visible !== false && product.published !== false)
       .map((product) => ({

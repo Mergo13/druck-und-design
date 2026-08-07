@@ -55,6 +55,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   await ensureAdminBootstrap();
+  const storeControl = await prisma.storeControlSetting.findUnique({ where: { id: "store-control" } });
+  if (storeControl?.maintenanceMode || storeControl?.disableCheckout) {
+    return NextResponse.json({ message: "Online Shop ist aktuell deaktiviert." }, { status: 423 });
+  }
+
   const sessionUser = await getSessionUser();
   if (!sessionUser?.email) {
     return NextResponse.json({ message: "Bitte melden Sie sich für eine Bestellung auf Rechnung an." }, { status: 401 });

@@ -292,13 +292,15 @@ export function CartQuoteView() {
   }
 
   return (
-    <section className="container-page py-8 md:py-10">
+    <section className="bg-slate-50/70 py-8 md:py-10">
+      <div className="container-page">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-black text-gradient">Checkout</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Schneller Abschluss mit klarer Bestellübersicht.</p>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-700">Warenkorb</p>
+          <h1 className="mt-1 text-4xl font-black text-slate-950">Checkout</h1>
+          <p className="mt-1 text-sm text-slate-500">Einfach prüfen, Lieferung wählen und Bestellung abschließen.</p>
         </div>
-        <Button variant="outline" className="gap-2" onClick={() => setCartDrawerOpen(true)}>
+        <Button variant="outline" className="gap-2 border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => setCartDrawerOpen(true)}>
           <ShoppingCart className="h-4 w-4" />
           Warenkorb ({cart.length})
         </Button>
@@ -308,36 +310,36 @@ export function CartQuoteView() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
-          <div className="glass-panel rounded-xl p-5">
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
-              <div className="rounded-md bg-primary/10 p-2 text-primary">
+              <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">
                 <Truck className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Versand & Rechnung</p>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Versand & Rechnung</p>
                 <p className="text-sm font-semibold text-slate-700">Bitte prüfen Sie Ihre Checkout-Daten.</p>
               </div>
             </div>
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
-                <label className="grid gap-2 text-sm font-black uppercase tracking-wider text-primary">
+                <label className="grid gap-2 text-sm font-black uppercase tracking-wider text-slate-700">
                   Liefermethode
                   <select
                     suppressHydrationWarning
                     value={deliveryMethod}
                     onChange={(event) => setDeliveryMethod(event.target.value as "abholung" | "versand")}
-                    className="h-11 rounded-md border bg-white px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-primary shadow-sm transition-all"
+                    className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   >
-                    <option value="versand">🚚 Paketversand (Post AT, DPD, GLS)</option>
-                    <option value="abholung">🏪 Selbstabholung (Druck & Design Studio)</option>
+                    <option value="versand">Paketversand (Post AT, DPD, GLS)</option>
+                    <option value="abholung">Selbstabholung (Druck & Design Studio)</option>
                   </select>
                 </label>
 
-                <label className="grid gap-2 text-sm font-black uppercase tracking-wider text-primary">
+                <label className="grid gap-2 text-sm font-black uppercase tracking-wider text-slate-700">
                   Name / Firma für Rechnung
                   <input
                     suppressHydrationWarning
-                    className="h-11 rounded-md border bg-white px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-primary shadow-sm transition-all"
+                    className="h-11 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                     placeholder="z.B. Muster GmbH"
                     value={customerName}
                     onChange={(event) => setCustomerName(event.target.value)}
@@ -346,7 +348,7 @@ export function CartQuoteView() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-black uppercase tracking-wider text-primary">
+                <label className="text-sm font-black uppercase tracking-wider text-slate-700">
                   Anmerkungen zur Bestellung
                 </label>
                 <textarea
@@ -354,17 +356,17 @@ export function CartQuoteView() {
                   value={notes}
                   onChange={(event) => setNotes(event.target.value)}
                   placeholder="Optional: Hinweise zu Ihrer Bestellung, Farbwünsche oder spezielle Anforderungen..."
-                  className="h-[126px] w-full rounded-md border bg-white p-3 text-sm font-medium outline-none focus:ring-2 focus:ring-primary shadow-sm transition-all"
+                  className="h-[126px] w-full rounded-md border border-slate-200 bg-white p-3 text-sm font-medium outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
             </div>
           </div>
 
           {profile && deliveryMethod === "versand" && (
-            <div className="glass-panel rounded-xl p-6">
+            <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-full bg-primary/10 p-2 text-primary">
+                  <div className="rounded-md bg-sky-50 p-2 text-sky-700">
                     <Truck className="h-6 w-6" />
                   </div>
                   <div>
@@ -372,14 +374,14 @@ export function CartQuoteView() {
                     <p className="text-xs font-bold uppercase text-muted-foreground mt-1">Konfigurieren Sie Ihre Zustellung</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 rounded-lg bg-white border p-2 shadow-sm">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span className="text-[10px] font-black text-primary uppercase tracking-wider">PLZ für Berechnung:</span>
+                <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <MapPin className="h-4 w-4 text-sky-700" />
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">PLZ für Berechnung:</span>
                   <input
                     suppressHydrationWarning
                     type="text"
                     placeholder="PLZ"
-                    className="h-8 w-20 rounded border-none bg-muted/50 px-2 text-sm font-bold text-center outline-none focus:ring-2 focus:ring-primary transition-all"
+                    className="h-8 w-20 rounded border border-slate-200 bg-white px-2 text-center text-sm font-bold outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                     value={postcode}
                     onChange={(e) => setPostcode(e.target.value)}
                   />
@@ -387,50 +389,50 @@ export function CartQuoteView() {
               </div>
 
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className={`group relative flex items-start gap-4 rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${!useSeparateShipping ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "bg-white hover:border-primary/50"}`}>
+                <label className={`group relative flex cursor-pointer items-start gap-4 rounded-lg border p-4 transition ${!useSeparateShipping ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100" : "bg-white hover:border-slate-300"}`}>
                   <div className="flex h-5 items-center">
                     <input
                       suppressHydrationWarning
                       type="radio"
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      className="h-4 w-4 border-slate-300 text-emerald-700 focus:ring-emerald-500"
                       checked={!useSeparateShipping}
                       onChange={() => setUseSeparateShipping(false)}
                     />
                   </div>
                   <div className="text-sm">
-                    <p className="font-black uppercase text-[11px] tracking-wider text-primary mb-1">Rechnungsadresse</p>
+                    <p className="font-black uppercase text-[11px] tracking-wider text-emerald-700 mb-1">Rechnungsadresse</p>
                     <p className="font-bold text-foreground">An Standardadresse liefern</p>
-                    <div className="mt-2 rounded bg-muted/40 p-2 text-xs font-medium text-muted-foreground whitespace-pre-wrap leading-relaxed border border-dashed">
+                    <div className="mt-2 whitespace-pre-wrap rounded border border-dashed border-slate-200 bg-white/70 p-2 text-xs font-medium leading-relaxed text-slate-500">
                       {profile.billingAddress || "Keine Rechnungsadresse hinterlegt."}
                     </div>
                   </div>
-                  {!useSeparateShipping && <div className="absolute top-4 right-4 text-primary"><CheckCircle2 className="h-5 w-5" /></div>}
+                  {!useSeparateShipping && <div className="absolute top-4 right-4 text-emerald-700"><CheckCircle2 className="h-5 w-5" /></div>}
                 </label>
 
                 {profile.shippingAddress && profile.shippingAddress !== profile.billingAddress ? (
-                  <label className={`group relative flex items-start gap-4 rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${useSeparateShipping ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "bg-white hover:border-primary/50"}`}>
+                  <label className={`group relative flex cursor-pointer items-start gap-4 rounded-lg border p-4 transition ${useSeparateShipping ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100" : "bg-white hover:border-slate-300"}`}>
                     <div className="flex h-5 items-center">
                       <input
                         suppressHydrationWarning
                         type="radio"
-                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                        className="h-4 w-4 border-slate-300 text-emerald-700 focus:ring-emerald-500"
                         checked={useSeparateShipping}
                         onChange={() => setUseSeparateShipping(true)}
                       />
                     </div>
                     <div className="text-sm">
-                      <p className="font-black uppercase text-[11px] tracking-wider text-primary mb-1">Separate Lieferadresse</p>
+                      <p className="font-black uppercase text-[11px] tracking-wider text-emerald-700 mb-1">Separate Lieferadresse</p>
                       <p className="font-bold text-foreground">An abweichende Adresse liefern</p>
-                      <div className="mt-2 rounded bg-muted/40 p-2 text-xs font-medium text-muted-foreground whitespace-pre-wrap leading-relaxed border border-dashed">
+                      <div className="mt-2 whitespace-pre-wrap rounded border border-dashed border-slate-200 bg-white/70 p-2 text-xs font-medium leading-relaxed text-slate-500">
                         {profile.shippingAddress}
                       </div>
                     </div>
-                    {useSeparateShipping && <div className="absolute top-4 right-4 text-primary"><CheckCircle2 className="h-5 w-5" /></div>}
+                    {useSeparateShipping && <div className="absolute top-4 right-4 text-emerald-700"><CheckCircle2 className="h-5 w-5" /></div>}
                   </label>
                 ) : (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-4 text-center bg-white/50">
-                    <p className="text-xs font-bold text-muted-foreground">Keine alternative Lieferadresse im Profil gefunden.</p>
-                    <Button variant="outline" size="sm" className="mt-2 text-[10px] uppercase font-black" asChild>
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+                    <p className="text-xs font-bold text-slate-500">Keine alternative Lieferadresse im Profil gefunden.</p>
+                    <Button variant="outline" size="sm" className="mt-2 border-slate-200 bg-white text-[10px] font-black uppercase hover:bg-slate-100" asChild>
                       <Link href="/konto#settings">Profil bearbeiten</Link>
                     </Button>
                   </div>
@@ -447,17 +449,17 @@ export function CartQuoteView() {
               {shippingRates.length > 0 && (
                 <div className="mt-6 space-y-3">
                   <div className="flex items-center gap-2">
-                    <div className="h-1 w-8 rounded-full bg-primary" />
-                    <p className="text-xs font-black uppercase tracking-widest text-primary">Verfügbare Versandpartner</p>
+                    <div className="h-1 w-8 rounded-full bg-sky-600" />
+                    <p className="text-xs font-black uppercase tracking-widest text-sky-700">Verfügbare Versandpartner</p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {shippingRates.map((rate) => (
-                      <label key={rate.id} className={`group flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${selectedRate?.id === rate.id ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "bg-white hover:border-primary/50"}`}>
+                      <label key={rate.id} className={`group flex cursor-pointer items-center gap-4 rounded-lg border p-4 transition ${selectedRate?.id === rate.id ? "border-sky-300 bg-sky-50 ring-2 ring-sky-100" : "bg-white hover:border-slate-300"}`}>
                         <div className="flex h-5 items-center">
                           <input
                             suppressHydrationWarning
                             type="radio"
-                            className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                            className="h-4 w-4 border-slate-300 text-sky-700 focus:ring-sky-500"
                             checked={selectedRate?.id === rate.id}
                             onChange={() => setSelectedRate(rate)}
                           />
@@ -466,12 +468,12 @@ export function CartQuoteView() {
                           <div className="flex flex-col">
                             <span className="text-sm font-black text-foreground">{rate.name}</span>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[10px] font-black bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase">{rate.carrier}</span>
-                              <span className="text-[10px] font-bold text-muted-foreground/60 tracking-tight">Express Abwicklung</span>
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-black uppercase text-slate-500">{rate.carrier}</span>
+                              <span className="text-[10px] font-bold tracking-tight text-slate-400">Standard Abwicklung</span>
                             </div>
                           </div>
                           <div className="text-right">
-                            <span className="text-sm font-black text-primary">{formatEuro(rate.price)}</span>
+                            <span className="text-sm font-black text-sky-700">{formatEuro(rate.price)}</span>
                           </div>
                         </div>
                       </label>
@@ -484,9 +486,9 @@ export function CartQuoteView() {
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:h-fit">
-          <div className="glass-panel rounded-xl p-5">
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Bestellübersicht</p>
-            <h3 className="mt-1 text-lg font-black">Ihre Zusammenfassung</h3>
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Bestellübersicht</p>
+            <h3 className="mt-1 text-lg font-black text-slate-950">Ihre Zusammenfassung</h3>
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Zwischensumme</span>
@@ -508,7 +510,7 @@ export function CartQuoteView() {
             <div className="my-4 h-px bg-slate-200" />
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold">Gesamt</span>
-              <span className="text-xl font-black text-gradient">{formatEuro(grandTotal)}</span>
+              <span className="text-xl font-black text-slate-950">{formatEuro(grandTotal)}</span>
             </div>
 
             <div className="mt-5 grid gap-3 border-y border-slate-200 py-4">
@@ -517,12 +519,12 @@ export function CartQuoteView() {
                   type="checkbox"
                   checked={legalAccepted}
                   onChange={(event) => setLegalAccepted(event.target.checked)}
-                  className="mt-1 h-4 w-4 shrink-0 accent-brand-blue"
+                  className="mt-1 h-4 w-4 shrink-0 accent-emerald-700"
                 />
                 <span>
-                  Ich habe die <Link className="font-bold text-brand-blue hover:underline" href="/agb" target="_blank">Allgemeinen Geschäftsbedingungen</Link>, die{" "}
-                  <Link className="font-bold text-brand-blue hover:underline" href="/datenschutz" target="_blank">Datenschutzbestimmungen</Link> sowie die{" "}
-                  <Link className="font-bold text-brand-blue hover:underline" href="/druckdaten-hinweise" target="_blank">Druckdaten- und Produktionshinweise</Link> gelesen und akzeptiere diese.
+                  Ich habe die <Link className="font-bold text-emerald-700 hover:underline" href="/agb" target="_blank">Allgemeinen Geschäftsbedingungen</Link>, die{" "}
+                  <Link className="font-bold text-emerald-700 hover:underline" href="/datenschutz" target="_blank">Datenschutzbestimmungen</Link> sowie die{" "}
+                  <Link className="font-bold text-emerald-700 hover:underline" href="/druckdaten-hinweise" target="_blank">Druckdaten- und Produktionshinweise</Link> gelesen und akzeptiere diese.
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600">
@@ -530,19 +532,19 @@ export function CartQuoteView() {
                   type="checkbox"
                   checked={printApprovalAccepted}
                   onChange={(event) => setPrintApprovalAccepted(event.target.checked)}
-                  className="mt-1 h-4 w-4 shrink-0 accent-brand-blue"
+                  className="mt-1 h-4 w-4 shrink-0 accent-emerald-700"
                 />
                 <span>Ich bestätige die Druckfreigabe. Layout, Texte, Maße, Farben, Bilder, Logos und sonstige Inhalte wurden geprüft. Nach der Freigabe übernehme ich die Verantwortung für Fehler in den freigegebenen Daten.</span>
               </label>
             </div>
 
-            <Button className="mt-5 w-full" onClick={() => void startStripeCheckout()} disabled={state === "sending" || !legalAccepted || !printApprovalAccepted}>
+            <Button className="mt-5 w-full border-emerald-700 bg-emerald-700 shadow-none hover:border-emerald-800 hover:bg-emerald-800 hover:shadow-none" onClick={() => void startStripeCheckout()} disabled={state === "sending" || !legalAccepted || !printApprovalAccepted}>
               {state === "sending" ? "Bitte warten..." : "Zahlungspflichtig bestellen"}
             </Button>
-            <Button className="mt-2 w-full" variant="outline" onClick={() => void placeOrderWithoutPayment()} disabled={state === "sending" || !legalAccepted || !printApprovalAccepted}>
+            <Button className="mt-2 w-full border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-100 hover:text-slate-950" variant="outline" onClick={() => void placeOrderWithoutPayment()} disabled={state === "sending" || !legalAccepted || !printApprovalAccepted}>
               Bestellung ohne Zahlung speichern
             </Button>
-            {message ? <p className={state === "error" ? "mt-3 text-xs text-red-600" : "mt-3 text-xs text-fuchsia-700"}>{message}</p> : null}
+            {message ? <p className={state === "error" ? "mt-3 text-xs text-red-600" : "mt-3 text-xs text-emerald-700"}>{message}</p> : null}
             <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
               Ihre Bestätigung wird zusammen mit dem Auftrag dokumentiert. Sie können Ihre Daten vor dem Bezahlen jederzeit ändern.
             </p>
@@ -570,7 +572,7 @@ export function CartQuoteView() {
               <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between border-b px-5 py-4">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Warenkorb</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Warenkorb</p>
                     <p className="text-sm font-semibold text-slate-700">{cart.length} Positionen</p>
                   </div>
                   <Button size="icon" variant="ghost" onClick={() => setCartDrawerOpen(false)}>
@@ -580,7 +582,7 @@ export function CartQuoteView() {
 
                 <div className="flex-1 space-y-3 overflow-y-auto p-5">
                   {cart.map((item) => (
-                    <div key={item.slug} className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div key={item.slug} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                       <p className="text-sm font-bold">{item.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{item.category}</p>
                       <div className="mt-3 flex items-center justify-between">
@@ -612,7 +614,7 @@ export function CartQuoteView() {
                     <span className="text-muted-foreground">Gesamt</span>
                     <span className="text-lg font-black">{formatEuro(grandTotal)}</span>
                   </div>
-                  <Button className="w-full justify-between" onClick={() => setCartDrawerOpen(false)}>
+                  <Button className="w-full justify-between border-emerald-700 bg-emerald-700 shadow-none hover:border-emerald-800 hover:bg-emerald-800 hover:shadow-none" onClick={() => setCartDrawerOpen(false)}>
                     Zur Kasse
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -622,6 +624,7 @@ export function CartQuoteView() {
           </>
         )}
       </AnimatePresence>
+      </div>
     </section>
   );
 }

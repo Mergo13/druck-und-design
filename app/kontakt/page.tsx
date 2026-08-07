@@ -6,8 +6,8 @@ export default function ContactPage() {
   const supportCards: Array<[LucideIcon, string, string, string]> = [
     [Phone, "Telefon", "+43 (0) 7242 63 2 39", "Mo-Do 8:00-18:00, Fr 8:00-14:00 Uhr"],
     [Mail, "E-Mail", "kontakt@druck-und-design.at", "Antwort meist am selben Werktag"],
-    [MessageCircle, "WhatsApp", "+43 (0) 7242 63 2 39", "Direkt fuer schnelle Rueckfragen"],
-    [MapPin, "Standort", "Wels, Oberoesterreich", "Termin nach Vereinbarung"]
+    [MessageCircle, "WhatsApp", "+43 (0) 7242 63 2 39", "Direkt für schnelle Rückfragen"],
+    [MapPin, "Standort", "Wels, Oberösterreich", "Termin nach Vereinbarung"]
   ];
 
   return (

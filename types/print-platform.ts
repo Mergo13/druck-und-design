@@ -50,7 +50,12 @@ export type ProductVariant = {
 
 export type ProductCategoryProperty = {
   name: string;
-  values: string[];
+  values: Array<string | {
+    value: string;
+    label?: string;
+    basePrice?: number;
+    stepPrice?: number;
+  }>;
   basePrice?: number;
   stepPrice?: number;
 };
