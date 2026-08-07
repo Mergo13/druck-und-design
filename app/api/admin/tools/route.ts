@@ -6,6 +6,8 @@ import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { requireModulePermission } from "@/lib/admin-permissions";
 import { writeAuditLog } from "@/lib/admin-audit";
 import { prisma } from "@/lib/prisma";
+import { getCategories, getProducts, upsertCategory, upsertProduct } from "@/lib/catalog-repository";
+import { getSiteImageMap, saveSiteImageMap, siteImageSlots } from "@/lib/site-images";
 
 const ENV_KEYS = [
   "SMTP_HOST",
@@ -144,13 +146,90 @@ function productionFilesystemResponse() {
   );
 }
 
-async function requirePermission(module: "usersRoles" | "backups" | "activityLogs" | "security" | "invoices", permission: "view" | "create" | "update") {
+async function requirePermission(module: "usersRoles" | "backups" | "activityLogs" | "security" | "invoices" | "products" | "categories", permission: "view" | "create" | "update") {
   await ensureAdminBootstrap();
   const allowed = await requireModulePermission(module, permission);
   if (!allowed.ok) {
     return { response: NextResponse.json({ message: allowed.message }, { status: allowed.status }) } as const;
   }
   return { sessionUser: allowed.sessionUser } as const;
+}
+
+type CatalogImageImportRow = {
+  type?: string;
+  slug?: string;
+  image?: string;
+  imagePath?: string;
+  image_path?: string;
+  heroImage?: string;
+  hero_image?: string;
+  logo?: string;
+  gallery?: string[] | string;
+  gallery_paths?: string[] | string;
+};
+
+function splitCsvLine(line: string) {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const next = line[index + 1];
+    if (char === "\"" && quoted && next === "\"") {
+      current += "\"";
+      index += 1;
+    } else if (char === "\"") {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      cells.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseCatalogImageCsv(content: string): CatalogImageImportRow[] {
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = splitCsvLine(lines[0]).map((header) => header.trim());
+  return lines.slice(1).map((line) => {
+    const cells = splitCsvLine(line);
+    return Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""])) as CatalogImageImportRow;
+  });
+}
+
+function parseCatalogImageRows(content: string): CatalogImageImportRow[] {
+  const trimmed = content.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) return parsed as CatalogImageImportRow[];
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as { products?: CatalogImageImportRow[]; categories?: CatalogImageImportRow[] };
+      return [
+        ...(obj.products ?? []).map((row) => ({ ...row, type: row.type ?? "product" })),
+        ...(obj.categories ?? []).map((row) => ({ ...row, type: row.type ?? "category" }))
+      ];
+    }
+    return [];
+  }
+  return parseCatalogImageCsv(trimmed);
+}
+
+function isSafeImagePath(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/^(javascript|data|vbscript):/i.test(trimmed)) return false;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  return trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\0") && !trimmed.includes("..");
+}
+
+function galleryValues(value: CatalogImageImportRow["gallery"]) {
+  const values = Array.isArray(value) ? value : typeof value === "string" ? value.split("|") : [];
+  return values.map((item) => String(item).trim()).filter(isSafeImagePath);
 }
 
 export async function GET(request: Request) {
@@ -306,6 +385,28 @@ export async function GET(request: Request) {
     }));
 
     return NextResponse.json({ items });
+  }
+
+  if (action === "catalog-image-import") {
+    const productsPermission = await requirePermission("products", "view");
+    if ("response" in productsPermission) return productsPermission.response;
+    const categoriesPermission = await requirePermission("categories", "view");
+    if ("response" in categoriesPermission) return categoriesPermission.response;
+    return NextResponse.json({
+      examples: {
+        json: {
+          products: [{ slug: "produkt-slug", image_path: "/uploads/products/bild.webp", gallery: ["/uploads/products/detail.webp"] }],
+          categories: [{ slug: "kategorie-slug", image: "/uploads/products/kategorie.webp" }]
+        },
+        csv: "type,slug,image_path,gallery\nproduct,produkt-slug,/uploads/products/bild.webp,/uploads/products/detail-1.webp|/uploads/products/detail-2.webp\ncategory,kategorie-slug,/uploads/products/kategorie.webp,"
+      }
+    });
+  }
+
+  if (action === "site-images") {
+    const permission = await requirePermission("usersRoles", "view");
+    if ("response" in permission) return permission.response;
+    return NextResponse.json({ slots: siteImageSlots, images: await getSiteImageMap() });
   }
 
   if (action === "shutdown") {
@@ -466,6 +567,124 @@ export async function POST(request: Request) {
       payload: Object.fromEntries(MARKETING_ENV_KEYS.map((key) => [key, body[key] ?? ""]))
     });
     return NextResponse.json({ success: true });
+  }
+
+  if (action === "catalog-image-import") {
+    const productsPermission = await requirePermission("products", "update");
+    if ("response" in productsPermission) return productsPermission.response;
+    const categoriesPermission = await requirePermission("categories", "update");
+    if ("response" in categoriesPermission) return categoriesPermission.response;
+    const content = typeof body.content === "string" ? body.content : "";
+    let rows: CatalogImageImportRow[] = [];
+    try {
+      rows = parseCatalogImageRows(content);
+    } catch {
+      return NextResponse.json({ message: "JSON oder CSV konnte nicht gelesen werden." }, { status: 400 });
+    }
+
+    if (!rows.length) {
+      return NextResponse.json({ message: "Keine importierbaren Zeilen gefunden." }, { status: 400 });
+    }
+
+    const [products, categories] = await Promise.all([getProducts(), getCategories()]);
+    const productBySlug = new Map(products.map((product) => [product.slug, product]));
+    const categoryBySlug = new Map(categories.map((category) => [category.slug, category]));
+    const result = {
+      updatedProducts: [] as string[],
+      updatedCategories: [] as string[],
+      skipped: [] as Array<{ slug?: string; reason: string }>
+    };
+
+    for (const row of rows) {
+      const slug = typeof row.slug === "string" ? row.slug.trim() : "";
+      const rawType = typeof row.type === "string" ? row.type.trim().toLowerCase() : "";
+      const image = [row.heroImage, row.hero_image, row.imagePath, row.image_path, row.image, row.logo].find((value) => typeof value === "string" && value.trim()) as string | undefined;
+      if (!slug) {
+        result.skipped.push({ reason: "slug fehlt" });
+        continue;
+      }
+      const gallery = galleryValues(row.gallery ?? row.gallery_paths);
+      if ((!image || !isSafeImagePath(image)) && !(gallery.length && (rawType === "product" || rawType === "produkt" || productBySlug.has(slug)))) {
+        result.skipped.push({ slug, reason: "Bildpfad fehlt oder ist ungültig" });
+        continue;
+      }
+
+      const targetType = rawType === "category" || rawType === "kategorie"
+        ? "category"
+        : rawType === "product" || rawType === "produkt"
+          ? "product"
+          : productBySlug.has(slug)
+            ? "product"
+            : categoryBySlug.has(slug)
+              ? "category"
+              : "";
+
+      if (targetType === "product") {
+        const product = productBySlug.get(slug);
+        if (!product) {
+          result.skipped.push({ slug, reason: "Produkt nicht gefunden" });
+          continue;
+        }
+        const updated = {
+          ...product,
+          visible: product.visible ?? true,
+          published: product.published ?? true,
+          heroImage: image ? image.trim() : product.heroImage,
+          gallery: gallery.length ? Array.from(new Set([...(product.gallery ?? []), ...gallery])) : product.gallery
+        };
+        await upsertProduct(updated);
+        productBySlug.set(slug, updated);
+        result.updatedProducts.push(slug);
+        continue;
+      }
+
+      if (targetType === "category") {
+        const category = categoryBySlug.get(slug);
+        if (!category) {
+          result.skipped.push({ slug, reason: "Kategorie nicht gefunden" });
+          continue;
+        }
+        const updated = {
+          ...category,
+          visible: category.visible ?? true,
+          published: category.published ?? true,
+          logo: image?.trim() ?? category.logo
+        };
+        await upsertCategory(updated);
+        categoryBySlug.set(slug, updated);
+        result.updatedCategories.push(slug);
+        continue;
+      }
+
+      result.skipped.push({ slug, reason: "Kein bestehendes Produkt oder keine bestehende Kategorie gefunden" });
+    }
+
+    await writeAuditLog({
+      actorEmail: productsPermission.sessionUser.email,
+      module: "products",
+      action: "catalog-image-import",
+      payload: {
+        updatedProducts: result.updatedProducts.length,
+        updatedCategories: result.updatedCategories.length,
+        skipped: result.skipped.length
+      }
+    });
+
+    return NextResponse.json({ success: true, result });
+  }
+
+  if (action === "site-images") {
+    const permission = await requirePermission("usersRoles", "update");
+    if ("response" in permission) return permission.response;
+    const images = body.images && typeof body.images === "object" ? body.images as Record<string, string> : {};
+    const saved = await saveSiteImageMap(images);
+    await writeAuditLog({
+      actorEmail: permission.sessionUser.email,
+      module: "usersRoles",
+      action: "site-images-update",
+      payload: { keys: Object.keys(saved) }
+    });
+    return NextResponse.json({ success: true, images: saved });
   }
 
   if (action === "backup") {

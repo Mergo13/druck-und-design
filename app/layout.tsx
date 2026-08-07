@@ -8,6 +8,7 @@ import { MarketingTracking } from "@/components/analytics/marketing-tracking";
 import { Suspense } from "react";
 import { StructuredData } from "@/components/structured-data";
 import { companySeo, localBusinessJsonLd, siteUrl } from "@/lib/seo";
+import { getSiteImage } from "@/lib/site-images";
 
 export const metadata: Metadata = {
   title: {
@@ -70,7 +71,8 @@ export const metadata: Metadata = {
   }
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const logoSrc = await getSiteImage("brand.logo");
   return (
     <html lang="de">
       <body>
@@ -80,9 +82,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <MarketingTracking />
         </Suspense>
         <StorefrontGate>
-          <Header />
+          <Header logoSrc={logoSrc} />
           <main className="min-h-[calc(100vh-9rem)]">{children}</main>
-          <Footer />
+          <Footer logoSrc={logoSrc} />
         </StorefrontGate>
       </body>
     </html>

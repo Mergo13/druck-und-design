@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { MotionReveal } from "@/components/ui/motion-reveal";
 import { VisualServiceShowcase } from "@/components/services/visual-service-showcase";
+import { getSiteImageMap } from "@/lib/site-images";
 
 export const metadata: Metadata = {
   title: "Werbeagentur für Unternehmen",
@@ -40,12 +41,17 @@ const services = [
   }
 ];
 
-export default function AgencyPage() {
+export default async function AgencyPage() {
+  const siteImages = await getSiteImageMap();
+  const managedServices = services.map((item, index) => ({
+    ...item,
+    image: siteImages[`werbeagentur.visual.${index + 1}`] ?? item.image
+  }));
   return (
     <>
       <section className="relative min-h-[680px] overflow-hidden bg-slate-950 text-white">
         <Image
-          src="/uploads/werbeagentur.jpg"
+          src={siteImages["werbeagentur.hero"]}
           alt="Kreative Werbeagentur bei der Entwicklung eines Markenauftritts"
           fill
           priority
@@ -91,7 +97,7 @@ export default function AgencyPage() {
             </div>
           </MotionReveal>
           <MotionReveal delay={0.12} className="relative aspect-[4/3] overflow-hidden shadow-premium">
-            <Image src="/uploads/werbeagentur2.jpg" alt="Besprechung von Design und Markenstrategie" fill className="object-cover" />
+            <Image src={siteImages["werbeagentur.story"]} alt="Besprechung von Design und Markenstrategie" fill className="object-cover" />
           </MotionReveal>
         </div>
       </section>
@@ -104,7 +110,7 @@ export default function AgencyPage() {
             description="Wählen Sie einen Bereich und entdecken Sie, wie wir Gestaltung und Technik verbinden."
           />
         </MotionReveal>
-        <MotionReveal><VisualServiceShowcase items={services} /></MotionReveal>
+        <MotionReveal><VisualServiceShowcase items={managedServices} /></MotionReveal>
       </section>
 
       <section className="bg-slate-950 py-16 text-white">

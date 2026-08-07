@@ -12,12 +12,14 @@ import { SectionHeading } from "@/components/ui/section-heading";
 import { getPublicCategories } from "@/lib/catalog-repository";
 import { StructuredData } from "@/components/structured-data";
 import { localBusinessJsonLd } from "@/lib/seo";
+import { getSiteImageMap } from "@/lib/site-images";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const platformCategories = await getPublicCategories();
   const homepageLogos = await getHomepageLogos();
+  const siteImages = await getSiteImageMap();
 
   return (
     <>
@@ -33,7 +35,7 @@ export default async function HomePage() {
         }}
       />
       <section className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
-        <HeroBackgroundSlideshow />
+        <HeroBackgroundSlideshow images={[siteImages["home.hero.1"], siteImages["home.hero.2"], siteImages["home.hero.3"]]} />
         <div className="container-page relative z-10 flex min-h-screen items-center py-20">
           <div className="max-w-3xl">
             <div className="flex items-center gap-4 text-xs font-black uppercase tracking-[0.18em] text-white/75">
@@ -59,7 +61,12 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <ScrollZoomHero />
+      <ScrollZoomHero imageOverrides={{
+        "/druckservice": siteImages["home.service.druckservice"],
+        "/werbeagentur": siteImages["home.service.werbeagentur"],
+        "/werbetechnik": siteImages["home.service.werbetechnik"],
+        "/kleidung-textilien": siteImages["home.service.textildruck"]
+      }} />
 
       <section className="bg-[linear-gradient(180deg,#eef4ff,#f8fbff)] py-16">
         <div className="container-page">

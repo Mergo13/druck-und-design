@@ -1,5 +1,6 @@
 import { ServicePortfolioPage } from "@/components/service-portfolio-page";
 import { Printer, Zap, ShieldCheck, Layers } from "lucide-react";
+import { getSiteImageMap } from "@/lib/site-images";
 
 export const metadata = {
   title: "Druckservice | druck&design",
@@ -47,14 +48,18 @@ const portfolio = [
   }
 ];
 
-export default function DruckservicePage() {
+export default async function DruckservicePage() {
+  const siteImages = await getSiteImageMap();
   return (
     <ServicePortfolioPage
       title="Präzision im Druck. Qualität ohne Kompromisse."
       subtitle="druck&design Druckservice"
       description="Wir verwandeln Ihre digitalen Visionen in haptische Erlebnisse. Als Ihre Druckerei in Wels bieten wir maßgeschneiderte Lösungen für Geschäftskunden und Individualisten."
       features={features}
-      portfolio={portfolio}
+      portfolio={portfolio.map((item, index) => ({
+        ...item,
+        image: siteImages[`druckservice.portfolio.${index + 1}`] ?? item.image
+      }))}
       ctaText="Druckprodukte entdecken"
       ctaLink="/leistungen"
     />

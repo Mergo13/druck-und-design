@@ -20,7 +20,7 @@ const navIconByHref: Record<string, ComponentType<{ className?: string }>> = {
   "/kontakt": MessageCircle
 };
 
-export function Header() {
+export function Header({ logoSrc = "/brand/logo-dud.png" }: { logoSrc?: string }) {
   const pathname = usePathname();
   const isAdmin = pathname?.startsWith("/admin");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -134,7 +134,7 @@ export function Header() {
       <div className="container-page">
         <div className="flex min-h-[4.5rem] items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-3">
-            <Image src="/brand/logo-dud.png" alt="druck&design" width={320} height={65} className="h-9 w-auto md:h-10" priority />
+            <Image src={logoSrc} alt="druck&design" width={320} height={65} className="h-9 w-auto md:h-10" priority />
           </Link>
           <nav className="hidden flex-1 items-center justify-center gap-2 md:flex">
             {isAdmin ? (

@@ -38,7 +38,11 @@ const services: Array<{
   }
 ];
 
-export function ScrollZoomHero() {
+export function ScrollZoomHero({ imageOverrides = {} }: { imageOverrides?: Record<string, string> }) {
+  const serviceItems = services.map((service) => ({
+    ...service,
+    image: imageOverrides[service.href] ?? service.image
+  }));
   return (
     <section className="container-page py-16 md:py-20">
       <div className="mb-8 max-w-3xl">
@@ -50,7 +54,7 @@ export function ScrollZoomHero() {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {services.map(({ title, text, href, image }) => (
+        {serviceItems.map(({ title, text, href, image }) => (
           <Card key={title} className="group overflow-hidden border border-border bg-card shadow-[0_14px_36px_rgba(15,23,42,.07)] transition-all hover:-translate-y-1 hover:border-foreground/20 hover:shadow-premium">
             <div className="relative aspect-[16/10] overflow-hidden bg-muted">
               <Image src={image} alt={title} fill className="object-cover transition duration-500 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />

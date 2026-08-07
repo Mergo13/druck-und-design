@@ -29,13 +29,13 @@ const cols: Array<Array<{ label: string; href: string }>> = [
   ]
 ];
 
-export function Footer() {
+export function Footer({ logoSrc = "/brand/logo-dud.png" }: { logoSrc?: string }) {
   return (
     <footer className="mt-20 border-t border-white/70 bg-[linear-gradient(180deg,#f8fbff,#eef4ff)] text-slate-800">
       <div className="container-page grid gap-10 py-14 md:grid-cols-[1.2fr_2fr]">
         <div>
           <Link href="/" className="inline-flex items-center">
-            <Image src="/brand/logo-dud.png" alt="druck&design studio" width={320} height={65} className="h-9 w-auto object-contain md:h-10" />
+            <Image src={logoSrc} alt="druck&design studio" width={320} height={65} className="h-9 w-auto object-contain md:h-10" />
           </Link>
           <p className="mt-4 max-w-sm text-sm leading-6 text-slate-600">Ihr Partner für Druckproduktion, Werbetechnik und Design. Digital, präzise und zuverlässig aus Wels.</p>
           <ShopStatusBadge />

@@ -3,7 +3,7 @@
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
-import { Alert, Box, Button, Card, CardContent, Grid, IconButton, TextField as MuiTextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Grid, IconButton, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import Image from "next/image";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -194,6 +194,8 @@ function AdminDashboardHome() {
     { label: "Urlaubsmodus", path: "/tools/vacation", color: "primary" as const },
     { label: "E-Mail Konfiguration", path: "/tools/email", color: "primary" as const },
     { label: "Upload-Ordner", path: "/tools/uploads", color: "primary" as const },
+    { label: "Bildpfade Import", path: "/tools/image-import", color: "primary" as const },
+    { label: "Website Bilder", path: "/tools/site-images", color: "primary" as const },
     { label: "Backup", path: "/tools/backup", color: "primary" as const },
     { label: "Werbung", path: "/tools/werbung", color: "primary" as const },
     { label: "CRM", path: "/tools/crm", color: "primary" as const },
@@ -714,14 +716,14 @@ function ProductImageUploadControls() {
   }
 
   async function onGalleryImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
     setUploadingGallery(true);
     try {
-      const url = await uploadFile(file);
-      const nextGallery = Array.from(new Set([...(gallery ?? []), url]));
+      const urls = await Promise.all(files.map((file) => uploadFile(file)));
+      const nextGallery = Array.from(new Set([...(gallery ?? []), ...urls]));
       setValue("gallery", nextGallery, { shouldDirty: true });
-      notify("Image added to gallery.", { type: "success" });
+      notify(`${urls.length} image${urls.length === 1 ? "" : "s"} added to gallery.`, { type: "success" });
     } catch {
       notify("Image upload failed.", { type: "error" });
     } finally {
@@ -749,11 +751,11 @@ function ProductImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingHero}>
           {uploadingHero ? "Uploading hero..." : "Upload Hero Image"}
-          <input type="file" accept="image/*" hidden onChange={onHeroImageChange} />
+          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onHeroImageChange} />
         </Button>
         <Button variant="outlined" component="label" disabled={uploadingGallery}>
-          {uploadingGallery ? "Adding to gallery..." : "Add Gallery Image"}
-          <input type="file" accept="image/*" hidden onChange={onGalleryImageChange} />
+          {uploadingGallery ? "Adding to gallery..." : "Add Gallery Images"}
+          <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onGalleryImageChange} />
         </Button>
       </Box>
       {currentHero ? (
@@ -1049,7 +1051,7 @@ function CategoryImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingLogo}>
           {uploadingLogo ? "Uploading..." : "Upload Category Image"}
-          <input type="file" accept="image/*" hidden onChange={onLogoChange} />
+          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onLogoChange} />
         </Button>
         {currentLogo ? (
           <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />} onClick={removeLogo}>
@@ -1414,6 +1416,363 @@ function UploadFoldersToolPage() {
         ))}
         <Box>
           <Button variant="outlined" onClick={() => void load()} disabled={loading}>Ordner aktualisieren</Button>
+        </Box>
+      </Box>
+    </AdminToolShell>
+  );
+}
+
+function CatalogImageImportToolPage() {
+  const notify = useNotify();
+  const [content, setContent] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState("");
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ url: string; mimeType: string }>>([]);
+  const [uploadedMimeType, setUploadedMimeType] = useState("");
+  const [uploadStats, setUploadStats] = useState<{ size?: number; originalSize?: number; optimized?: boolean } | null>(null);
+  const [targetType, setTargetType] = useState<"product" | "category">("product");
+  const [targetSlug, setTargetSlug] = useState("");
+  const [imageUsage, setImageUsage] = useState<"hero" | "gallery" | "logo">("hero");
+  const [products, setProducts] = useState<Array<{ slug: string; name: string }>>([]);
+  const [categories, setCategories] = useState<Array<{ slug: string; name: string }>>([]);
+  const [result, setResult] = useState<{
+    updatedProducts: string[];
+    updatedCategories: string[];
+    skipped: Array<{ slug?: string; reason: string }>;
+  } | null>(null);
+
+  const jsonExample = JSON.stringify({
+    products: [
+      {
+        slug: "alu-dibond-schilder",
+        image_path: "/uploads/products/alu-dibond.webp",
+        gallery: ["/uploads/products/alu-dibond-detail.webp"]
+      }
+    ],
+    categories: [
+      {
+        slug: "schilder",
+        image: "/uploads/products/kategorie-schilder.webp"
+      }
+    ]
+  }, null, 2);
+
+  const csvExample = "type,slug,image_path,gallery\nproduct,alu-dibond-schilder,/uploads/products/alu-dibond.webp,/uploads/products/detail-1.webp|/uploads/products/detail-2.webp\ncategory,schilder,/uploads/products/kategorie-schilder.webp,";
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [productsRes, categoriesRes] = await Promise.all([
+          fetch("/api/catalog/products?scope=admin"),
+          fetch("/api/catalog/categories?scope=admin")
+        ]);
+        if (productsRes.ok) setProducts(await productsRes.json() as Array<{ slug: string; name: string }>);
+        if (categoriesRes.ok) setCategories(await categoriesRes.json() as Array<{ slug: string; name: string }>);
+      } catch {
+        notify("Produkte/Kategorien konnten nicht geladen werden.", { type: "error" });
+      }
+    })();
+  }, []);
+
+  async function uploadImage(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      const payloads = await Promise.all(files.map(async (file) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
+        const payload = await res.json().catch(() => ({})) as { url?: string; mimeType?: string; size?: number; originalSize?: number; optimized?: boolean; message?: string };
+        if (!res.ok) {
+          throw new Error(typeof payload?.message === "string" ? payload.message : "Upload fehlgeschlagen");
+        }
+        return { ...payload, sourceType: file.type };
+      }));
+      const uploaded = payloads
+        .filter((item): item is typeof item & { url: string } => Boolean(item.url))
+        .map((item) => ({ url: item.url, mimeType: item.mimeType ?? item.sourceType ?? "" }));
+      const urls = uploaded.map((item) => item.url);
+      const first = payloads[0];
+      setUploadedFiles(uploaded);
+      setUploadedUrls(urls);
+      setUploadedUrl(urls[0] ?? "");
+      setUploadedMimeType(first?.mimeType ?? first?.sourceType ?? "");
+      setUploadStats({ size: first?.size, originalSize: first?.originalSize, optimized: first?.optimized });
+      notify(payloads.some((item) => item.optimized) ? "Dateien hochgeladen und für Web optimiert." : "Dateien hochgeladen.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Upload fehlgeschlagen", { type: "error" });
+    } finally {
+      setUploading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function assignUploadedImage() {
+    const imageUrls = uploadedFiles.length
+      ? uploadedFiles.filter((item) => !item.mimeType.startsWith("video/")).map((item) => item.url)
+      : [uploadedUrl].filter(Boolean);
+    if (!imageUrls.length || !targetSlug) return;
+    if (uploadedMimeType.startsWith("video/")) {
+      notify("Videos werden gespeichert, aber nicht als Produktbild/Kategoriebild zugewiesen.", { type: "warning" });
+      return;
+    }
+    const row = targetType === "category"
+      ? { categories: [{ slug: targetSlug, image_path: imageUrls[0] }] }
+      : imageUsage === "gallery"
+        ? { products: [{ slug: targetSlug, gallery: imageUrls }] }
+        : { products: [{ slug: targetSlug, image_path: imageUrls[0], gallery: imageUrls.slice(1) }] };
+    setContent(JSON.stringify(row, null, 2));
+    await importImages(JSON.stringify(row, null, 2));
+  }
+
+  async function importImages(nextContent = content) {
+    setSaving(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/tools?action=catalog-image-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: nextContent })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Import fehlgeschlagen");
+      }
+      setResult(payload.result);
+      notify("Bildpfade importiert.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Import fehlgeschlagen", { type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <AdminToolShell
+      title="Bildpfade Import"
+      description="Produkt- und Kategorie-Bilder per JSON oder CSV bestehenden Slugs zuweisen."
+    >
+      <Box sx={{ display: "grid", gap: 1.5 }}>
+        <Alert severity="info">
+          Der Import aktualisiert nur vorhandene Produkte und Kategorien. Produktbild = heroImage, Kategorie-Bild = logo.
+        </Alert>
+        <Card variant="outlined">
+          <CardContent sx={{ py: 1.5, display: "grid", gap: 1.3 }}>
+            <Typography variant="subtitle2">Bild hochladen und zuweisen</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "160px 1fr 170px" }, gap: 1 }}>
+              <MuiTextField
+                select
+                size="small"
+                label="Verwenden für"
+                value={targetType}
+                onChange={(event) => {
+                  const nextType = event.target.value as "product" | "category";
+                  setTargetType(nextType);
+                  setImageUsage(nextType === "category" ? "logo" : "hero");
+                  setTargetSlug("");
+                }}
+              >
+                <MenuItem value="product">Produkt</MenuItem>
+                <MenuItem value="category">Kategorie</MenuItem>
+              </MuiTextField>
+              <MuiTextField
+                select
+                size="small"
+                label={targetType === "product" ? "Produkt" : "Kategorie"}
+                value={targetSlug}
+                onChange={(event) => setTargetSlug(event.target.value)}
+              >
+                {(targetType === "product" ? products : categories).map((item) => (
+                  <MenuItem value={item.slug} key={item.slug}>{item.name} ({item.slug})</MenuItem>
+                ))}
+              </MuiTextField>
+              <MuiTextField
+                select
+                size="small"
+                label="Position"
+                value={targetType === "category" ? "logo" : imageUsage}
+                disabled={targetType === "category"}
+                onChange={(event) => setImageUsage(event.target.value as "hero" | "gallery")}
+              >
+                <MenuItem value="hero">Hauptbild</MenuItem>
+                <MenuItem value="gallery">Galerie</MenuItem>
+                <MenuItem value="logo">Kategorie-Bild</MenuItem>
+              </MuiTextField>
+            </Box>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+              <Button variant="outlined" component="label" disabled={uploading}>
+                {uploading ? "Optimiert..." : "Bild/Video hochladen"}
+                <input type="file" accept="image/*,.heic,.heif,video/mp4,video/webm,video/quicktime" multiple hidden onChange={uploadImage} />
+              </Button>
+              <Button variant="contained" onClick={() => void assignUploadedImage()} disabled={saving || !uploadedUrl || !targetSlug || uploadedMimeType.startsWith("video/")}>
+                Bild zuweisen
+              </Button>
+              {uploadedUrl ? (
+                <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                  {uploadedUrls.length > 1 ? `${uploadedUrls.length} Dateien hochgeladen` : uploadedUrl}
+                  {uploadStats?.size && uploadStats?.originalSize ? ` | ${(uploadStats.originalSize / 1024 / 1024).toFixed(1)} MB -> ${(uploadStats.size / 1024 / 1024).toFixed(1)} MB` : ""}
+                </Typography>
+              ) : null}
+            </Box>
+            {uploadedUrl ? (
+              <Box>
+                {uploadedMimeType.startsWith("video/") ? (
+                  <video src={uploadedUrl} controls muted style={{ width: 180, height: 100, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={uploadedUrl} alt="Hochgeladenes Bild" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
+                )}
+              </Box>
+            ) : null}
+          </CardContent>
+        </Card>
+        <MuiTextField
+          label="JSON oder CSV"
+          multiline
+          minRows={10}
+          value={content}
+          onChange={(event) => setContent(event.target.value)}
+          placeholder={csvExample}
+          fullWidth
+        />
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          <Button variant="contained" onClick={() => void importImages()} disabled={saving || !content.trim()}>
+            {saving ? "Importiert..." : "Bildpfade importieren"}
+          </Button>
+          <Button variant="outlined" onClick={() => setContent(jsonExample)} disabled={saving}>JSON Beispiel</Button>
+          <Button variant="outlined" onClick={() => setContent(csvExample)} disabled={saving}>CSV Beispiel</Button>
+        </Box>
+        {result ? (
+          <Card variant="outlined">
+            <CardContent sx={{ py: 1.5, display: "grid", gap: 0.8 }}>
+              <Typography variant="subtitle2">Import Ergebnis</Typography>
+              <Typography variant="body2">Produkte aktualisiert: {result.updatedProducts.length}</Typography>
+              <Typography variant="body2">Kategorien aktualisiert: {result.updatedCategories.length}</Typography>
+              <Typography variant="body2">Übersprungen: {result.skipped.length}</Typography>
+              {result.skipped.length ? (
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {result.skipped.slice(0, 12).map((item, index) => (
+                    <Typography component="li" variant="caption" color="text.secondary" key={`${item.slug ?? "row"}-${index}`}>
+                      {item.slug ?? "Zeile"}: {item.reason}
+                    </Typography>
+                  ))}
+                </Box>
+              ) : null}
+            </CardContent>
+          </Card>
+        ) : null}
+      </Box>
+    </AdminToolShell>
+  );
+}
+
+function SiteImagesToolPage() {
+  const notify = useNotify();
+  const [slots, setSlots] = useState<Array<{ key: string; label: string; defaultUrl: string }>>([]);
+  const [images, setImages] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const res = await fetch("/api/admin/tools?action=site-images");
+      const payload = await res.json() as { slots: Array<{ key: string; label: string; defaultUrl: string }>; images: Record<string, string> };
+      if (!res.ok) throw new Error("Bilder konnten nicht geladen werden.");
+      setSlots(payload.slots);
+      setImages(payload.images);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Bilder konnten nicht geladen werden.", { type: "error" });
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function save(nextImages = images) {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/tools?action=site-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: nextImages })
+      });
+      if (!res.ok) throw new Error("Speichern fehlgeschlagen.");
+      const payload = await res.json() as { images: Record<string, string> };
+      setImages((current) => ({ ...current, ...payload.images }));
+      notify("Website Bilder gespeichert.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Speichern fehlgeschlagen.", { type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadForSlot(slotKey: string, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingKey(slotKey);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
+      const payload = await res.json().catch(() => ({})) as { url?: string; message?: string };
+      if (!res.ok || !payload.url) throw new Error(payload.message ?? "Upload fehlgeschlagen.");
+      const nextImages = { ...images, [slotKey]: payload.url };
+      setImages(nextImages);
+      await save(nextImages);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Upload fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingKey(null);
+      event.target.value = "";
+    }
+  }
+
+  return (
+    <AdminToolShell
+      title="Website Bilder"
+      description="Alle zentralen Website-Bilder hochladen, austauschen und speichern."
+    >
+      <Box sx={{ display: "grid", gap: 1.5 }}>
+        <Alert severity="info">
+          Produktbilder und Kategoriebilder bleiben direkt bei Produkte/Kategorien editierbar. Diese Liste steuert Logo, Startseite und Service-Seiten.
+        </Alert>
+        <Box sx={{ display: "grid", gap: 1.2 }}>
+          {slots.map((slot) => {
+            const value = images[slot.key] || slot.defaultUrl;
+            return (
+              <Card key={slot.key} variant="outlined">
+                <CardContent sx={{ display: "grid", gap: 1, gridTemplateColumns: { xs: "1fr", md: "120px 1fr auto" }, alignItems: "center", py: 1.5 }}>
+                  <Box sx={{ width: 104, height: 64, position: "relative", border: "1px solid #e2e8f0", borderRadius: 1, overflow: "hidden", bgcolor: "#f8fafc" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={value} alt={slot.label} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  </Box>
+                  <Box sx={{ display: "grid", gap: 0.8 }}>
+                    <Typography variant="subtitle2">{slot.label}</Typography>
+                    <MuiTextField
+                      size="small"
+                      label={slot.key}
+                      value={value}
+                      onChange={(event) => setImages((current) => ({ ...current, [slot.key]: event.target.value }))}
+                    />
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                    <Button variant="outlined" component="label" disabled={uploadingKey === slot.key || saving}>
+                      {uploadingKey === slot.key ? "Upload..." : "Upload"}
+                      <input type="file" accept="image/*,.heic,.heif" hidden onChange={(event) => void uploadForSlot(slot.key, event)} />
+                    </Button>
+                    <Button variant="contained" disabled={saving} onClick={() => void save()}>
+                      Speichern
+                    </Button>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
         </Box>
       </Box>
     </AdminToolShell>
@@ -2121,6 +2480,8 @@ export function ReactAdminDashboard() {
         <Route path="/tools/vacation" element={<VacationToolPage />} />
         <Route path="/tools/email" element={<EmailConfigToolPage />} />
         <Route path="/tools/uploads" element={<UploadFoldersToolPage />} />
+        <Route path="/tools/image-import" element={<CatalogImageImportToolPage />} />
+        <Route path="/tools/site-images" element={<SiteImagesToolPage />} />
         <Route path="/tools/backup" element={<BackupToolPage />} />
         <Route path="/tools/werbung" element={<WerbungToolPage />} />
         <Route path="/tools/crm" element={<CRMToolPage />} />
