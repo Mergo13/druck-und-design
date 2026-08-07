@@ -7,6 +7,7 @@ import { writeAuditLog } from "@/lib/admin-audit";
 import { bulkDeleteSchema, listQuerySchema, moduleCreateSchemas } from "@/lib/admin-schemas";
 import { requireModulePermission } from "@/lib/admin-permissions";
 import { prisma } from "@/lib/prisma";
+import { createVoucherPdf } from "@/lib/voucher-pdf";
 import type { AdminModuleKey } from "@/types/admin";
 import { getCategories, getProducts, upsertCategory, upsertProduct, deleteCategory, deleteProduct } from "@/lib/catalog-repository";
 
@@ -33,6 +34,55 @@ const supportedModules: AdminModuleKey[] = [
 
 function isSupportedModule(value: string): value is AdminModuleKey {
   return supportedModules.includes(value as AdminModuleKey);
+}
+
+async function sendVoucherEmail(input: {
+  to: string;
+  customer: string;
+  coupon: {
+    code: string;
+    discountType: string;
+    discountValue: number;
+    endsAt: Date | null;
+  };
+}) {
+  const smtpHost = process.env.SMTP_HOST?.trim();
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const smtpPass = process.env.SMTP_PASS?.trim();
+  const smtpPort = Number(process.env.SMTP_PORT?.trim() || "587");
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error("SMTP ist nicht konfiguriert. Gutschein wurde erstellt, E-Mail konnte nicht gesendet werden.");
+  }
+
+  const company = await prisma.companyInformation.findUnique({ where: { id: "company" } });
+  const pdf = await createVoucherPdf({
+    code: input.coupon.code,
+    discountType: input.coupon.discountType,
+    discountValue: input.coupon.discountValue,
+    customer: input.customer,
+    email: input.to,
+    validUntil: input.coupon.endsAt,
+    company
+  });
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.default.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: smtpUser, pass: smtpPass }
+  });
+  const fromEmail = process.env.SMTP_FROM_EMAIL?.trim() || smtpUser;
+  await transporter.sendMail({
+    from: fromEmail,
+    to: input.to,
+    subject: `Ihr Gutschein ${input.coupon.code}`,
+    text: `Guten Tag,\n\nanbei finden Sie Ihren Gutschein ${input.coupon.code} von druck&design studio.\n\nFreundliche Grüße\n${company?.name || "druck&design studio"}`,
+    attachments: [{
+      filename: `gutschein-${input.coupon.code}.pdf`,
+      content: Buffer.from(pdf),
+      contentType: "application/pdf"
+    }]
+  });
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ module: string }> }) {
@@ -434,15 +484,52 @@ export async function POST(request: Request, { params }: { params: Promise<{ mod
   if (module === "coupons") {
     const parsed = moduleCreateSchemas.coupons.safeParse(body);
     if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
+    const { recipientEmail, recipientName, deliverToDashboard, sendPdfEmail, ...couponData } = parsed.data;
     const item = await prisma.coupon.create({
       data: {
-        ...parsed.data,
-        startsAt: parsed.data.startsAt ? new Date(parsed.data.startsAt) : null,
-        endsAt: parsed.data.endsAt ? new Date(parsed.data.endsAt) : null
+        ...couponData,
+        startsAt: couponData.startsAt ? new Date(couponData.startsAt) : null,
+        endsAt: couponData.endsAt ? new Date(couponData.endsAt) : null
       }
     });
-    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.id, payload: parsed.data });
-    return NextResponse.json(item);
+    const normalizedEmail = recipientEmail?.trim().toLowerCase() || "";
+    let deliveryError: string | undefined;
+    if (normalizedEmail && (deliverToDashboard || sendPdfEmail)) {
+      const customer = recipientName?.trim() || normalizedEmail;
+      await prisma.adminInvoice.upsert({
+        where: { id: `GUT-${item.id}` },
+        update: {
+          customer,
+          email: normalizedEmail,
+          invoiceNumber: item.code,
+          amount: item.discountValue,
+          status: "Gutschein",
+          source: "coupon"
+        },
+        create: {
+          id: `GUT-${item.id}`,
+          customer,
+          email: normalizedEmail,
+          invoiceNumber: item.code,
+          amount: item.discountValue,
+          status: "Gutschein",
+          source: "coupon"
+        }
+      });
+      if (sendPdfEmail) {
+        try {
+          await sendVoucherEmail({
+            to: normalizedEmail,
+            customer,
+            coupon: item
+          });
+        } catch (error) {
+          deliveryError = error instanceof Error ? error.message : "Gutschein-E-Mail konnte nicht gesendet werden.";
+        }
+      }
+    }
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.id, payload: { ...couponData, recipientEmail: normalizedEmail || undefined, deliverToDashboard, sendPdfEmail, deliveryError } });
+    return NextResponse.json({ ...item, deliveryError });
   }
   if (module === "reviews") {
     const parsed = moduleCreateSchemas.reviews.safeParse(body);

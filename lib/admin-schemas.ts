@@ -33,7 +33,11 @@ export const moduleCreateSchemas = {
     active: z.boolean().default(true),
     usageLimit: z.number().int().positive().optional(),
     startsAt: z.string().datetime().optional(),
-    endsAt: z.string().datetime().optional()
+    endsAt: z.string().datetime().optional(),
+    recipientEmail: z.string().email().optional().or(z.literal("")),
+    recipientName: z.string().optional(),
+    deliverToDashboard: z.boolean().optional(),
+    sendPdfEmail: z.boolean().optional()
   }),
   reviews: z.object({
     customer: z.string().min(1),
