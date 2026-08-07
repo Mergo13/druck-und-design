@@ -330,7 +330,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
           suppressHydrationWarning
           type="file"
           className="sr-only"
-          accept=".pdf,.ai,.psd,.png,.jpg,.jpeg,.tif,.tiff,application/pdf,image/png,image/jpeg,image/tiff,image/x-adobe-photoshop,application/postscript"
+          accept=".pdf,.ai,.psd,.png,.jpg,.jpeg,.tif,.tiff,.heic,.heif,application/pdf,image/png,image/jpeg,image/tiff,image/heic,image/heif,image/x-adobe-photoshop,application/postscript"
           onChange={(event) => validateAndSetFile(event.target.files?.[0])}
         />
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />

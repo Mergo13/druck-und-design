@@ -15,6 +15,7 @@ import {
   Utensils,
   Wrench
 } from "lucide-react";
+import { getSiteImageMap } from "@/lib/site-images";
 
 export const metadata = {
   title: "Werbetechnik Wels | Schilder, Folien, Banner & Fahrzeugbeschriftung | druck&design",
@@ -102,11 +103,20 @@ const faqs = [
   }
 ];
 
-export default function WerbetechnikPage() {
+export default async function WerbetechnikPage() {
+  const siteImages = await getSiteImageMap();
+  const managedVisualServices = visualServices.map((item, index) => ({
+    ...item,
+    image: siteImages[`werbetechnik.visual.${index + 1}`] ?? item.image
+  }));
+  const managedShowroomProjects = showroomProjects.map((item, index) => ({
+    ...item,
+    image: siteImages[`werbetechnik.project.${index + 1}`] ?? item.image
+  }));
   return (
     <>
       <section className="relative min-h-[680px] overflow-hidden bg-slate-950 text-white">
-        <Image src="/uploads/werbetechnik.jpg" alt="Professionelle Fahrzeugbeschriftung und Werbetechnik" fill priority className="object-cover opacity-65" />
+        <Image src={siteImages["werbetechnik.hero"]} alt="Professionelle Fahrzeugbeschriftung und Werbetechnik" fill priority className="object-cover opacity-65" />
         <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/75 to-transparent" />
         <div className="container-page relative z-10 flex min-h-[680px] items-center py-20">
           <div className="max-w-4xl">
@@ -129,7 +139,7 @@ export default function WerbetechnikPage() {
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-brand-blue">Was wir sichtbar machen</span>
           <h2 className="mt-3 max-w-3xl text-4xl font-black text-brand-ink md:text-5xl">Drei Flächen. Unzählige Möglichkeiten.</h2>
         </MotionReveal>
-        <MotionReveal><VisualServiceShowcase items={visualServices} /></MotionReveal>
+        <MotionReveal><VisualServiceShowcase items={managedVisualServices} /></MotionReveal>
       </section>
 
       <section className="container-page py-20">
@@ -149,7 +159,7 @@ export default function WerbetechnikPage() {
         </div>
       </section>
 
-      <ProjectShowroom projects={showroomProjects} />
+      <ProjectShowroom projects={managedShowroomProjects} />
 
       <section className="bg-slate-50 py-20">
         <div className="container-page">

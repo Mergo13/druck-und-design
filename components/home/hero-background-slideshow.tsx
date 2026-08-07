@@ -3,13 +3,14 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
-const heroImages = [
+const defaultHeroImages = [
   "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=2200&q=80",
   "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=2200&q=80",
   "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=2200&q=80"
 ];
 
-export function HeroBackgroundSlideshow() {
+export function HeroBackgroundSlideshow({ images = defaultHeroImages }: { images?: string[] }) {
+  const heroImages = images.length ? images : defaultHeroImages;
   const [active, setActive] = useState(0);
 
   useEffect(() => {

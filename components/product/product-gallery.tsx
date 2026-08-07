@@ -13,6 +13,7 @@ interface ProductGalleryProps {
 export function ProductGallery({ images, name }: ProductGalleryProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [mainImage, setMainImage] = useState(0);
+  const galleryImages = Array.from(new Set(images.filter(Boolean)));
 
   const openLightbox = (index: number) => {
     setSelectedImage(index);
@@ -25,14 +26,14 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (selectedImage !== null) {
-      setSelectedImage((selectedImage + 1) % images.length);
+      setSelectedImage((selectedImage + 1) % galleryImages.length);
     }
   };
 
   const prevImage = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (selectedImage !== null) {
-      setSelectedImage((selectedImage - 1 + images.length) % images.length);
+      setSelectedImage((selectedImage - 1 + galleryImages.length) % galleryImages.length);
     }
   };
 
@@ -46,11 +47,11 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
         setSelectedImage(null);
       }
       if (event.key === "ArrowRight") {
-        setSelectedImage((prev) => (prev === null ? prev : (prev + 1) % images.length));
+        setSelectedImage((prev) => (prev === null ? prev : (prev + 1) % galleryImages.length));
       }
       if (event.key === "ArrowLeft") {
         setSelectedImage((prev) =>
-          prev === null ? prev : (prev - 1 + images.length) % images.length,
+          prev === null ? prev : (prev - 1 + galleryImages.length) % galleryImages.length,
         );
       }
     };
@@ -59,18 +60,18 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [images.length, selectedImage]);
+  }, [galleryImages.length, selectedImage]);
 
   return (
-    <div className="grid gap-4 md:grid-cols-[1fr_120px]">
+    <div className="grid gap-4">
       <motion.div
         layoutId="main-image-stage"
         onClick={() => openLightbox(mainImage)}
-        className="group relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-xl border border-slate-200/80 bg-gradient-to-b from-white to-slate-50 shadow-[0_10px_40px_-20px_rgba(2,6,23,0.6)]"
+        className="group relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
       >
         <AnimatePresence mode="wait">
           <motion.div
-            key={images[mainImage]}
+            key={galleryImages[mainImage]}
             initial={{ opacity: 0, scale: 1.02 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.99 }}
@@ -78,10 +79,10 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
             className="absolute inset-0"
           >
             <Image
-              src={images[mainImage]}
+              src={galleryImages[mainImage]}
               alt={`${name} - Ansicht ${mainImage + 1}`}
               fill
-              className="object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+              className="object-contain p-4 transition-transform duration-700 group-hover:scale-[1.025]"
               priority
               sizes="(min-width: 1024px) 60vw, 100vw"
             />
@@ -93,12 +94,12 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
           Zoom
         </div>
         <div className="pointer-events-none absolute bottom-3 right-3 rounded-full border border-white/70 bg-white/85 px-2.5 py-1 text-xs font-semibold text-slate-700 backdrop-blur">
-          {mainImage + 1} / {images.length}
+          {mainImage + 1} / {galleryImages.length}
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-4 gap-3 overflow-x-auto pb-1 md:grid-cols-1 md:overflow-visible">
-        {images.map((image, index) => (
+      <div className="grid grid-cols-4 gap-3 overflow-x-auto pb-1 sm:grid-cols-5 lg:grid-cols-6">
+        {galleryImages.map((image, index) => (
           <motion.button
             key={image + index}
             whileHover={{ y: -2, scale: 1.02 }}
@@ -115,7 +116,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
               alt={`${name} Thumbnail ${index + 1}`}
               fill
               className={`object-cover transition ${mainImage === index ? "scale-105" : ""}`}
-              sizes="120px"
+              sizes="140px"
             />
             {mainImage === index && (
               <motion.div
@@ -161,7 +162,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
             >
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={images[selectedImage]}
+                    key={galleryImages[selectedImage]}
                   initial={{ opacity: 0.2 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0.2 }}
@@ -169,7 +170,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
                   className="absolute inset-0"
                 >
                   <Image
-                    src={images[selectedImage]}
+                    src={galleryImages[selectedImage]}
                     alt={`${name} Fullscreen`}
                     fill
                     className="object-contain"
@@ -186,7 +187,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
             </button>
 
             <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/45 px-3 py-1 text-sm font-medium text-white">
-              {selectedImage + 1} / {images.length}
+              {selectedImage + 1} / {galleryImages.length}
             </div>
           </motion.div>
         )}
