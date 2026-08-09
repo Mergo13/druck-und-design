@@ -1,6 +1,106 @@
-import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
+import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty } from "@/types/print-platform";
+
+function money(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function safeQuantity(quantity: number) {
+  return Number.isFinite(quantity) ? Math.max(1, Math.round(quantity)) : 1;
+}
+
+function tierPrice(tiers: Array<{ quantity: number; price: number }> | undefined, quantity: number) {
+  const valid = (tiers ?? [])
+    .map((tier) => ({ quantity: safeQuantity(Number(tier.quantity)), price: Math.max(0, Number(tier.price) || 0) }))
+    .filter((tier) => tier.quantity > 0)
+    .sort((a, b) => a.quantity - b.quantity);
+  if (!valid.length) return null;
+  return valid.find((tier) => tier.quantity === quantity)?.price ?? valid.filter((tier) => tier.quantity <= quantity).at(-1)?.price ?? valid[0].price;
+}
+
+export function calculateConfiguredProductPrice(
+  product: ProductCatalogItem,
+  quantity: number,
+  selectedOptions: Record<string, string>
+) {
+  const qty = safeQuantity(quantity);
+  const base = product.pricingType === "tiered"
+    ? tierPrice(product.priceTiers, qty) ?? product.basePrice
+    : product.basePrice;
+  const lines: Array<{ label: string; value: string; price: number }> = [];
+  const properties = product.pricingProperties ?? [];
+  const surcharge = properties.reduce((sum, property) => {
+    const selected = selectedOptions[`eigenschaft:${property.name}`];
+    const selectedValue = selected || property.values[0]?.value || "";
+    const match = property.values.find((value) => value.value === selectedValue);
+    if (!match) return sum;
+    const propertyStepPrice = Math.max(0, Number(property.stepPrice) || 0) * qty;
+    const valuePrice = match.pricingMode === "fixed"
+      ? Math.max(0, Number(match.fixedPrice) || 0)
+      : match.pricingMode === "tiered"
+        ? tierPrice(match.tierPrices, qty) ?? 0
+        : 0;
+    const price = money(propertyStepPrice + valuePrice);
+    lines.push({ label: property.name, value: match.value, price });
+    return sum + price;
+  }, 0);
+
+  return {
+    quantity: qty,
+    basePrice: money(base),
+    lines,
+    total: money(base + surcharge)
+  };
+}
+
+export function validateProductPricing(product: ProductCatalogItem) {
+  const errors: string[] = [];
+  const tiers = product.priceTiers ?? [];
+  if (product.pricingType === "tiered" && tiers.length === 0) {
+    errors.push("Für Staffelpreis muss mindestens eine Menge angelegt sein.");
+  }
+  const tierQuantities = new Set<number>();
+  for (const tier of tiers) {
+    const quantity = Number(tier.quantity);
+    const price = Number(tier.price);
+    if (!Number.isFinite(quantity) || quantity <= 0) errors.push("Mengen müssen größer als 0 sein.");
+    if (tierQuantities.has(quantity)) errors.push(`Die Menge ${quantity} ist bereits vorhanden.`);
+    tierQuantities.add(quantity);
+    if (!Number.isFinite(price) || price < 0) errors.push(`Für Menge ${quantity} fehlt ein gültiger Preis.`);
+  }
+
+  const propertyNames = new Set<string>();
+  for (const property of product.pricingProperties ?? []) {
+    const propertyName = property.name.trim();
+    if (!propertyName) errors.push("Eine Eigenschaft hat keinen Namen.");
+    if (propertyNames.has(propertyName.toLowerCase())) errors.push(`Die Eigenschaft ${propertyName} ist doppelt.`);
+    propertyNames.add(propertyName.toLowerCase());
+    const values = new Set<string>();
+    for (const value of property.values ?? []) {
+      const valueName = value.value.trim();
+      if (!valueName) errors.push(`Ein Wert in ${propertyName || "Eigenschaft"} ist leer.`);
+      if (values.has(valueName.toLowerCase())) errors.push(`Der Wert ${valueName} ist in ${propertyName} doppelt.`);
+      values.add(valueName.toLowerCase());
+      if (value.pricingMode === "fixed" && Number(value.fixedPrice ?? 0) < 0) errors.push(`Der fixe Aufpreis für ${valueName} darf nicht negativ sein.`);
+      if (value.pricingMode === "tiered") {
+        const surchargeQuantities = new Set((value.tierPrices ?? []).map((tier) => Number(tier.quantity)));
+        for (const quantity of tierQuantities) {
+          if (!surchargeQuantities.has(quantity)) errors.push(`Für ${propertyName} / ${valueName} fehlt die Staffel ${quantity}.`);
+        }
+        for (const tier of value.tierPrices ?? []) {
+          if (!tierQuantities.has(Number(tier.quantity))) errors.push(`Die Staffel ${tier.quantity} existiert nicht im Produkt.`);
+          if (Number(tier.price) < 0) errors.push(`Der Staffel-Aufpreis für ${valueName} darf nicht negativ sein.`);
+        }
+      }
+    }
+  }
+
+  return Array.from(new Set(errors));
+}
 
 export function calculateVariantPrice(product: ProductCatalogItem, variantId: string, quantity: number, selectedOptions: Record<string, string>) {
+  if (product.pricingType === "tiered" || product.pricingProperties?.length) {
+    return calculateConfiguredProductPrice(product, quantity, selectedOptions).total;
+  }
   const variant = product.variants.find((item) => item.id === variantId) ?? product.variants[0];
   const base = variant.priceRules.find((rule) => rule.key === "basis")?.amount ?? product.basePrice;
   const unit = variant.priceRules.find((rule) => rule.key === "auflage")?.amount ?? 0;

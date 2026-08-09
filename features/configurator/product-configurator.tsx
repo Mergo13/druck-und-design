@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 
-const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".svg", ".eps"];
+const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
 const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
 const PRINT_CHECK_FEE = Number(process.env.NEXT_PUBLIC_PRINT_CHECK_FEE_EUR ?? "9.99");
@@ -25,11 +25,16 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
   }, [firstVariant]);
 
   const quantityOptions = useMemo(() => {
-    return fixedQuantitySteps.map((step) => ({
+    const steps = product.pricingType === "tiered" && product.priceTiers?.length
+      ? product.priceTiers.map((tier) => Number(tier.quantity)).filter(Boolean)
+      : product.quantitySteps?.length
+        ? product.quantitySteps
+        : fixedQuantitySteps;
+    return Array.from(new Set(steps)).map((step) => ({
       value: String(step),
       label: step.toLocaleString("de-DE")
     }));
-  }, []);
+  }, [product.priceTiers, product.pricingType, product.quantitySteps]);
 
   const [config, setConfig] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -39,7 +44,10 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
         const selected = attribute.options?.find((option) => option.value === attribute.defaultValue);
         initial[attribute.key] = selected?.value ?? attribute.options?.[0]?.value ?? "";
       }
-      initial.auflage = String(fixedQuantitySteps[0]);
+      initial.auflage = quantityOptions[0]?.value ?? String(fixedQuantitySteps[0]);
+    }
+    for (const property of product.pricingProperties ?? []) {
+      initial[`eigenschaft:${property.name}`] = property.values[0]?.value ?? "";
     }
     return initial;
   });
@@ -88,12 +96,18 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
   }, [product.category]);
 
   const enabledProperties = useMemo(() => {
+    if (product.pricingProperties?.length) {
+      return [];
+    }
     const enabled = new Set(product.enabledCategoryProperties ?? []);
     if (!enabled.size) return [];
     return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
   }, [categoryProperties, product.enabledCategoryProperties]);
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
+    if (product.pricingType === "tiered" || product.pricingProperties?.length) {
+      return calculateConfiguredProductPrice(product, quantity, config).total;
+    }
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
@@ -288,6 +302,23 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
               {option.label}
             </option>
           ))}
+            </select>
+          </label>
+        ))}
+        {(product.pricingProperties ?? []).map((property) => (
+          <label className="grid gap-2" key={`product-property-${property.name}`}>
+            <span className="text-sm font-bold">{property.name}</span>
+            <select
+              suppressHydrationWarning
+              value={config[`eigenschaft:${property.name}`] ?? property.values[0]?.value ?? ""}
+              onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
+              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              {(property.values ?? []).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.value}
+                </option>
+              ))}
             </select>
           </label>
         ))}

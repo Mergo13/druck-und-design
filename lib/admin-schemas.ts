@@ -119,6 +119,25 @@ export const moduleCreateSchemas = {
     gallery: z.array(z.string()),
     rating: z.number(),
     basePrice: z.number(),
+    pricingType: z.enum(["fixed", "tiered"]).optional(),
+    productStatus: z.enum(["draft", "active", "inactive"]).optional(),
+    priceTiers: z.array(z.object({
+      quantity: z.number().int().positive(),
+      price: z.number().nonnegative()
+    })).optional(),
+    pricingProperties: z.array(z.object({
+      name: z.string().min(1),
+      stepPrice: z.number().nonnegative().optional(),
+      values: z.array(z.object({
+        value: z.string().min(1),
+        pricingMode: z.enum(["included", "fixed", "tiered"]),
+        fixedPrice: z.number().nonnegative().optional(),
+        tierPrices: z.array(z.object({
+          quantity: z.number().int().positive(),
+          price: z.number().nonnegative()
+        })).optional()
+      }))
+    })).optional(),
     deliveryText: z.string(),
     tags: z.array(z.string()),
     variants: z.array(z.any()),

@@ -37,6 +37,8 @@ import {
 } from "react-admin";
 import { Route } from "react-router-dom";
 import { useFormContext, useWatch } from "react-hook-form";
+import { calculateConfiguredProductPrice, validateProductPricing } from "@/lib/print-workflow";
+import type { ProductCatalogItem, ProductPriceTier, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
 type AdminRecord = RaRecord & {
   slug?: string;
@@ -76,7 +78,7 @@ const dataProvider = {
     if (catalogResources.has(resource)) {
       const data = await fetchJson<AdminRecord[]>(`${catalogApiUrl}/${resource}?scope=admin`);
       return {
-        data: data.map((item) => normalizeCatalogRecordForAdmin({ ...item, visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })),
+        data: data.map((item) => normalizeCatalogRecordForAdmin({ ...item, productStatus: item.productStatus ?? (item.visible === false || item.published === false ? "inactive" : "active"), pricingType: item.pricingType ?? "fixed", priceTiers: item.priceTiers ?? [{ quantity: 1, price: item.basePrice ?? 0 }], pricingProperties: item.pricingProperties ?? [], visible: item.visible ?? true, published: item.published ?? true, id: item.slug ?? item.id })),
         total: data.length
       };
     }
@@ -94,7 +96,7 @@ const dataProvider = {
   getOne: async (resource: string, params: { id: string }) => {
     if (catalogResources.has(resource)) {
       const data = await fetchJson<AdminRecord>(`${catalogApiUrl}/${resource}/${params.id}?scope=admin`);
-      return { data: normalizeCatalogRecordForAdmin({ ...data, visible: data.visible ?? true, published: data.published ?? true, id: data.slug ?? data.id }) };
+      return { data: normalizeCatalogRecordForAdmin({ ...data, productStatus: data.productStatus ?? (data.visible === false || data.published === false ? "inactive" : "active"), pricingType: data.pricingType ?? "fixed", priceTiers: data.priceTiers ?? [{ quantity: 1, price: data.basePrice ?? 0 }], pricingProperties: data.pricingProperties ?? [], visible: data.visible ?? true, published: data.published ?? true, id: data.slug ?? data.id }) };
     }
     const payload = await fetchJson<{ items: AdminRecord[] }>(`/api/admin/modules/${resource}?q=${encodeURIComponent(params.id)}&page=1&pageSize=100`);
     const item = payload.items.find((entry) => String(entry.id) === String(params.id));
@@ -391,8 +393,7 @@ function ProductList() {
         <TextField source="slug" />
         <TextField source="name" />
         <TextField source="category" />
-        <BooleanField source="visible" />
-        <BooleanField source="published" />
+        <TextField source="productStatus" label="Status" />
         <NumberField source="basePrice" />
         <DateField source="updatedAt" emptyText="-" />
         <EditButton />
@@ -747,21 +748,21 @@ function ProductImageUploadControls() {
 
   return (
     <Box sx={{ display: "grid", gap: 1.5, mb: 1 }}>
-      <Typography variant="subtitle2">Product Images</Typography>
+      <Typography variant="subtitle2">Produktbilder</Typography>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingHero}>
-          {uploadingHero ? "Uploading hero..." : "Upload Hero Image"}
+          {uploadingHero ? "Lädt hoch..." : "Hauptbild hochladen"}
           <input type="file" accept="image/*,.heic,.heif" hidden onChange={onHeroImageChange} />
         </Button>
         <Button variant="outlined" component="label" disabled={uploadingGallery}>
-          {uploadingGallery ? "Adding to gallery..." : "Add Gallery Images"}
+          {uploadingGallery ? "Fügt hinzu..." : "Galeriebilder hochladen"}
           <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onGalleryImageChange} />
         </Button>
       </Box>
       {currentHero ? (
         <Box sx={{ mt: 0.5 }}>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: 180 }}>
-            <Typography variant="caption" color="text.secondary">Hero Preview</Typography>
+            <Typography variant="caption" color="text.secondary">Hauptbild Vorschau</Typography>
             <IconButton size="small" aria-label="Remove hero image" onClick={removeHeroImage}>
               <DeleteOutlineIcon fontSize="inherit" />
             </IconButton>
@@ -773,7 +774,7 @@ function ProductImageUploadControls() {
       ) : null}
       {currentGallery.length > 0 ? (
         <Box sx={{ mt: 0.5 }}>
-          <Typography variant="caption" color="text.secondary">Gallery ({currentGallery.length})</Typography>
+          <Typography variant="caption" color="text.secondary">Galerie ({currentGallery.length})</Typography>
           <Box sx={{ mt: 0.5, display: "flex", gap: 1, flexWrap: "wrap" }}>
             {currentGallery.slice(0, 12).map((url) => (
               <Box key={url} sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 84, height: 56, position: "relative" }}>
@@ -795,10 +796,324 @@ function ProductImageUploadControls() {
   );
 }
 
+function sortNumericTiers(tiers: ProductPriceTier[]) {
+  return [...tiers].sort((a, b) => Number(a.quantity) - Number(b.quantity));
+}
+
+function syncTierSurcharges(properties: ProductPricingProperty[], tiers: ProductPriceTier[]) {
+  const quantities = tiers.map((tier) => Number(tier.quantity)).filter((quantity) => Number.isFinite(quantity) && quantity > 0);
+  return properties.map((property) => ({
+    ...property,
+    values: (property.values ?? []).map((value) => {
+      if (value.pricingMode !== "tiered") return value;
+      const current = new Map((value.tierPrices ?? []).map((tier) => [Number(tier.quantity), Number(tier.price) || 0]));
+      return {
+        ...value,
+        tierPrices: quantities.map((quantity) => ({ quantity, price: current.get(quantity) ?? 0 }))
+      };
+    })
+  }));
+}
+
+function ProductDuplicateButton() {
+  const notify = useNotify();
+  const redirect = useRedirect();
+  const record = useRecordContext<ProductCatalogItem & { id?: string }>();
+  if (!record?.slug) return null;
+  const productRecord = record;
+
+  async function duplicateProduct() {
+    const slug = window.prompt("Neuer Produkt-Slug", `${productRecord.slug}-kopie`);
+    if (!slug) return;
+    const name = window.prompt("Neuer Produktname", `${productRecord.name} Kopie`) || `${productRecord.name} Kopie`;
+    const payload = {
+      ...productRecord,
+      id: undefined,
+      slug,
+      name,
+      productStatus: "draft",
+      visible: false,
+      published: false
+    };
+    try {
+      const res = await fetch("/api/catalog/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof body?.message === "string" ? body.message : "Duplizieren fehlgeschlagen.");
+      notify("Produkt als Entwurf dupliziert.", { type: "success" });
+      redirect(`/products/${slug}`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Duplizieren fehlgeschlagen.", { type: "error" });
+    }
+  }
+
+  return (
+    <Box sx={{ mb: 1 }}>
+      <Button variant="outlined" onClick={() => void duplicateProduct()}>Produkt duplizieren</Button>
+    </Box>
+  );
+}
+
+function ProductPricingManager() {
+  const { setValue, getValues } = useFormContext();
+  const pricingType = (useWatch({ name: "pricingType" }) as ProductCatalogItem["pricingType"] | undefined) ?? "tiered";
+  const productStatus = (useWatch({ name: "productStatus" }) as ProductCatalogItem["productStatus"] | undefined) ?? "draft";
+  const basePrice = Number(useWatch({ name: "basePrice" }) ?? 0);
+  const priceTiers = (useWatch({ name: "priceTiers" }) as ProductPriceTier[] | undefined) ?? [];
+  const pricingProperties = (useWatch({ name: "pricingProperties" }) as ProductPricingProperty[] | undefined) ?? [];
+  const [previewQuantity, setPreviewQuantity] = useState<number>(() => Number(priceTiers[0]?.quantity ?? 1));
+  const [previewConfig, setPreviewConfig] = useState<Record<string, string>>({});
+  const [csvText, setCsvText] = useState("");
+  const tierRows = priceTiers.length ? priceTiers : [{ quantity: 1, price: basePrice || 0 }];
+
+  function updateTiers(next: ProductPriceTier[]) {
+    setValue("priceTiers", next, { shouldDirty: true });
+    setValue("quantitySteps", next.map((tier) => Number(tier.quantity)).filter(Boolean), { shouldDirty: true });
+    setValue("pricingProperties", syncTierSurcharges(pricingProperties, next), { shouldDirty: true });
+  }
+
+  function updateProperties(next: ProductPricingProperty[]) {
+    setValue("pricingProperties", syncTierSurcharges(next, tierRows), { shouldDirty: true });
+  }
+
+  function currentProduct(): ProductCatalogItem {
+    const values = getValues() as ProductCatalogItem;
+    return {
+      ...values,
+      basePrice,
+      pricingType,
+      productStatus,
+      priceTiers: tierRows,
+      pricingProperties
+    };
+  }
+
+  const preview = calculateConfiguredProductPrice(currentProduct(), previewQuantity || Number(tierRows[0]?.quantity ?? 1), previewConfig);
+  const validationErrors = validateProductPricing(currentProduct());
+
+  function exportCsv() {
+    setCsvText(["quantity,base_price", ...tierRows.map((tier) => `${tier.quantity},${tier.price}`)].join("\n"));
+  }
+
+  function importCsv() {
+    const lines = csvText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const rows = lines.slice(lines[0]?.toLowerCase().includes("quantity") ? 1 : 0).map((line) => {
+      const [quantity, price] = line.split(",").map((cell) => Number(cell.trim()));
+      return { quantity, price };
+    }).filter((row) => Number.isFinite(row.quantity) && row.quantity > 0 && Number.isFinite(row.price) && row.price >= 0);
+    if (rows.length) updateTiers(rows);
+  }
+
+  return (
+    <Card variant="outlined" sx={{ my: 2 }}>
+      <CardContent sx={{ display: "grid", gap: 2 }}>
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>Preisstruktur</Typography>
+        <Grid container spacing={1.5}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <SelectInput source="productStatus" label="Produktstatus" defaultValue="draft" choices={[
+              { id: "draft", name: "Entwurf" },
+              { id: "active", name: "Aktiv" },
+              { id: "inactive", name: "Inaktiv" }
+            ]} fullWidth />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <SelectInput source="pricingType" label="Preisart" defaultValue="tiered" choices={[
+              { id: "tiered", name: "Staffelpreis" },
+              { id: "fixed", name: "Fixpreis" }
+            ]} fullWidth />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <NumberInput source="basePrice" label="Grundpreis / Ab-Preis (€)" min={0} step={0.01} fullWidth />
+          </Grid>
+        </Grid>
+
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Mengen / Staffelpreise</Typography>
+          <Box sx={{ display: "grid", gap: 0.75 }}>
+            {tierRows.map((tier, index) => (
+              <Box key={`${tier.quantity}-${index}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "120px 160px auto" }, gap: 1, alignItems: "center" }}>
+                <MuiTextField size="small" label="Menge" type="number" value={tier.quantity} onChange={(event) => {
+                  const next = [...tierRows];
+                  next[index] = { ...tier, quantity: Number(event.target.value) };
+                  updateTiers(next);
+                }} />
+                <MuiTextField size="small" label="Preis (€)" type="number" value={tier.price} onChange={(event) => {
+                  const next = [...tierRows];
+                  next[index] = { ...tier, price: Number(event.target.value) };
+                  updateTiers(next);
+                }} />
+                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                  <Button size="small" variant="outlined" onClick={() => updateTiers([...tierRows.slice(0, index + 1), { ...tier }, ...tierRows.slice(index + 1)])}>Duplizieren</Button>
+                  <Button size="small" variant="outlined" disabled={index === 0} onClick={() => {
+                    const next = [...tierRows];
+                    [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                    updateTiers(next);
+                  }}>Hoch</Button>
+                  <Button size="small" variant="outlined" disabled={index === tierRows.length - 1} onClick={() => {
+                    const next = [...tierRows];
+                    [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                    updateTiers(next);
+                  }}>Runter</Button>
+                  <Button size="small" color="error" variant="outlined" onClick={() => updateTiers(tierRows.filter((_, rowIndex) => rowIndex !== index))}>Löschen</Button>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+          <Box sx={{ mt: 1, display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button variant="outlined" onClick={() => updateTiers([...tierRows, { quantity: Number(tierRows.at(-1)?.quantity ?? 0) + 100, price: 0 }])}>Menge hinzufügen</Button>
+            <Button variant="outlined" onClick={() => updateTiers(sortNumericTiers(tierRows))}>Nach Menge sortieren</Button>
+          </Box>
+          <Box sx={{ mt: 1.5, display: "grid", gap: 1 }}>
+            <MuiTextField multiline minRows={3} label="CSV Import / Export Staffelpreise" value={csvText} onChange={(event) => setCsvText(event.target.value)} placeholder={"quantity,base_price\n100,50\n200,90"} />
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Button variant="outlined" onClick={exportCsv}>CSV Export</Button>
+              <Button variant="outlined" onClick={importCsv}>CSV Import</Button>
+            </Box>
+          </Box>
+        </Box>
+
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Eigenschaften</Typography>
+          <Box sx={{ display: "grid", gap: 1.2 }}>
+            {pricingProperties.map((property, propertyIndex) => (
+              <Card key={`${property.name}-${propertyIndex}`} variant="outlined">
+                <CardContent sx={{ display: "grid", gap: 1.2, py: 1.5 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 180px auto" }, gap: 1 }}>
+                    <MuiTextField size="small" label="Eigenschaft" value={property.name} onChange={(event) => {
+                      const next = [...pricingProperties];
+                      next[propertyIndex] = { ...property, name: event.target.value };
+                      updateProperties(next);
+                    }} />
+                    <MuiTextField size="small" label="Stückpreis Eigenschaft (€)" type="number" value={property.stepPrice ?? 0} onChange={(event) => {
+                      const next = [...pricingProperties];
+                      next[propertyIndex] = { ...property, stepPrice: Number(event.target.value) };
+                      updateProperties(next);
+                    }} />
+                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                      <Button size="small" variant="outlined" onClick={() => updateProperties([...pricingProperties.slice(0, propertyIndex + 1), JSON.parse(JSON.stringify(property)) as ProductPricingProperty, ...pricingProperties.slice(propertyIndex + 1)])}>Eigenschaft duplizieren</Button>
+                      <Button size="small" color="error" variant="outlined" onClick={() => updateProperties(pricingProperties.filter((_, index) => index !== propertyIndex))}>Löschen</Button>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ display: "grid", gap: 0.9 }}>
+                    {(property.values ?? []).map((value, valueIndex) => (
+                      <Box key={`${value.value}-${valueIndex}`} sx={{ border: "1px solid #e2e8f0", borderRadius: 1, p: 1, display: "grid", gap: 1 }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 190px 150px auto" }, gap: 1 }}>
+                          <MuiTextField size="small" label="Wert" value={value.value} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            next[propertyIndex].values[valueIndex].value = event.target.value;
+                            updateProperties(next);
+                          }} />
+                          <MuiTextField select size="small" label="Preisart" value={value.pricingMode} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            const nextValue = next[propertyIndex].values[valueIndex];
+                            nextValue.pricingMode = event.target.value as ProductPropertyValue["pricingMode"];
+                            if (nextValue.pricingMode === "tiered") {
+                              nextValue.tierPrices = tierRows.map((tier) => ({ quantity: Number(tier.quantity), price: nextValue.tierPrices?.find((row) => Number(row.quantity) === Number(tier.quantity))?.price ?? 0 }));
+                            }
+                            updateProperties(next);
+                          }}>
+                            <MenuItem value="included">Im Grundpreis enthalten</MenuItem>
+                            <MenuItem value="fixed">Fixer Aufpreis</MenuItem>
+                            <MenuItem value="tiered">Staffel-Aufpreis</MenuItem>
+                          </MuiTextField>
+                          <MuiTextField size="small" label="Aufpreis (€)" type="number" disabled={value.pricingMode !== "fixed"} value={value.fixedPrice ?? 0} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            next[propertyIndex].values[valueIndex].fixedPrice = Number(event.target.value);
+                            updateProperties(next);
+                          }} />
+                          <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                            <Button size="small" variant="outlined" onClick={() => {
+                              const next = structuredClone(pricingProperties);
+                              next[propertyIndex].values.splice(valueIndex + 1, 0, structuredClone(value));
+                              updateProperties(next);
+                            }}>Duplizieren</Button>
+                            <Button size="small" color="error" variant="outlined" onClick={() => {
+                              const next = structuredClone(pricingProperties);
+                              next[propertyIndex].values = next[propertyIndex].values.filter((_, index) => index !== valueIndex);
+                              updateProperties(next);
+                            }}>Löschen</Button>
+                          </Box>
+                        </Box>
+                        {value.pricingMode === "tiered" ? (
+                          <Box sx={{ overflowX: "auto" }}>
+                            <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${tierRows.length}, minmax(92px, 1fr))`, gap: 0.75, minWidth: Math.max(360, tierRows.length * 96) }}>
+                              {tierRows.map((tier) => {
+                                const quantity = Number(tier.quantity);
+                                const rowIndex = (value.tierPrices ?? []).findIndex((row) => Number(row.quantity) === quantity);
+                                const row = rowIndex >= 0 ? value.tierPrices?.[rowIndex] : { quantity, price: 0 };
+                                return (
+                                  <MuiTextField key={quantity} size="small" label={String(quantity)} type="number" value={row?.price ?? 0} onChange={(event) => {
+                                    const next = structuredClone(pricingProperties);
+                                    const nextValue = next[propertyIndex].values[valueIndex];
+                                    const prices = nextValue.tierPrices ?? [];
+                                    const foundIndex = prices.findIndex((entry) => Number(entry.quantity) === quantity);
+                                    if (foundIndex >= 0) prices[foundIndex].price = Number(event.target.value);
+                                    else prices.push({ quantity, price: Number(event.target.value) });
+                                    nextValue.tierPrices = prices;
+                                    updateProperties(next);
+                                  }} />
+                                );
+                              })}
+                            </Box>
+                          </Box>
+                        ) : null}
+                      </Box>
+                    ))}
+                  </Box>
+                  <Button variant="outlined" onClick={() => {
+                    const next = structuredClone(pricingProperties);
+                    next[propertyIndex].values = [...(next[propertyIndex].values ?? []), { value: "Neuer Wert", pricingMode: "included" }];
+                    updateProperties(next);
+                  }}>Wert hinzufügen</Button>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+          <Box sx={{ mt: 1 }}>
+            <Button variant="contained" onClick={() => updateProperties([...pricingProperties, { name: "Neue Eigenschaft", values: [{ value: "Standard", pricingMode: "included" }] }])}>Eigenschaft hinzufügen</Button>
+          </Box>
+        </Box>
+
+        <Card variant="outlined" sx={{ bgcolor: "#f8fafc" }}>
+          <CardContent sx={{ display: "grid", gap: 1 }}>
+            <Typography variant="subtitle2">Preisvorschau</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "160px 1fr" }, gap: 1 }}>
+              <MuiTextField select size="small" label="Menge" value={previewQuantity || tierRows[0]?.quantity || 1} onChange={(event) => setPreviewQuantity(Number(event.target.value))}>
+                {tierRows.map((tier) => <MenuItem key={tier.quantity} value={tier.quantity}>{tier.quantity}</MenuItem>)}
+              </MuiTextField>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                {pricingProperties.map((property) => (
+                  <MuiTextField key={property.name} select size="small" label={property.name} value={previewConfig[`eigenschaft:${property.name}`] ?? property.values[0]?.value ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, [`eigenschaft:${property.name}`]: event.target.value }))} sx={{ minWidth: 180 }}>
+                    {(property.values ?? []).map((value) => <MenuItem key={value.value} value={value.value}>{value.value}</MenuItem>)}
+                  </MuiTextField>
+                ))}
+              </Box>
+            </Box>
+            <Typography variant="body2">Grundpreis: {formatCurrency(preview.basePrice)}</Typography>
+            {preview.lines.map((line) => (
+              <Typography key={`${line.label}-${line.value}`} variant="body2">{line.label}: {line.value} +{formatCurrency(line.price)}</Typography>
+            ))}
+            <Typography variant="h6" sx={{ fontWeight: 900 }}>Gesamt: {formatCurrency(preview.total)}</Typography>
+          </CardContent>
+        </Card>
+
+        {validationErrors.length ? (
+          <Alert severity="warning">{validationErrors[0]}</Alert>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProductEdit() {
   return (
     <Edit>
       <SimpleForm>
+        <ProductDuplicateButton />
         <ProductImageUploadControls />
         <TextInput source="slug" validate={[required()]} />
         <TextInput source="name" validate={[required()]} />
@@ -806,12 +1121,9 @@ function ProductEdit() {
         <TextInput source="short" multiline />
         <TextInput source="description" multiline />
         <TextInput source="seo" multiline />
-        <BooleanInput source="visible" label="Sichtbar im Shop" />
-        <BooleanInput source="published" label="Veröffentlicht" />
         <TextInput source="heroImage" />
-        <NumberInput source="basePrice" />
         <TextInput source="deliveryText" />
-        <ProductCategoryPropertiesControl />
+        <ProductPricingManager />
       </SimpleForm>
     </Edit>
   );
@@ -820,7 +1132,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm defaultValues={{ visible: true, published: true, rating: 4.8, tags: [], gallery: [], variants: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm defaultValues={{ visible: false, published: false, productStatus: "draft", pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductImageUploadControls />
         <TextInput source="slug" validate={[required()]} />
         <TextInput source="name" validate={[required()]} />
@@ -828,12 +1140,9 @@ function ProductCreate() {
         <TextInput source="short" multiline />
         <TextInput source="description" multiline />
         <TextInput source="seo" multiline />
-        <BooleanInput source="visible" label="Sichtbar im Shop" />
-        <BooleanInput source="published" label="Veröffentlicht" />
         <TextInput source="heroImage" />
-        <NumberInput source="basePrice" />
         <TextInput source="deliveryText" />
-        <ProductCategoryPropertiesControl />
+        <ProductPricingManager />
       </SimpleForm>
     </Create>
   );
@@ -946,16 +1255,13 @@ function CategoryList() {
 function CategoryPropertiesInput() {
   return (
     <ArrayInput source="properties" label="Eigenschaften">
-      <SimpleFormIterator inline>
-        <TextInput source="name" label="Name" placeholder="z.B. Papier" />
-        <NumberInput source="basePrice" label="Fallback Basispreis (€)" min={0} step={0.01} />
-        <NumberInput source="stepPrice" label="Fallback Stückpreis (€)" min={0} step={0.01} />
-        <ArrayInput source="values" label="Werte mit Preis">
-          <SimpleFormIterator inline>
-            <TextInput source="value" label="Wert" placeholder="z.B. 170g Bilderdruck" />
-            <TextInput source="label" label="Label" placeholder="optional" />
-            <NumberInput source="basePrice" label="Basispreis (€)" min={0} step={0.01} />
-            <NumberInput source="stepPrice" label="Stückpreis (€)" min={0} step={0.01} />
+      <SimpleFormIterator disableReordering disableClear>
+        <TextInput source="name" label="Eigenschaft" placeholder="z.B. Papier" helperText={false} />
+        <NumberInput source="stepPrice" label="Stückpreis Eigenschaft (€)" min={0} step={0.01} helperText="Optionaler Preis pro Stück für diese Eigenschaft." />
+        <ArrayInput source="values" label="Werte">
+          <SimpleFormIterator inline disableReordering disableClear>
+            <TextInput source="value" label="Wert" placeholder="z.B. 170g Bilderdruck" helperText={false} />
+            <NumberInput source="basePrice" label="Preis (€)" min={0} step={0.01} helperText={false} />
           </SimpleFormIterator>
         </ArrayInput>
       </SimpleFormIterator>

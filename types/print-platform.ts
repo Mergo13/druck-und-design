@@ -60,6 +60,31 @@ export type ProductCategoryProperty = {
   stepPrice?: number;
 };
 
+export type ProductPriceTier = {
+  quantity: number;
+  price: number;
+};
+
+export type ProductPropertyPriceMode = "included" | "fixed" | "tiered";
+
+export type ProductPropertyTierPrice = {
+  quantity: number;
+  price: number;
+};
+
+export type ProductPropertyValue = {
+  value: string;
+  pricingMode: ProductPropertyPriceMode;
+  fixedPrice?: number;
+  tierPrices?: ProductPropertyTierPrice[];
+};
+
+export type ProductPricingProperty = {
+  name: string;
+  stepPrice?: number;
+  values: ProductPropertyValue[];
+};
+
 export type ProductCategory = {
   slug: MainCategory;
   name: string;
@@ -85,6 +110,10 @@ export type ProductCatalogItem = {
   gallery: string[];
   rating: number;
   basePrice: number;
+  pricingType?: "fixed" | "tiered";
+  productStatus?: "draft" | "active" | "inactive";
+  priceTiers?: ProductPriceTier[];
+  pricingProperties?: ProductPricingProperty[];
   deliveryText: string;
   tags: string[];
   variants: ProductVariant[];

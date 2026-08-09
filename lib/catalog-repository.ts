@@ -162,7 +162,7 @@ export async function getPublicProducts() {
     },
     orderBy: { name: "asc" }
   });
-  return rows.map(productFromRow);
+  return rows.map(productFromRow).filter((product) => (product.productStatus ?? "active") === "active");
 }
 
 export async function getProductBySlug(slug: string) {
@@ -180,7 +180,9 @@ export async function getPublicProductBySlug(slug: string) {
   const category = await prisma.catalogCategory.findFirst({
     where: { slug: row.category, visible: true, published: true }
   });
-  return category ? productFromRow(row) : null;
+  const product = productFromRow(row);
+  if ((product.productStatus ?? "active") !== "active") return null;
+  return category ? product : null;
 }
 
 export async function upsertCategory(category: ProductCategory, originalSlug?: string) {
@@ -231,25 +233,29 @@ export async function upsertProduct(product: ProductCatalogItem) {
   await ensureCatalogSeeded();
   const category = await prisma.catalogCategory.findUnique({ where: { slug: product.category } });
   if (!category) throw new Error("Die gewählte Kategorie existiert nicht.");
+  const productStatus = product.productStatus ?? (product.visible === false || product.published === false ? "inactive" : "active");
+  const visible = productStatus === "active";
+  const published = productStatus === "active";
+  const nextProduct = { ...product, productStatus, visible, published };
   await prisma.catalogProduct.upsert({
     where: { slug: product.slug },
     update: {
       name: product.name,
       category: product.category,
-      visible: product.visible ?? true,
-      published: product.published ?? true,
-      data: asJson(product)
+      visible,
+      published,
+      data: asJson(nextProduct)
     },
     create: {
       slug: product.slug,
       name: product.name,
       category: product.category,
-      visible: product.visible ?? true,
-      published: product.published ?? true,
-      data: asJson(product)
+      visible,
+      published,
+      data: asJson(nextProduct)
     }
   });
-  return product;
+  return nextProduct;
 }
 
 export async function deleteProduct(slug: string) {
