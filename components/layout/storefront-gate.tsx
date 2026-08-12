@@ -9,6 +9,7 @@ type StoreControlPayload = {
   disableCheckout: boolean;
   announcementBar: string;
   maintenanceAvailableAt?: string;
+  isAdmin?: boolean;
 };
 
 export function StorefrontGate({ children }: { children: React.ReactNode }) {
@@ -30,7 +31,7 @@ export function StorefrontGate({ children }: { children: React.ReactNode }) {
     })();
   }, [isAdminRoute]);
 
-  if (!isAdminRoute && control?.maintenanceMode) {
+  if (!isAdminRoute && control?.maintenanceMode && !control.isAdmin) {
     return (
       <main className="min-h-screen bg-slate-950 text-white">
         <section className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
