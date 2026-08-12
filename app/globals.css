@@ -130,3 +130,8 @@ body {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
+
+@keyframes shopGlow {
+  0%, 100% { opacity: .45; transform: translate3d(0, 0, 0) scale(1); }
+  50% { opacity: .9; transform: translate3d(18px, -14px, 0) scale(1.08); }
+}

@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { posts } from "@/data/products";
 import { getCategories, getProducts } from "@/lib/catalog-repository";
 import { localSeoPages, siteUrl } from "@/lib/seo";
+import { getStudentArticles, studentLandingPages } from "@/lib/student-content";
 
 function getBaseUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL?.trim() || siteUrl).replace(/\/+$/, "");
@@ -15,6 +16,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/",
     "/leistungen",
     "/news",
+    "/studenten",
+    "/studenten/ratgeber",
     "/kontakt",
     "/faq",
     "/druckservice",
@@ -32,9 +35,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/llms.txt"
   ];
 
-  const [categories, products] = await Promise.all([
+  const [categories, products, studentArticles] = await Promise.all([
     getCategories(),
-    getProducts()
+    getProducts(),
+    getStudentArticles()
   ]);
 
   const entries: MetadataRoute.Sitemap = [
@@ -61,6 +65,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly" as const,
       priority: 0.82
     })),
+    ...studentLandingPages.map((page) => ({
+      url: `${baseUrl}/studenten/${page.slug}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.72
+    })),
     ...products
       .filter((product) => product.visible !== false && product.published !== false)
       .map((product) => ({
@@ -74,6 +84,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: post.date ? new Date(post.date) : now,
       changeFrequency: "monthly" as const,
       priority: 0.65
+    })),
+    ...studentArticles.map((article) => ({
+      url: `${baseUrl}/studenten/ratgeber/${article.slug}`,
+      lastModified: article.updatedAt ? new Date(article.updatedAt) : now,
+      changeFrequency: "monthly" as const,
+      priority: article.featured ? 0.72 : 0.62
     }))
   ];
 

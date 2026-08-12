@@ -23,9 +23,29 @@ const orderRequestSchema = z.object({
   shippingCost: z.number().nonnegative().max(100000).optional(),
   shippingName: z.string().max(200).optional(),
   processingFee: z.number().nonnegative().max(100000).optional(),
+  couponCode: z.string().max(100).optional(),
+  couponDiscount: z.number().nonnegative().max(100000).optional(),
   legalAccepted: z.literal(true),
   printApprovalAccepted: z.literal(true)
 });
+
+async function resolveCouponDiscount(code: string | undefined, subtotal: number) {
+  const normalizedCode = code?.trim().toUpperCase();
+  if (!normalizedCode) return { code: undefined, discount: 0 };
+  const coupon = await prisma.coupon.findUnique({ where: { code: normalizedCode } });
+  const now = new Date();
+  if (!coupon || !coupon.active) throw new Error("Gutschein ist nicht gültig.");
+  if (coupon.startsAt && coupon.startsAt > now) throw new Error("Gutschein ist noch nicht gültig.");
+  if (coupon.endsAt && coupon.endsAt < now) throw new Error("Gutschein ist abgelaufen.");
+  if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) throw new Error("Gutschein wurde bereits vollständig eingelöst.");
+  const rawDiscount = coupon.discountType === "percent"
+    ? subtotal * Math.min(100, Math.max(0, coupon.discountValue)) / 100
+    : coupon.discountValue;
+  return {
+    code: coupon.code,
+    discount: Math.min(subtotal, Math.max(0, Math.round(rawDiscount * 100) / 100))
+  };
+}
 
 export async function GET() {
   await ensureAdminBootstrap();
@@ -48,6 +68,11 @@ export async function GET() {
     status: item.status,
     billingAddress: item.billingAddress,
     shippingAddress: item.shippingAddress,
+    shippingCost: item.shippingCost,
+    shippingName: item.shippingName,
+    processingFee: item.processingFee,
+    couponCode: item.couponCode,
+    couponDiscount: item.couponDiscount,
     createdAt: item.createdAt.toISOString(),
     items: item.items
   })));
@@ -72,7 +97,13 @@ export async function POST(request: Request) {
 
   const body = parsed.data;
   const itemsTotal = body.items.reduce((sum, item) => sum + item.price, 0);
-  const total = itemsTotal + (body.shippingCost ?? 0) + (body.processingFee ?? 0);
+  let coupon;
+  try {
+    coupon = await resolveCouponDiscount(body.couponCode, itemsTotal);
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Gutschein konnte nicht angewendet werden." }, { status: 400 });
+  }
+  const total = Math.max(0, itemsTotal - coupon.discount + (body.shippingCost ?? 0) + (body.processingFee ?? 0));
   const order = await prisma.adminOrder.create({
     data: {
       id: `REQ-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
@@ -85,6 +116,8 @@ export async function POST(request: Request) {
       shippingCost: body.shippingCost,
       shippingName: body.shippingName,
       processingFee: body.processingFee,
+      couponCode: coupon.code,
+      couponDiscount: coupon.discount || undefined,
       total,
       status: "Anfrage",
       items: body.items.map((item) => ({
@@ -98,6 +131,9 @@ export async function POST(request: Request) {
       }))
     }
   });
+  if (coupon.code && coupon.discount > 0) {
+    await prisma.coupon.update({ where: { code: coupon.code }, data: { usedCount: { increment: 1 } } });
+  }
 
   return NextResponse.json(order, { status: 201 });
 }

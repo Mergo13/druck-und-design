@@ -20,14 +20,16 @@ export const moduleCreateSchemas = {
     note: z.string().optional()
   }),
   invoices: z.object({
-    id: z.string().min(1),
+    id: z.string().optional(),
+    invoiceNumber: z.string().optional(),
     customer: z.string().min(1),
+    email: z.string().email().optional().or(z.literal("")),
     amount: z.number().nonnegative(),
     status: z.string().default("open"),
     dueDate: z.string().datetime().optional()
   }),
   coupons: z.object({
-    code: z.string().min(2),
+    code: z.string().optional(),
     discountType: z.string().default("percent"),
     discountValue: z.number().nonnegative(),
     active: z.boolean().default(true),
@@ -41,13 +43,26 @@ export const moduleCreateSchemas = {
   }),
   reviews: z.object({
     customer: z.string().min(1),
+    email: z.string().email().optional().or(z.literal("")),
+    orderId: z.string().optional(),
+    productSlug: z.string().optional(),
+    productName: z.string().optional(),
     rating: z.number().int().min(1).max(5),
     comment: z.string().min(1),
-    published: z.boolean().default(false)
+    published: z.boolean().default(false),
+    adminNote: z.string().optional()
   }),
   newsletter: z.object({
     email: z.string().email(),
     active: z.boolean().default(true)
+  }),
+  newsletterCampaigns: z.object({
+    subject: z.string().min(1),
+    preheader: z.string().optional(),
+    body: z.string().min(1),
+    ctaLabel: z.string().optional(),
+    ctaUrl: z.string().url().optional().or(z.literal("")),
+    status: z.enum(["draft", "sent"]).default("draft")
   }),
   shipping: z.object({
     name: z.string().min(1),
@@ -91,6 +106,11 @@ export const moduleCreateSchemas = {
     quantitySteps: z.array(z.number()).optional(),
     defaultPropertyTemplate: z.string().optional(),
     logo: z.string().optional(),
+    showroomImages: z.array(z.object({
+      image: z.string().min(1),
+      title: z.string().min(1),
+      description: z.string().optional()
+    })).optional(),
     properties: z.array(z.object({
       name: z.string().min(1),
       values: z.array(z.union([
@@ -119,11 +139,24 @@ export const moduleCreateSchemas = {
     gallery: z.array(z.string()),
     rating: z.number(),
     basePrice: z.number(),
-    pricingType: z.enum(["fixed", "tiered"]).optional(),
+    pricingType: z.enum(["fixed", "tiered", "area", "hourly"]).optional(),
+    purchaseMode: z.enum(["online", "request", "both", "disabled"]).optional(),
+    isBestseller: z.boolean().optional(),
+    bestsellerSortOrder: z.number().optional(),
+    isStudentShop: z.boolean().optional(),
+    studentShopSortOrder: z.number().optional(),
     productStatus: z.enum(["draft", "active", "inactive"]).optional(),
+    areaPricing: z.object({
+      defaultWidthCm: z.number().optional(),
+      defaultHeightCm: z.number().optional(),
+      minAreaM2: z.number().optional()
+    }).optional(),
     priceTiers: z.array(z.object({
       quantity: z.number().int().positive(),
-      price: z.number().nonnegative()
+      fromQuantity: z.number().int().positive().optional(),
+      toQuantity: z.number().int().positive().optional(),
+      price: z.number().nonnegative(),
+      unitPrice: z.number().nonnegative().optional()
     })).optional(),
     pricingProperties: z.array(z.object({
       name: z.string().min(1),
@@ -149,6 +182,29 @@ export const moduleCreateSchemas = {
     }),
     quantitySteps: z.array(z.number()).optional(),
     propertyTemplate: z.string().optional(),
-    enabledCategoryProperties: z.array(z.string()).optional()
+    enabledCategoryProperties: z.array(z.string()).optional(),
+    industrySlugs: z.array(z.string()).optional()
+  }),
+  studentArticles: z.object({
+    slug: z.string().min(1),
+    title: z.string().min(1),
+    excerpt: z.string().min(1),
+    body: z.string().min(1),
+    category: z.string().min(1),
+    tags: z.array(z.string()).optional(),
+    featuredImage: z.string().optional().or(z.literal("")),
+    seoTitle: z.string().optional().or(z.literal("")),
+    metaDescription: z.string().optional().or(z.literal("")),
+    canonicalUrl: z.string().optional().or(z.literal("")),
+    status: z.enum(["draft", "published"]).default("draft"),
+    publishDate: z.string().optional().or(z.literal("")),
+    relatedProducts: z.array(z.string()).optional(),
+    relatedArticles: z.array(z.string()).optional(),
+    faqs: z.array(z.object({
+      question: z.string().min(1),
+      answer: z.string().min(1)
+    })).optional(),
+    featured: z.boolean().optional(),
+    sortOrder: z.number().optional()
   })
 } as const;

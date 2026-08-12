@@ -2,17 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, CheckCircle2, ChevronDown, FileCheck, FileImage, Sparkles, UploadCloud, XCircle, Info } from "lucide-react";
+import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
 const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
-const PRINT_CHECK_FEE = Number(process.env.NEXT_PUBLIC_PRINT_CHECK_FEE_EUR ?? "9.99");
 
 export function ProductConfigurator({ product, authenticated }: { product: ProductCatalogItem; authenticated: boolean }) {
   const router = useRouter();
@@ -26,7 +25,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
 
   const quantityOptions = useMemo(() => {
     const steps = product.pricingType === "tiered" && product.priceTiers?.length
-      ? product.priceTiers.map((tier) => Number(tier.quantity)).filter(Boolean)
+      ? product.priceTiers.flatMap((tier) => [Number(tier.fromQuantity ?? tier.quantity), Number(tier.toQuantity)]).filter(Boolean)
       : product.quantitySteps?.length
         ? product.quantitySteps
         : fixedQuantitySteps;
@@ -44,36 +43,25 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
         const selected = attribute.options?.find((option) => option.value === attribute.defaultValue);
         initial[attribute.key] = selected?.value ?? attribute.options?.[0]?.value ?? "";
       }
-      initial.auflage = quantityOptions[0]?.value ?? String(fixedQuantitySteps[0]);
+    }
+    initial.auflage = quantityOptions[0]?.value ?? String(fixedQuantitySteps[0]);
+    if (product.pricingType === "area") {
+      initial.areaWidthCm = String(product.areaPricing?.defaultWidthCm ?? 100);
+      initial.areaHeightCm = String(product.areaPricing?.defaultHeightCm ?? 100);
     }
     for (const property of product.pricingProperties ?? []) {
-      initial[`eigenschaft:${property.name}`] = property.values[0]?.value ?? "";
+      const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
+      initial[`eigenschaft:${property.name}`] = enabledValues.find((value) => value.defaultSelected)?.value ?? enabledValues[0]?.value ?? "";
     }
     return initial;
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [mockupUrl, setMockupUrl] = useState<string>("");
   const [uploadError, setUploadError] = useState("");
-  const [preflightStatus, setPreflightStatus] = useState<"idle" | "running" | "ok" | "error">("idle");
-  const [preflightMessage, setPreflightMessage] = useState("Die KI-gestützte Live-Analyse startet nach dem Dateiupload.");
-  const [preflightDetails, setPreflightDetails] = useState<Array<{ code: string; label: string; passed: boolean; hint?: string }>>([]);
-  const [metrics, setMetrics] = useState<{
-    fileSizeMb: number;
-    extension: string;
-    mimeType?: string;
-    widthPx?: number;
-    heightPx?: number;
-    totalPixels?: number;
-    estimatedDpi?: number;
-    colorModelHint?: "RGB" | "CMYK" | "Unknown";
-    targetFormat?: string;
-  } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
-  const [printCheckRequested, setPrintCheckRequested] = useState(false);
   const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
-  const currentQuantity = Number(config.auflage ?? fixedQuantitySteps[0]);
+  const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
 
   useEffect(() => {
     return () => {
@@ -105,7 +93,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
   }, [categoryProperties, product.enabledCategoryProperties]);
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
-    if (product.pricingType === "tiered" || product.pricingProperties?.length) {
+    if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
       return calculateConfiguredProductPrice(product, quantity, config).total;
     }
     const productPrice = firstVariant
@@ -113,33 +101,20 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
   }, [config, currentQuantity, enabledProperties, firstVariant, product]);
+  const tierBreakdown = useMemo(() => {
+    if (product.pricingType !== "tiered") return null;
+    try {
+      return calculateTierPrice(currentQuantity, product.priceTiers);
+    } catch {
+      return null;
+    }
+  }, [currentQuantity, product.priceTiers, product.pricingType]);
+  const displayedTotal = currentPrice;
 
-  async function validateAndSetFile(file?: File) {
-    setUploadError("");
-    if (!file) return;
-
+  async function readFilePreview(file: File) {
     const fileName = file.name.toLowerCase();
-    const isAllowed = acceptedExtensions.some((extension) => fileName.endsWith(extension));
-
-    if (!isAllowed) {
-      setUploadedFile(null);
-      setUploadError("Bitte laden Sie eine PDF-, AI-, PSD-, EPS-, PNG-, JPG-, TIFF- oder WebP-Datei hoch.");
-      return;
-    }
-
-    if (file.size > maxFileSize) {
-      setUploadedFile(null);
-      setUploadError("Die Datei ist zu groß. Für die Demo sind maximal 50 MB erlaubt.");
-      return;
-    }
-
-    setUploadedFile(file);
     let widthPx: number | undefined;
     let heightPx: number | undefined;
-
-    // Fix: Clear previous errors and preflight data when a new file is valid
-    setPreflightDetails([]);
-    setMetrics(null);
 
     if (file.type.startsWith("image/") || ["png", "jpg", "jpeg", "tif", "tiff", "webp"].some(ext => fileName.endsWith(ext))) {
       try {
@@ -154,47 +129,30 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       if (mockupUrl) URL.revokeObjectURL(mockupUrl);
       setMockupUrl("");
     }
+    return { fileName, widthPx, heightPx };
+  }
 
-    setPreflightStatus("running");
-    setPreflightMessage("Preflight läuft...");
-    const response = await fetch("/api/preflight", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        fileSizeBytes: file.size,
-        mimeType: file.type || "application/octet-stream",
-        widthPx,
-        heightPx,
-        targetFormat: config.Format || config.format || "DIN A5",
-        colorModelHint: (file.type.startsWith("image/") || ["png", "jpg", "jpeg", "tif", "tiff", "webp"].some(ext => fileName.endsWith(ext))) ? "RGB" : "Unknown"
-      })
-    });
-    const result = await response.json() as {
-      valid: boolean;
-      checks: Array<{ code: string; label: string; passed: boolean; hint?: string }>;
-      metrics?: {
-        fileSizeMb: number;
-        extension: string;
-        mimeType?: string;
-        widthPx?: number;
-        heightPx?: number;
-        totalPixels?: number;
-        estimatedDpi?: number;
-        colorModelHint?: "RGB" | "CMYK" | "Unknown";
-        targetFormat?: string;
-      };
-      aiAdvice?: string;
-    };
-    setPreflightDetails(result.checks);
-    setMetrics(result.metrics ?? null);
-    if (result.valid) {
-      setPreflightStatus("ok");
-      setPreflightMessage(result.aiAdvice || "Die KI hat Ihre Daten als produktionsreif eingestuft.");
-    } else {
-      setPreflightStatus("error");
-      setPreflightMessage(result.aiAdvice || "Die KI-Analyse hat kritische Fehler festgestellt, die das Druckergebnis beeinträchtigen könnten.");
+  async function validateAndSetFile(file?: File) {
+    setUploadError("");
+    if (!file) return;
+
+    const fileName = file.name.toLowerCase();
+    const isAllowed = acceptedExtensions.some((extension) => fileName.endsWith(extension));
+
+    if (!isAllowed) {
+      setUploadedFile(null);
+      setUploadError("Bitte laden Sie eine PDF-, AI-, PSD-, EPS-, PNG-, JPG-, TIFF-, HEIC- oder WebP-Datei hoch.");
+      return;
     }
+
+    if (file.size > maxFileSize) {
+      setUploadedFile(null);
+      setUploadError("Die Datei ist zu groß. Maximal 50 MB erlaubt.");
+      return;
+    }
+
+    setUploadedFile(file);
+    await readFilePreview(file);
   }
 
   async function uploadPrintFile(file: File) {
@@ -209,15 +167,6 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
   }
 
   async function addToCart() {
-    if (printCheckRequested && !uploadedFile) {
-      setCartMessage("Für den Profi-Print-Check bitte zuerst eine Datei hochladen.");
-      return false;
-    }
-    if (printCheckRequested && preflightStatus !== "ok" && preflightStatus !== "error") {
-      setCartMessage("Bitte warten, bis der Datei-Check abgeschlossen ist.");
-      return false;
-    }
-
     const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{
       slug: string;
       name: string;
@@ -228,11 +177,11 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       printCheckFee?: number;
       printCheckFileName?: string;
       printCheckFileUrl?: string;
-      printCheckStatus?: "ok" | "error" | "idle";
+      config?: Record<string, string>;
     }>;
 
     let uploadedUrl: string | undefined;
-    if (printCheckRequested && uploadedFile) {
+    if (uploadedFile) {
       try {
         const uploaded = await uploadPrintFile(uploadedFile);
         uploadedUrl = uploaded.url;
@@ -243,15 +192,30 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
     }
 
     const merged = [...existing];
+    const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, config);
+    const baseBreakdown = product.pricingType === "tiered"
+      ? (() => {
+        try {
+          const tier = calculateTierPrice(currentQuantity, product.priceTiers);
+          return `${tier.quantity} Stück × ${formatEuro(tier.unitPrice)} / Stück = ${formatEuro(tier.totalPrice)}`;
+        } catch {
+          return formatEuro(priceSnapshot.basePrice);
+        }
+      })()
+      : formatEuro(priceSnapshot.basePrice);
+    const selectedConfig = Object.fromEntries([
+      ["Menge", String(currentQuantity)],
+      ["Grundpreis", baseBreakdown],
+      ...priceSnapshot.lines.map((line) => [line.label, `${line.value}${line.price ? ` (+${formatEuro(line.price)})` : ""}`])
+    ]);
     const found = merged.find((entry) => entry.slug === product.slug);
     if (found) {
       found.quantity += 1;
-      if (printCheckRequested) {
-        found.printCheckRequested = true;
-        found.printCheckFee = PRINT_CHECK_FEE;
-        found.printCheckFileName = uploadedFile?.name ?? found.printCheckFileName;
+      found.unitPrice = currentPrice;
+      found.config = selectedConfig;
+      if (uploadedFile) {
+        found.printCheckFileName = uploadedFile.name;
         found.printCheckFileUrl = uploadedUrl ?? found.printCheckFileUrl;
-        found.printCheckStatus = preflightStatus === "ok" ? "ok" : preflightStatus === "error" ? "error" : "idle";
       }
     } else {
       merged.push({
@@ -260,11 +224,11 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
         quantity: 1,
         category: product.category,
         unitPrice: currentPrice,
-        printCheckRequested,
-        printCheckFee: printCheckRequested ? PRINT_CHECK_FEE : 0,
+        printCheckRequested: false,
+        printCheckFee: 0,
         printCheckFileName: uploadedFile?.name,
         printCheckFileUrl: uploadedUrl,
-        printCheckStatus: preflightStatus === "ok" ? "ok" : preflightStatus === "error" ? "error" : "idle"
+        config: selectedConfig
       });
     }
     localStorage.setItem("dud_cart", JSON.stringify(merged));
@@ -278,8 +242,9 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
-          <h2 className="text-2xl font-black">{authenticated ? formatEuro(currentPrice) : "Preis nach Anmeldung"}</h2>
-          <p className="text-sm text-muted-foreground">Konfiguration inkl. Datencheck</p>
+          <h2 className="text-2xl font-black">{authenticated ? formatEuro(displayedTotal) : "Preis nach Anmeldung"}</h2>
+          <p className="text-sm text-muted-foreground">Konfiguration mit optionalem Datei-Upload</p>
+          {authenticated && tierBreakdown ? <p className="text-xs font-semibold text-muted-foreground">{tierBreakdown.quantity} Stück × {formatEuro(tierBreakdown.unitPrice)} / Stück = {formatEuro(tierBreakdown.totalPrice)}</p> : null}
           {authenticated ? <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p> : null}
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
@@ -288,7 +253,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
         </div>
       </div>
       <div className="mt-6 grid gap-4">
-        {[...productOptions, { label: "Auflage", key: "auflage", options: quantityOptions }].map(({ label, key, options }) => (
+        {productOptions.map(({ label, key, options }) => (
           <label className="grid gap-2" key={label}>
             <span className="text-sm font-bold">{label}</span>
             <select
@@ -305,23 +270,82 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
             </select>
           </label>
         ))}
-        {(product.pricingProperties ?? []).map((property) => (
+        <label className="grid gap-2">
+          <span className="text-sm font-bold">Auflage</span>
+          {product.pricingType === "tiered" ? (
+            <input
+              suppressHydrationWarning
+              type="number"
+              min="1"
+              step="1"
+              value={config.auflage ?? "1"}
+              onChange={(event) => setConfig({ ...config, auflage: event.target.value })}
+              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+          ) : (
+            <select
+              suppressHydrationWarning
+              value={config.auflage}
+              onChange={(event) => setConfig({ ...config, auflage: event.target.value })}
+              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            >
+              {quantityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+        {product.pricingType === "area" ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-2">
+              <span className="text-sm font-bold">Breite (cm)</span>
+              <input
+                suppressHydrationWarning
+                type="number"
+                min="1"
+                step="0.1"
+                value={config.areaWidthCm ?? ""}
+                onChange={(event) => setConfig({ ...config, areaWidthCm: event.target.value })}
+                className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm font-bold">Höhe (cm)</span>
+              <input
+                suppressHydrationWarning
+                type="number"
+                min="1"
+                step="0.1"
+                value={config.areaHeightCm ?? ""}
+                onChange={(event) => setConfig({ ...config, areaHeightCm: event.target.value })}
+                className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              />
+            </label>
+          </div>
+        ) : null}
+        {(product.pricingProperties ?? []).map((property) => {
+          const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
+          if (!enabledValues.length) return null;
+          return (
           <label className="grid gap-2" key={`product-property-${property.name}`}>
             <span className="text-sm font-bold">{property.name}</span>
             <select
               suppressHydrationWarning
-              value={config[`eigenschaft:${property.name}`] ?? property.values[0]?.value ?? ""}
+              value={config[`eigenschaft:${property.name}`] ?? enabledValues.find((value) => value.defaultSelected)?.value ?? enabledValues[0]?.value ?? ""}
               onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
               className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             >
-              {(property.values ?? []).map((option) => (
+              {enabledValues.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.value}
+                  {option.labelOverride || option.label || option.value}
                 </option>
               ))}
             </select>
           </label>
-        ))}
+          );
+        })}
         {enabledProperties.map((property) => (
           <label className="grid gap-2" key={`category-property-${property.name}`}>
             <span className="text-sm font-bold">{property.name}</span>
@@ -365,8 +389,8 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
           onChange={(event) => validateAndSetFile(event.target.files?.[0])}
         />
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />
-        <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten hochladen"}</p>
-        <p className="text-xs text-muted-foreground mt-1">Klicken oder Datei hier ablegen. PDF, AI, PSD, PNG, JPG oder TIFF bis 50 MB.</p>
+        <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten / Dokument hochladen"}</p>
+        <p className="text-xs text-muted-foreground mt-1">Klicken oder Datei hier ablegen. Upload ist auch ohne Profi Print-Check möglich.</p>
         {uploadedFile && (
           <div className="mt-3 flex justify-center">
             <Button
@@ -378,10 +402,6 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
                 e.preventDefault();
                 e.stopPropagation();
                 setUploadedFile(null);
-                setPreflightStatus("idle");
-                setPreflightMessage("Live-Vorschau und Datencheck starten nach dem Upload.");
-                setPreflightDetails([]);
-                setMetrics(null);
                 if (mockupUrl) URL.revokeObjectURL(mockupUrl);
                 setMockupUrl("");
               }}
@@ -409,97 +429,14 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
           Dateityp ohne Bildvorschau ({uploadedFile.name})
         </div>
       ) : null}
-      {preflightStatus === "ok" && (
-        <div className="mt-4 flex flex-col gap-2 rounded-md border border-emerald-200 bg-emerald-50/50 p-4 text-sm text-emerald-900">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold">
-              <FileCheck className="h-4 w-4 text-emerald-600" /> Preflight
-            </div>
-            <Badge variant="success">BESTANDEN</Badge>
-          </div>
-          <p className="mt-1 leading-relaxed text-xs">{preflightMessage}</p>
-          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-emerald-600/70">
-            <Sparkles className="h-3 w-3 animate-pulse" /> KI-Visionsanalyse & Profi-Datencheck
-          </div>
-        </div>
-      )}
-      {preflightStatus === "error" && (
-        <div className="mt-4 flex flex-col gap-2 rounded-md border border-red-200 bg-red-50/50 p-4 text-sm text-red-900">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 font-bold">
-              <XCircle className="h-4 w-4 text-red-600" /> Preflight
-            </div>
-            <Badge variant="destructive">FEHLER</Badge>
-          </div>
-          <p className="mt-1 leading-relaxed text-xs">{preflightMessage}</p>
-          <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-red-600/70">
-            <Sparkles className="h-3 w-3" /> KI-Risikobewertung
-          </div>
-        </div>
-      )}
-      {preflightStatus === "idle" && (
-        <div className="mt-4 flex items-center justify-between rounded-md bg-slate-50 p-3 text-sm text-slate-700 border">
+      {uploadedFile ? (
+        <div className="mt-4 flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
           <div className="flex items-center gap-2">
-            <FileCheck className="h-4 w-4" /> Preflight
+            <FileCheck className="h-4 w-4" /> Datei wird mit der Bestellung hochgeladen
           </div>
-          <Badge variant="outline">BEREIT</Badge>
+          <Badge variant="outline">UPLOAD</Badge>
         </div>
-      )}
-      {preflightStatus === "running" && (
-        <div className="mt-4 flex items-center justify-between rounded-md bg-blue-50 p-3 text-sm text-blue-700 border border-blue-100 animate-pulse">
-          <div className="flex items-center gap-2">
-            <FileCheck className="h-4 w-4" /> Preflight läuft...
-          </div>
-          <Badge variant="secondary">PRÜFT</Badge>
-        </div>
-      )}
-      {metrics && (
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={() => setShowTechnicalDetails(!showTechnicalDetails)}
-            className="flex w-full items-center justify-between rounded-md border bg-slate-50 p-3 text-xs font-bold text-slate-700 hover:bg-slate-100"
-          >
-            <span>Technische Messwerte</span>
-            <ChevronDown className={`h-4 w-4 transition-transform ${showTechnicalDetails ? "rotate-180" : ""}`} />
-          </button>
-          {showTechnicalDetails && (
-            <div className="mt-1 grid grid-cols-2 gap-2 rounded-md border bg-white p-3 text-[10px] text-slate-600">
-              <p>Datei: {metrics.extension.toUpperCase()}</p>
-              <p>Größe: {metrics.fileSizeMb} MB</p>
-              <p>Pixel: {metrics.widthPx ?? "-"} x {metrics.heightPx ?? "-"}</p>
-              <p>DPI: {metrics.estimatedDpi ?? "-"}</p>
-              <p>Farbmodell: {metrics.colorModelHint ?? "-"}</p>
-              <p>Format: {metrics.targetFormat ?? "-"}</p>
-            </div>
-          )}
-        </div>
-      )}
-      {preflightDetails.length > 0 && showTechnicalDetails && (
-        <div className="mt-3 rounded-md border p-3 text-[10px]">
-          <p className="font-bold">Qualitätschecks</p>
-          <div className="mt-2 grid gap-1">
-            {preflightDetails.map((item) => (
-              <div key={item.code} className={`flex items-center gap-2 ${item.passed ? "text-fuchsia-700" : "text-red-700"}`}>
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                <span className="flex-1">{item.label}</span>
-                <span>{item.passed ? "OK" : "Error"}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      <div className="mt-4 rounded-md border p-3">
-        <label className="flex items-center gap-3 text-sm font-semibold">
-          <input
-            type="checkbox"
-            checked={printCheckRequested}
-            onChange={(event) => setPrintCheckRequested(event.target.checked)}
-          />
-          Profi Print-Check (KI + manuell){authenticated ? ` + ${formatEuro(PRINT_CHECK_FEE)}` : ""}
-        </label>
-        <p className="mt-1 text-xs text-muted-foreground">Wird als Zusatzleistung berechnet (Abholung oder Versand).</p>
-      </div>
+      ) : null}
       {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
         In den Warenkorb
       </Button> : <Button asChild className="mt-6 w-full" size="lg"><a href="/login">Anmelden und Preise sehen</a></Button>}

@@ -10,6 +10,7 @@ const modules: AdminModuleKey[] = [
   "coupons",
   "reviews",
   "newsletter",
+  "newsletterCampaigns",
   "shipping",
   "paymentMethods",
   "usersRoles",
@@ -18,7 +19,10 @@ const modules: AdminModuleKey[] = [
   "backups",
   "security",
   "categories",
-  "products"
+  "industries",
+  "products",
+  "studentArticles",
+  "studentVerifications"
 ];
 
 let bootstrapped = false;

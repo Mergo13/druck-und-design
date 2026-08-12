@@ -13,6 +13,7 @@ type CheckoutItem = {
   category: string;
   quantity: number;
   unitPrice?: number;
+  config?: Record<string, string>;
   printCheckRequested?: boolean;
   printCheckFee?: number;
   printCheckFileName?: string;
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
     shippingCost?: number;
     shippingName?: string;
     processingFee?: number;
+    couponCode?: string;
     legalAccepted?: boolean;
     printApprovalAccepted?: boolean;
   } | null;
@@ -56,6 +58,29 @@ export async function POST(request: Request) {
 
   const stripe = new Stripe(stripeSecret);
   const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
+  const itemsSubtotal = items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * Math.max(1, item.quantity || 1), 0);
+  const normalizedCouponCode = body?.couponCode?.trim().toUpperCase() || "";
+  let couponDiscount = 0;
+  if (normalizedCouponCode) {
+    const coupon = await prisma.coupon.findUnique({ where: { code: normalizedCouponCode } });
+    const now = new Date();
+    if (!coupon || !coupon.active) {
+      return NextResponse.json({ message: "Gutschein ist nicht gültig." }, { status: 400 });
+    }
+    if (coupon.startsAt && coupon.startsAt > now) {
+      return NextResponse.json({ message: "Gutschein ist noch nicht gültig." }, { status: 400 });
+    }
+    if (coupon.endsAt && coupon.endsAt < now) {
+      return NextResponse.json({ message: "Gutschein ist abgelaufen." }, { status: 400 });
+    }
+    if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
+      return NextResponse.json({ message: "Gutschein wurde bereits vollständig eingelöst." }, { status: 400 });
+    }
+    const rawDiscount = coupon.discountType === "percent"
+      ? itemsSubtotal * Math.min(100, Math.max(0, coupon.discountValue)) / 100
+      : coupon.discountValue;
+    couponDiscount = Math.min(itemsSubtotal, Math.max(0, Math.round(rawDiscount * 100) / 100));
+  }
 
   const lineItems = items.flatMap((item) => {
     const orderLines = [
@@ -127,12 +152,22 @@ export async function POST(request: Request) {
     });
   }
 
+  const stripeDiscount = couponDiscount > 0
+    ? await stripe.coupons.create({
+        amount_off: Math.round(couponDiscount * 100),
+        currency: "eur",
+        duration: "once",
+        name: `Gutschein ${normalizedCouponCode}`
+      })
+    : null;
+
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     locale: "de",
     customer_email: effectiveCustomerEmail || undefined,
     billing_address_collection: "required",
     line_items: lineItems,
+    discounts: stripeDiscount ? [{ coupon: stripeDiscount.id }] : undefined,
     success_url: `${origin}/checkout/erfolg?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/warenkorb?status=abgebrochen`,
     metadata: {
@@ -149,6 +184,8 @@ export async function POST(request: Request) {
       shippingCost: String(shippingCost),
       shippingName: body?.shippingName || "",
       processingFee: String(processingFee),
+      couponCode: normalizedCouponCode,
+      couponDiscount: String(couponDiscount),
       legalAcceptedAt: new Date().toISOString(),
       printApprovalAcceptedAt: new Date().toISOString()
     }

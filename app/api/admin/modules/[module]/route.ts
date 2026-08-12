@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
@@ -9,7 +10,8 @@ import { requireModulePermission } from "@/lib/admin-permissions";
 import { prisma } from "@/lib/prisma";
 import { createVoucherPdf } from "@/lib/voucher-pdf";
 import type { AdminModuleKey } from "@/types/admin";
-import { getCategories, getProducts, upsertCategory, upsertProduct, deleteCategory, deleteProduct } from "@/lib/catalog-repository";
+import { deleteCategory, deleteIndustry, deleteProduct, getCategories, getIndustries, getProducts, upsertCategory, upsertIndustry, upsertProduct } from "@/lib/catalog-repository";
+import { deleteStudentArticles, getStudentArticles, upsertStudentArticle } from "@/lib/student-content";
 
 const supportedModules: AdminModuleKey[] = [
   "orders",
@@ -19,6 +21,7 @@ const supportedModules: AdminModuleKey[] = [
   "coupons",
   "reviews",
   "newsletter",
+  "newsletterCampaigns",
   "shipping",
   "paymentMethods",
   "usersRoles",
@@ -27,13 +30,97 @@ const supportedModules: AdminModuleKey[] = [
   "backups",
   "security",
   "categories",
+  "industries",
   "products",
+  "studentArticles",
+  "studentVerifications",
   "audit",
   "crm-pending"
 ];
 
 function isSupportedModule(value: string): value is AdminModuleKey {
   return supportedModules.includes(value as AdminModuleKey);
+}
+
+function generateVoucherCode() {
+  return `DUD-${randomBytes(3).toString("hex").toUpperCase()}`;
+}
+
+async function uniqueVoucherCode(input?: string) {
+  const normalized = input?.trim().toUpperCase();
+  if (normalized) return normalized;
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const code = generateVoucherCode();
+    const exists = await prisma.coupon.findUnique({ where: { code } });
+    if (!exists) return code;
+  }
+  return `DUD-${Date.now().toString(36).toUpperCase()}`;
+}
+
+async function nextInvoiceNumber() {
+  const year = new Date().getFullYear();
+  const count = await prisma.adminInvoice.count({
+    where: {
+      OR: [
+        { id: { startsWith: `RE-${year}-` } },
+        { invoiceNumber: { startsWith: `RE-${year}-` } }
+      ]
+    }
+  });
+  return `RE-${year}-${String(count + 1).padStart(4, "0")}`;
+}
+
+function assertSmtpConfig() {
+  const smtpHost = process.env.SMTP_HOST?.trim();
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const smtpPass = process.env.SMTP_PASS?.trim();
+  const smtpPort = Number(process.env.SMTP_PORT?.trim() || "587");
+  const fromEmail = process.env.SMTP_FROM_EMAIL?.trim() || smtpUser;
+  if (!smtpHost || !smtpUser || !smtpPass || !fromEmail) {
+    throw new Error("SMTP ist nicht konfiguriert. Bitte SMTP_HOST, SMTP_USER, SMTP_PASS und SMTP_FROM_EMAIL einrichten.");
+  }
+  return { smtpHost, smtpUser, smtpPass, smtpPort, fromEmail };
+}
+
+async function sendNewsletterCampaign(input: {
+  subject: string;
+  preheader?: string | null;
+  body: string;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+}) {
+  const smtp = assertSmtpConfig();
+  const subscribers = await prisma.newsletterSubscriber.findMany({
+    where: { active: true },
+    orderBy: { createdAt: "asc" }
+  });
+  if (subscribers.length === 0) {
+    throw new Error("Keine aktiven Newsletter-Kontakte vorhanden.");
+  }
+
+  const company = await prisma.companyInformation.findUnique({ where: { id: "company" } });
+  const nodemailer = await import("nodemailer");
+  const transporter = nodemailer.default.createTransport({
+    host: smtp.smtpHost,
+    port: smtp.smtpPort,
+    secure: smtp.smtpPort === 465,
+    auth: { user: smtp.smtpUser, pass: smtp.smtpPass }
+  });
+  const plainFooter = `\n\n--\n${company?.name || "DUD Studio"}\nSie erhalten diese E-Mail, weil Sie als Newsletter-Kontakt aktiv sind.`;
+  const cta = input.ctaUrl
+    ? `\n\n${input.ctaLabel || "Mehr erfahren"}: ${input.ctaUrl}`
+    : "";
+
+  for (const subscriber of subscribers) {
+    await transporter.sendMail({
+      from: smtp.fromEmail,
+      to: subscriber.email,
+      subject: input.subject,
+      text: `${input.preheader ? `${input.preheader}\n\n` : ""}${input.body}${cta}${plainFooter}`
+    });
+  }
+
+  return subscribers.length;
 }
 
 async function sendVoucherEmail(input: {
@@ -275,11 +362,68 @@ export async function GET(request: Request, { params }: { params: Promise<{ modu
     });
   }
 
+  if (module === "industries") {
+    const all = await getIndustries();
+    const filtered = q
+      ? all.filter((industry) => industry.name.toLowerCase().includes(q.toLowerCase()) || industry.slug.toLowerCase().includes(q.toLowerCase()))
+      : all;
+    return NextResponse.json({
+      items: filtered.slice(skip, skip + pageSize),
+      total: filtered.length,
+      page,
+      pageSize
+    });
+  }
+
   if (module === "products") {
     const all = await getProducts();
     const filtered = q 
       ? all.filter(p => p.name.toLowerCase().includes(q.toLowerCase()) || p.slug.toLowerCase().includes(q.toLowerCase()))
       : all;
+    return NextResponse.json({
+      items: filtered.slice(skip, skip + pageSize),
+      total: filtered.length,
+      page,
+      pageSize
+    });
+  }
+
+  if (module === "studentArticles") {
+    const all = await getStudentArticles({ includeDrafts: true });
+    const filtered = q
+      ? all.filter((article) => `${article.title} ${article.slug} ${article.category}`.toLowerCase().includes(q.toLowerCase()))
+      : all;
+    return NextResponse.json({
+      items: filtered.slice(skip, skip + pageSize).map((item) => ({ ...item, id: item.slug })),
+      total: filtered.length,
+      page,
+      pageSize
+    });
+  }
+
+  if (module === "studentVerifications") {
+    const users = await prisma.customerAccount.findMany({ orderBy: { updatedAt: "desc" } });
+    const mapped = users
+      .map((row) => {
+        const data = row.data as Record<string, any>;
+        const verification = data.studentVerification as Record<string, any> | undefined;
+        return verification ? {
+          id: row.id,
+          email: row.email,
+          fullName: data.fullName ?? "",
+          university: verification.university ?? "",
+          status: verification.status ?? "pending",
+          validUntil: verification.validUntil ?? "",
+          submittedAt: verification.submittedAt ?? "",
+          reviewedAt: verification.reviewedAt ?? "",
+          reviewNote: verification.reviewNote ?? "",
+          documentPath: verification.documentPath ?? ""
+        } : null;
+      })
+      .filter(Boolean) as Array<Record<string, unknown>>;
+    const filtered = q
+      ? mapped.filter((item) => JSON.stringify(item).toLowerCase().includes(q.toLowerCase()))
+      : mapped;
     return NextResponse.json({
       items: filtered.slice(skip, skip + pageSize),
       total: filtered.length,
@@ -356,6 +500,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ modu
     const [items, total] = await Promise.all([
       prisma.newsletterSubscriber.findMany({ where, skip, take: pageSize, orderBy: { createdAt: "desc" } }),
       prisma.newsletterSubscriber.count({ where })
+    ]);
+    return NextResponse.json({ items, total, page, pageSize });
+  }
+
+  if (module === "newsletterCampaigns") {
+    const where: Prisma.NewsletterCampaignWhereInput = {
+      AND: [
+        status ? { status } : {},
+        q ? { OR: [{ subject: containsQ }, { body: containsQ }] } : {}
+      ]
+    };
+    const [items, total] = await Promise.all([
+      prisma.newsletterCampaign.findMany({ where, skip, take: pageSize, orderBy: { createdAt: "desc" } }),
+      prisma.newsletterCampaign.count({ where })
     ]);
     return NextResponse.json({ items, total, page, pageSize });
   }
@@ -472,9 +630,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ mod
   if (module === "invoices") {
     const parsed = moduleCreateSchemas.invoices.safeParse(body);
     if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
+    const invoiceNumber = parsed.data.invoiceNumber?.trim() || parsed.data.id?.trim() || await nextInvoiceNumber();
     const item = await prisma.adminInvoice.create({
       data: {
-        ...parsed.data,
+        id: invoiceNumber,
+        customer: parsed.data.customer,
+        email: parsed.data.email || null,
+        invoiceNumber,
+        amount: parsed.data.amount,
+        status: parsed.data.status,
         dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null
       }
     });
@@ -485,9 +649,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ mod
     const parsed = moduleCreateSchemas.coupons.safeParse(body);
     if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
     const { recipientEmail, recipientName, deliverToDashboard, sendPdfEmail, ...couponData } = parsed.data;
+    const code = await uniqueVoucherCode(couponData.code);
     const item = await prisma.coupon.create({
       data: {
         ...couponData,
+        code,
         startsAt: couponData.startsAt ? new Date(couponData.startsAt) : null,
         endsAt: couponData.endsAt ? new Date(couponData.endsAt) : null
       }
@@ -545,6 +711,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ mod
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.id, payload: parsed.data });
     return NextResponse.json(item);
   }
+  if (module === "newsletterCampaigns") {
+    const parsed = moduleCreateSchemas.newsletterCampaigns.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
+    let recipientCount = 0;
+    let sentAt: Date | null = null;
+    if (parsed.data.status === "sent") {
+      try {
+        recipientCount = await sendNewsletterCampaign(parsed.data);
+        sentAt = new Date();
+      } catch (error) {
+        return NextResponse.json({ message: error instanceof Error ? error.message : "Newsletter konnte nicht gesendet werden." }, { status: 400 });
+      }
+    }
+    const item = await prisma.newsletterCampaign.create({
+      data: {
+        ...parsed.data,
+        ctaUrl: parsed.data.ctaUrl || null,
+        recipientCount,
+        sentAt
+      }
+    });
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.id, payload: parsed.data });
+    return NextResponse.json(item);
+  }
   if (module === "shipping") {
     const parsed = moduleCreateSchemas.shipping.safeParse(body);
     if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
@@ -594,12 +784,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ mod
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.slug, payload: parsed.data });
     return NextResponse.json(item);
   }
+  if (module === "industries") {
+    const item = await upsertIndustry(body as any);
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.slug, payload: body });
+    return NextResponse.json(item);
+  }
   if (module === "products") {
     const parsed = moduleCreateSchemas.products.safeParse(body);
     if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
     const item = await upsertProduct(parsed.data as any);
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.slug, payload: parsed.data });
     return NextResponse.json(item);
+  }
+  if (module === "studentArticles") {
+    const parsed = moduleCreateSchemas.studentArticles.safeParse(body);
+    if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
+    const item = await upsertStudentArticle(parsed.data as any);
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "create", entityId: item.slug, payload: parsed.data });
+    return NextResponse.json({ ...item, id: item.slug });
   }
   const parsed = moduleCreateSchemas.security.safeParse(body);
   if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
@@ -629,10 +831,50 @@ export async function PUT(request: Request, { params }: { params: Promise<{ modu
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.slug, payload: data });
     return NextResponse.json(item);
   }
+  if (module === "industries") {
+    const item = await upsertIndustry(data as any, payload.id);
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.slug, payload: data });
+    return NextResponse.json(item);
+  }
   if (module === "products") {
     const item = await upsertProduct(data as any);
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.slug, payload: data });
     return NextResponse.json(item);
+  }
+  if (module === "studentArticles") {
+    const parsed = moduleCreateSchemas.studentArticles.safeParse(data);
+    if (!parsed.success) return NextResponse.json({ message: "Invalid payload.", issues: parsed.error.flatten() }, { status: 400 });
+    const item = await upsertStudentArticle({ ...(parsed.data as any), slug: String(data.slug || payload.id) });
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.slug, payload: data });
+    return NextResponse.json({ ...item, id: item.slug });
+  }
+  if (module === "studentVerifications") {
+    const user = await prisma.customerAccount.findUnique({ where: { id: payload.id } });
+    if (!user) return NextResponse.json({ message: "Benutzer nicht gefunden." }, { status: 404 });
+    const userData = user.data as Record<string, any>;
+    const current = userData.studentVerification as Record<string, any> | undefined;
+    const nextVerification: Record<string, any> = {
+      ...(current ?? {}),
+      status: typeof data.status === "string" ? data.status : current?.status ?? "pending",
+      validUntil: typeof data.validUntil === "string" ? data.validUntil : current?.validUntil ?? "",
+      reviewNote: typeof data.reviewNote === "string" ? data.reviewNote : current?.reviewNote ?? "",
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: permission.sessionUser.email
+    };
+    const nextData = { ...userData, studentVerification: nextVerification };
+    await prisma.customerAccount.update({ where: { id: payload.id }, data: { data: nextData as Prisma.InputJsonValue } });
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: payload.id, payload: nextVerification });
+    return NextResponse.json({
+      id: payload.id,
+      email: user.email,
+      fullName: userData.fullName ?? "",
+      university: nextVerification.university ?? "",
+      status: nextVerification.status,
+      validUntil: nextVerification.validUntil ?? "",
+      reviewedAt: nextVerification.reviewedAt,
+      reviewNote: nextVerification.reviewNote ?? "",
+      documentPath: nextVerification.documentPath ?? ""
+    });
   }
   if (module === "orders") {
     const item = await prisma.adminOrder.update({ where: { id: payload.id }, data: data as Prisma.AdminOrderUpdateInput });
@@ -647,7 +889,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ modu
   if (module === "invoices") {
     const dataWithDate = { ...data };
     if (typeof dataWithDate.dueDate === "string") {
-      dataWithDate.dueDate = new Date(dataWithDate.dueDate);
+      dataWithDate.dueDate = dataWithDate.dueDate ? new Date(dataWithDate.dueDate) : null;
+    }
+    if (typeof dataWithDate.invoiceNumber === "string" && dataWithDate.invoiceNumber.trim()) {
+      dataWithDate.invoiceNumber = dataWithDate.invoiceNumber.trim();
     }
     const item = await prisma.adminInvoice.update({ where: { id: payload.id }, data: dataWithDate as Prisma.AdminInvoiceUpdateInput });
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.id, payload: data });
@@ -659,7 +904,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ modu
     return NextResponse.json(item);
   }
   if (module === "coupons") {
-    const item = await prisma.coupon.update({ where: { id: payload.id }, data: data as Prisma.CouponUpdateInput });
+    const couponData = { ...data };
+    if (typeof couponData.code === "string") couponData.code = await uniqueVoucherCode(couponData.code);
+    if (typeof couponData.startsAt === "string") couponData.startsAt = couponData.startsAt ? new Date(couponData.startsAt) : null;
+    if (typeof couponData.endsAt === "string") couponData.endsAt = couponData.endsAt ? new Date(couponData.endsAt) : null;
+    const item = await prisma.coupon.update({ where: { id: payload.id }, data: couponData as Prisma.CouponUpdateInput });
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.id, payload: data });
     return NextResponse.json(item);
   }
@@ -670,6 +919,34 @@ export async function PUT(request: Request, { params }: { params: Promise<{ modu
   }
   if (module === "newsletter") {
     const item = await prisma.newsletterSubscriber.update({ where: { id: payload.id }, data: data as Prisma.NewsletterSubscriberUpdateInput });
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.id, payload: data });
+    return NextResponse.json(item);
+  }
+  if (module === "newsletterCampaigns") {
+    const dataWithSendState = { ...data };
+    if (dataWithSendState.ctaUrl === "") dataWithSendState.ctaUrl = null;
+    if (dataWithSendState.status === "sent") {
+      const current = await prisma.newsletterCampaign.findUnique({ where: { id: payload.id } });
+      if (!current?.sentAt) {
+        try {
+          const recipientCount = await sendNewsletterCampaign({
+            subject: typeof dataWithSendState.subject === "string" ? dataWithSendState.subject : current?.subject ?? "",
+            preheader: typeof dataWithSendState.preheader === "string" ? dataWithSendState.preheader : current?.preheader,
+            body: typeof dataWithSendState.body === "string" ? dataWithSendState.body : current?.body ?? "",
+            ctaLabel: typeof dataWithSendState.ctaLabel === "string" ? dataWithSendState.ctaLabel : current?.ctaLabel,
+            ctaUrl: typeof dataWithSendState.ctaUrl === "string" ? dataWithSendState.ctaUrl : current?.ctaUrl
+          });
+          dataWithSendState.recipientCount = recipientCount;
+          dataWithSendState.sentAt = new Date();
+          dataWithSendState.lastError = null;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Newsletter konnte nicht gesendet werden.";
+          await prisma.newsletterCampaign.update({ where: { id: payload.id }, data: { lastError: message } });
+          return NextResponse.json({ message }, { status: 400 });
+        }
+      }
+    }
+    const item = await prisma.newsletterCampaign.update({ where: { id: payload.id }, data: dataWithSendState as Prisma.NewsletterCampaignUpdateInput });
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.id, payload: data });
     return NextResponse.json(item);
   }
@@ -728,15 +1005,20 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ m
   else if (module === "categories") {
     for (const id of ids) await deleteCategory(id);
   }
+  else if (module === "industries") {
+    for (const id of ids) await deleteIndustry(id);
+  }
   else if (module === "products") {
     for (const id of ids) await deleteProduct(id);
   }
+  else if (module === "studentArticles") await deleteStudentArticles(ids);
   else if (module === "quotes") await prisma.adminQuote.deleteMany({ where: { id: { in: ids } } });
   else if (module === "invoices") await prisma.adminInvoice.deleteMany({ where: { id: { in: ids } } });
   else if (module === "fileUploads") await prisma.contactFileUpload.deleteMany({ where: { id: { in: ids } } });
   else if (module === "coupons") await prisma.coupon.deleteMany({ where: { id: { in: ids } } });
   else if (module === "reviews") await prisma.review.deleteMany({ where: { id: { in: ids } } });
   else if (module === "newsletter") await prisma.newsletterSubscriber.deleteMany({ where: { id: { in: ids } } });
+  else if (module === "newsletterCampaigns") await prisma.newsletterCampaign.deleteMany({ where: { id: { in: ids } } });
   else if (module === "shipping") await prisma.shippingMethod.deleteMany({ where: { id: { in: ids } } });
   else if (module === "paymentMethods") await prisma.paymentMethod.deleteMany({ where: { id: { in: ids } } });
   else if (module === "usersRoles") await prisma.adminUser.deleteMany({ where: { id: { in: ids } } });

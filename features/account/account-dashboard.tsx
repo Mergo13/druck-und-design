@@ -12,6 +12,7 @@ import {
   Package,
   Settings,
   ShieldCheck,
+  Star,
   UserCircle2,
   X,
   type LucideIcon
@@ -22,12 +23,13 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 
 const navigation: Array<[LucideIcon, string, string]> = [
-  [LayoutDashboard, "Uebersicht", "#"],
+  [LayoutDashboard, "Uebersicht", "#orders"],
   [Package, "Bestellungen", "#orders"],
   [CreditCard, "Rechnungen", "#invoices"],
   [UserCircle2, "Kontoeinstellungen", "#settings"],
+  [ShieldCheck, "Studentenstatus", "#student-status"],
   [LifeBuoy, "Reklamationen", "#support"],
-  [Settings, "Einstellungen", "#"]
+  [Settings, "Einstellungen", "#security"]
 ];
 
 const projects = [];
@@ -80,34 +82,76 @@ export function AccountDashboard() {
   const [passwordMessage, setPasswordMessage] = useState({ text: "", type: "info" as "info" | "success" | "error" });
   const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
   const [activeSearchField, setActiveSearchField] = useState<"billing" | "shipping" | null>(null);
+  const [reviewForm, setReviewForm] = useState({ productSlug: "", productName: "", rating: 5, comment: "" });
+  const [reviewMessage, setReviewMessage] = useState({ text: "", type: "info" as "info" | "success" | "error" });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [studentUniversity, setStudentUniversity] = useState("");
+  const [studentIdFile, setStudentIdFile] = useState<File | null>(null);
+  const [studentUploadMessage, setStudentUploadMessage] = useState({ text: "", type: "info" as "info" | "success" | "error" });
+  const [submittingStudentId, setSubmittingStudentId] = useState(false);
+
+  async function loadAccountData() {
+    const profileRes = await fetch("/api/user/profile");
+    if (!profileRes.ok) {
+      setAuthenticated(false);
+      return;
+    }
+    const profileData = await profileRes.json();
+    setAuthenticated(true);
+    setEmail(profileData.email ?? "");
+    setProfile(profileData);
+    setStudentUniversity(profileData.studentVerification?.university || "");
+    setProfileForm({
+      fullName: profileData.fullName || "",
+      company: profileData.company || "",
+      vatId: profileData.vatId || "",
+      phone: profileData.phone || "",
+      email: profileData.email || "",
+      billingAddress: profileData.billingAddress || "",
+      shippingAddress: profileData.shippingAddress || ""
+    });
+
+    const [ordersRes, invoicesRes] = await Promise.all([
+      fetch("/api/orders"),
+      fetch("/api/user/invoices")
+    ]);
+    if (ordersRes.ok) {
+      const ordersData = await ordersRes.json();
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
+    }
+    if (invoicesRes.ok) {
+      const invoiceRows = await invoicesRes.json();
+      setInvoicesData(Array.isArray(invoiceRows) ? invoiceRows : []);
+    }
+  }
+
+  async function handleStudentVerificationUpload(e: React.FormEvent) {
+    e.preventDefault();
+    if (!studentIdFile) {
+      setStudentUploadMessage({ text: "Bitte einen Studentenausweis als PDF oder Bild auswählen.", type: "error" });
+      return;
+    }
+    setSubmittingStudentId(true);
+    setStudentUploadMessage({ text: "", type: "info" });
+    const formData = new FormData();
+    formData.append("university", studentUniversity);
+    formData.append("file", studentIdFile);
+    try {
+      const res = await fetch("/api/uploads/student-id", { method: "POST", body: formData });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.message || "Upload fehlgeschlagen.");
+      await loadAccountData();
+      setStudentIdFile(null);
+      setStudentUploadMessage({ text: "Studentenstatus wurde zur Prüfung eingereicht.", type: "success" });
+    } catch (error) {
+      setStudentUploadMessage({ text: error instanceof Error ? error.message : "Upload fehlgeschlagen.", type: "error" });
+    } finally {
+      setSubmittingStudentId(false);
+    }
+  }
 
   useEffect(() => {
-    fetch("/api/auth/session")
-      .then((res) => res.json())
-      .then((data: { authenticated: boolean; user?: any }) => {
-        setAuthenticated(Boolean(data.authenticated));
-        setEmail(data.user?.email ?? "");
-        if (data.authenticated) {
-          setProfile(data.user);
-          setProfileForm({
-            fullName: data.user?.fullName || "",
-            company: data.user?.company || "",
-            vatId: data.user?.vatId || "",
-            phone: data.user?.phone || "",
-            email: data.user?.email || "",
-            billingAddress: data.user?.billingAddress || "",
-            shippingAddress: data.user?.shippingAddress || ""
-          });
-          fetch("/api/orders")
-            .then(res => res.json())
-            .then(ordersData => setOrders(Array.isArray(ordersData) ? ordersData : []))
-            .catch(err => console.error("Error fetching orders:", err));
-          fetch("/api/user/invoices")
-            .then(res => res.json())
-            .then((invoiceRows) => setInvoicesData(Array.isArray(invoiceRows) ? invoiceRows : []))
-            .catch(err => console.error("Error fetching invoices:", err));
-        }
-      })
+    loadAccountData()
       .catch(() => setAuthenticated(false));
   }, []);
 
@@ -160,6 +204,7 @@ export function AccountDashboard() {
         const data = await res.json();
         setProfile(data.user);
         setEmail(data.user?.email || email);
+        await loadAccountData();
         setIsEditingProfile(false);
         alert("Profil erfolgreich aktualisiert.");
       } else {
@@ -218,6 +263,46 @@ export function AccountDashboard() {
       }
     } catch (err) {
       setPasswordMessage({ text: "Netzwerkfehler", type: "error" });
+    }
+  }
+
+  function prepareReview(order: any) {
+    const firstItem = Array.isArray(order.items) ? order.items[0] : null;
+    setReviewForm({
+      productSlug: String(firstItem?.productSlug ?? ""),
+      productName: String(firstItem?.name ?? firstItem?.productName ?? ""),
+      rating: 5,
+      comment: ""
+    });
+    setReviewMessage({ text: "", type: "info" });
+  }
+
+  async function submitReview(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    setSubmittingReview(true);
+    setReviewMessage({ text: "", type: "info" });
+    try {
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: selectedOrder.id,
+          productSlug: reviewForm.productSlug,
+          productName: reviewForm.productName,
+          rating: reviewForm.rating,
+          comment: reviewForm.comment
+        })
+      });
+      const payload = await response.json().catch(() => ({ message: "Bewertung konnte nicht gespeichert werden." }));
+      if (!response.ok) {
+        setReviewMessage({ text: payload.message ?? "Bewertung konnte nicht gespeichert werden.", type: "error" });
+        return;
+      }
+      setReviewMessage({ text: payload.message ?? "Danke. Die Bewertung wartet auf Freigabe.", type: "success" });
+      setReviewForm((current) => ({ ...current, comment: "" }));
+    } finally {
+      setSubmittingReview(false);
     }
   }
 
@@ -343,9 +428,23 @@ export function AccountDashboard() {
                           size="sm" 
                           variant="outline" 
                           className="h-7 text-[10px]"
-                          onClick={() => setSelectedOrder(order)}
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            prepareReview(order);
+                          }}
                         >
                           Details
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-[10px]"
+                          onClick={() => {
+                            setSelectedOrder(order);
+                            prepareReview(order);
+                          }}
+                        >
+                          Bewerten
                         </Button>
                       </div>
                     </motion.article>
@@ -583,6 +682,70 @@ export function AccountDashboard() {
                 )}
               </section>
 
+              <section id="student-status">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-base font-black md:text-xl">Studentenstatus</h2>
+                </div>
+                <div className="grid gap-4 md:grid-cols-[.9fr_1.1fr]">
+                  <div className="rounded-md border bg-background p-4">
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-bold">
+                      <ShieldCheck className="h-4 w-4 text-primary" />
+                      Aktueller Status
+                    </h3>
+                    <p className="text-sm font-bold text-foreground">
+                      {profile?.studentVerification?.status === "approved" ? "Bestätigt" :
+                        profile?.studentVerification?.status === "rejected" ? "Abgelehnt" :
+                          profile?.studentVerification?.status === "expired" ? "Abgelaufen" :
+                            profile?.studentVerification?.status === "pending" ? "In Prüfung" : "Noch nicht eingereicht"}
+                    </p>
+                    {profile?.studentVerification?.university ? (
+                      <p className="mt-2 text-sm text-muted-foreground">{profile.studentVerification.university}</p>
+                    ) : null}
+                    {profile?.studentVerification?.validUntil ? (
+                      <p className="mt-1 text-xs text-muted-foreground">Gültig bis {profile.studentVerification.validUntil}</p>
+                    ) : null}
+                    {profile?.studentVerification?.reviewNote ? (
+                      <p className="mt-3 rounded-md bg-muted p-3 text-xs text-muted-foreground">{profile.studentVerification.reviewNote}</p>
+                    ) : null}
+                  </div>
+                  <form onSubmit={handleStudentVerificationUpload} className="space-y-4 rounded-md border bg-background p-4 shadow-sm">
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">Studentenausweis hochladen</h3>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">Die Datei wird privat gespeichert und ist nicht öffentlich abrufbar.</p>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-muted-foreground">Universität / FH</label>
+                        <input
+                          type="text"
+                          value={studentUniversity}
+                          onChange={(e) => setStudentUniversity(e.target.value)}
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          placeholder="z.B. FH Oberösterreich"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-muted-foreground">Nachweis</label>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg,.webp"
+                          onChange={(e) => setStudentIdFile(e.target.files?.[0] ?? null)}
+                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                          required
+                        />
+                      </div>
+                    </div>
+                    {studentUploadMessage.text ? (
+                      <p className={studentUploadMessage.type === "error" ? "text-sm font-bold text-red-600" : "text-sm font-bold text-emerald-600"}>{studentUploadMessage.text}</p>
+                    ) : null}
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={submittingStudentId}>{submittingStudentId ? "Wird hochgeladen..." : "Zur Prüfung senden"}</Button>
+                    </div>
+                  </form>
+                </div>
+              </section>
+
               <section id="support">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-base font-black md:text-xl">Reklamationen</h2>
@@ -709,6 +872,73 @@ export function AccountDashboard() {
                   )}
                 </div>
               </div>
+
+              <form onSubmit={submitReview} className="border-t pt-6">
+                <h4 className="mb-3 flex items-center gap-2 text-sm font-bold">
+                  <Star className="h-4 w-4" />
+                  Bestellung bewerten
+                </h4>
+                <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+                  <label className="grid gap-1 text-xs font-bold uppercase text-muted-foreground">
+                    Produkt
+                    <select
+                      value={reviewForm.productSlug}
+                      onChange={(event) => {
+                        const item = Array.isArray(selectedOrder.items)
+                          ? selectedOrder.items.find((entry: any) => String(entry.productSlug ?? "") === event.target.value)
+                          : null;
+                        setReviewForm({
+                          ...reviewForm,
+                          productSlug: event.target.value,
+                          productName: String(item?.name ?? item?.productName ?? "")
+                        });
+                      }}
+                      className="h-10 rounded-md border bg-background px-3 text-sm font-semibold normal-case text-foreground"
+                    >
+                      {Array.isArray(selectedOrder.items) ? selectedOrder.items.map((item: any, index: number) => (
+                        <option key={`${item.productSlug ?? item.name}-${index}`} value={String(item.productSlug ?? "")}>
+                          {item.name || item.productName || "Produkt"}
+                        </option>
+                      )) : null}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-bold uppercase text-muted-foreground">
+                    Sterne
+                    <select
+                      value={reviewForm.rating}
+                      onChange={(event) => setReviewForm({ ...reviewForm, rating: Number(event.target.value) })}
+                      className="h-10 rounded-md border bg-background px-3 text-sm font-semibold text-foreground"
+                    >
+                      {[5, 4, 3, 2, 1].map((rating) => (
+                        <option key={rating} value={rating}>{rating}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <label className="mt-3 grid gap-1 text-xs font-bold uppercase text-muted-foreground">
+                  Kommentar
+                  <textarea
+                    value={reviewForm.comment}
+                    onChange={(event) => setReviewForm({ ...reviewForm, comment: event.target.value })}
+                    className="h-24 rounded-md border bg-background p-3 text-sm font-medium normal-case text-foreground"
+                    placeholder="Wie war Ihre Erfahrung?"
+                    required
+                    minLength={3}
+                  />
+                </label>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Button type="submit" size="sm" disabled={submittingReview}>
+                    {submittingReview ? "Speichert..." : "Bewertung senden"}
+                  </Button>
+                  {reviewMessage.text ? (
+                    <p className={reviewMessage.type === "error" ? "text-xs font-bold text-rose-600" : "text-xs font-bold text-emerald-700"}>
+                      {reviewMessage.text}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Bewertungen erscheinen erst nach Admin-Freigabe.</p>
+                  )}
+                </div>
+              </form>
 
               {(selectedOrder.shippingCost || selectedOrder.processingFee) && (
                 <div className="border-t pt-4 space-y-2">
