@@ -6,6 +6,7 @@ export type AdminModuleKey =
   | "coupons"
   | "reviews"
   | "newsletter"
+  | "newsletterCampaigns"
   | "shipping"
   | "paymentMethods"
   | "usersRoles"
@@ -14,7 +15,10 @@ export type AdminModuleKey =
   | "backups"
   | "security"
   | "categories"
+  | "industries"
   | "products"
+  | "studentArticles"
+  | "studentVerifications"
   | "audit"
   | "crm-pending";
 

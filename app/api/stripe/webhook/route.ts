@@ -146,6 +146,8 @@ export async function POST(request: Request) {
         shippingCost: session.metadata?.shippingCost ? Number(session.metadata.shippingCost) : undefined,
         shippingName: session.metadata?.shippingName || undefined,
         processingFee: session.metadata?.processingFee ? Number(session.metadata.processingFee) : undefined,
+        couponCode: session.metadata?.couponCode || undefined,
+        couponDiscount: session.metadata?.couponDiscount ? Number(session.metadata.couponDiscount) : undefined,
         customerName: session.metadata?.customerName || session.customer_details?.name || undefined,
         customerEmail: session.customer_details?.email || session.customer_email || undefined,
       };
@@ -186,6 +188,7 @@ export async function POST(request: Request) {
 
       // Fallback for name from billing if still missing
       await ensureAdminBootstrap();
+      const existingAdminOrder = await prisma.adminOrder.findUnique({ where: { id: orderId } });
       await prisma.adminOrder.upsert({
         where: { id: orderId },
         update: {
@@ -198,6 +201,11 @@ export async function POST(request: Request) {
           items: items as unknown as object,
           billingAddress: session.metadata?.billingAddress || (session.customer_details?.address ? JSON.stringify(session.customer_details.address) : null),
           shippingAddress: session.metadata?.shippingAddress || session.metadata?.billingAddress || (session.customer_details?.address ? JSON.stringify(session.customer_details.address) : null),
+          shippingCost: session.metadata?.shippingCost ? Number(session.metadata.shippingCost) : null,
+          shippingName: session.metadata?.shippingName || null,
+          processingFee: session.metadata?.processingFee ? Number(session.metadata.processingFee) : null,
+          couponCode: session.metadata?.couponCode || null,
+          couponDiscount: session.metadata?.couponDiscount ? Number(session.metadata.couponDiscount) : null,
         },
         create: {
           id: orderId,
@@ -210,8 +218,19 @@ export async function POST(request: Request) {
           items: items as unknown as object,
           billingAddress: session.metadata?.billingAddress || (session.customer_details?.address ? JSON.stringify(session.customer_details.address) : null),
           shippingAddress: session.metadata?.shippingAddress || session.metadata?.billingAddress || (session.customer_details?.address ? JSON.stringify(session.customer_details.address) : null),
+          shippingCost: session.metadata?.shippingCost ? Number(session.metadata.shippingCost) : null,
+          shippingName: session.metadata?.shippingName || null,
+          processingFee: session.metadata?.processingFee ? Number(session.metadata.processingFee) : null,
+          couponCode: session.metadata?.couponCode || null,
+          couponDiscount: session.metadata?.couponDiscount ? Number(session.metadata.couponDiscount) : null,
         }
       });
+      if (!existingAdminOrder && session.metadata?.couponCode && Number(session.metadata?.couponDiscount || 0) > 0) {
+        await prisma.coupon.updateMany({
+          where: { code: session.metadata.couponCode, active: true },
+          data: { usedCount: { increment: 1 } }
+        });
+      }
       logger.info({ orderId, stripeSessionId: session.id, total }, "Saved Stripe order in adminOrder");
       
       logger.info(

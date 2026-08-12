@@ -56,6 +56,8 @@ export type Order = {
   shippingCost?: number;
   shippingName?: string;
   processingFee?: number;
+  couponCode?: string;
+  couponDiscount?: number;
 };
 
 export type UserAccount = {
@@ -68,6 +70,16 @@ export type UserAccount = {
   passwordHash: string;
   billingAddress?: string;
   shippingAddress?: string;
+  studentVerification?: {
+    university?: string;
+    status?: "pending" | "approved" | "rejected" | "expired";
+    submittedAt?: string;
+    reviewedAt?: string;
+    reviewedBy?: string;
+    reviewNote?: string;
+    validUntil?: string;
+    documentPath?: string;
+  };
   createdAt: string;
 };
 

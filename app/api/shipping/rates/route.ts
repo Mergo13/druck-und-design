@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
+import { prisma } from "@/lib/prisma";
 import { getSendcloudRates, estimateWeight } from "@/lib/sendcloud";
 
 export async function POST(request: Request) {
   try {
+    await ensureAdminBootstrap();
     const body = await request.json();
     const { items, toCountry, toPostcode } = body;
 
@@ -12,6 +15,26 @@ export async function POST(request: Request) {
 
     const weight = estimateWeight(items);
     const country = toCountry || "AT"; // Fallback to AT
+    const configuredRates = await prisma.shippingMethod.findMany({
+      where: { active: true },
+      orderBy: [{ price: "asc" }, { name: "asc" }]
+    });
+
+    if (configuredRates.length > 0) {
+      return NextResponse.json({
+        rates: configuredRates.map((rate) => ({
+          id: rate.id,
+          name: rate.name,
+          price: rate.price,
+          currency: "EUR",
+          carrier: "admin",
+          etaDays: rate.etaDays
+        })),
+        weight,
+        country,
+        source: "admin"
+      });
+    }
 
     const rates = await getSendcloudRates({
       weight,
