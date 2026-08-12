@@ -4,6 +4,9 @@ import { ShopBrowser } from "@/features/shop/shop-browser";
 import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository";
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
+import { ShowroomSection } from "@/components/showroom/showroom-section";
+import { getCategoryShowroom } from "@/lib/showroom-content";
+import { getSiteImageMap } from "@/lib/site-images";
 
 export async function generateMetadata({ params }: { params: Promise<{ kategorie: string }> }): Promise<Metadata> {
   const { kategorie } = await params;
@@ -24,11 +27,12 @@ export async function generateMetadata({ params }: { params: Promise<{ kategorie
 
 export default async function CategoryPage({ params }: { params: Promise<{ kategorie: string }> }) {
   const { kategorie } = await params;
-  const [categories, rawProducts, session] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser()]);
+  const [categories, rawProducts, session, siteImages] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser(), getSiteImageMap()]);
   const authenticated = Boolean(session);
   const products = authenticated ? rawProducts : rawProducts.map(withoutPrices);
   const category = categories.find((item) => item.slug === kategorie);
   if (!category || ["druckservice", "werbetechnik", "werbeagentur", "kleidung-textilien", "leistungen"].includes(kategorie)) notFound();
+  const showroomImages = getCategoryShowroom(category, siteImages);
 
   return (
     <section className="container-page py-10">
@@ -37,6 +41,11 @@ export default async function CategoryPage({ params }: { params: Promise<{ kateg
         <h1 className="mt-2 text-4xl font-black">{category.name}</h1>
         <p className="mt-3 max-w-3xl text-muted-foreground">{category.description} Konfigurieren Sie Format, Papier, Auflage und Lieferzeit mit transparenten Preisen und professionellem Druckdatencheck.</p>
       </div>
+      <ShowroomSection
+        title={`${category.name} Showroom`}
+        description="Typische Anwendungen und Umsetzungen für diese Produktgruppe."
+        images={showroomImages}
+      />
       <ShopBrowser initialCategory={category.slug} categories={categories} products={products} authenticated={authenticated} />
     </section>
   );

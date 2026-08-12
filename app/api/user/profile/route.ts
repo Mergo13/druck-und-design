@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser, createSessionToken, getSessionCookieName } from "@/lib/auth";
 import { getUserByEmail, saveUser } from "@/lib/catalog-repository";
+import { prisma } from "@/lib/prisma";
 import { SessionUser, UserAccount } from "@/types";
 
 export async function GET() {
@@ -55,6 +56,22 @@ export async function POST(request: Request) {
   };
 
   await saveUser(updatedUser);
+  if (requestedEmail !== user.email.toLowerCase()) {
+    await Promise.all([
+      prisma.adminOrder.updateMany({
+        where: { email: user.email.toLowerCase() },
+        data: { email: requestedEmail }
+      }),
+      prisma.adminInvoice.updateMany({
+        where: { email: user.email.toLowerCase() },
+        data: { email: requestedEmail }
+      }),
+      prisma.review.updateMany({
+        where: { email: user.email.toLowerCase() },
+        data: { email: requestedEmail }
+      })
+    ]);
+  }
 
   // Update session cookie with new data
   const newSession: SessionUser = {

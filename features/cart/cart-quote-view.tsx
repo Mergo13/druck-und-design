@@ -21,6 +21,7 @@ type CartEntry = {
   category: string;
   quantity: number;
   unitPrice?: number;
+  config?: Record<string, string>;
   printCheckRequested?: boolean;
   printCheckFee?: number;
   printCheckFileName?: string;
@@ -57,6 +58,10 @@ export function CartQuoteView() {
   const [authenticated, setAuthenticated] = useState(false);
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [printApprovalAccepted, setPrintApprovalAccepted] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null);
+  const [couponMessage, setCouponMessage] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("dud_cart");
@@ -98,7 +103,8 @@ export function CartQuoteView() {
     [cart]
   );
   const shippingCost = useMemo(() => (deliveryMethod === "versand" && selectedRate ? selectedRate.price : 0), [deliveryMethod, selectedRate]);
-  const grandTotal = subtotal + printCheckTotal + shippingCost + PROCESSING_FEE;
+  const couponDiscount = useMemo(() => Math.min(subtotal, appliedCoupon?.discountAmount ?? 0), [appliedCoupon, subtotal]);
+  const grandTotal = Math.max(0, subtotal + printCheckTotal - couponDiscount + shippingCost + PROCESSING_FEE);
 
   function updateQuantity(slug: string, nextQuantity: number) {
     const next = cart.map((item) => item.slug === slug ? { ...item, quantity: Math.max(1, nextQuantity) } : item);
@@ -109,6 +115,18 @@ export function CartQuoteView() {
 
   function removeItem(slug: string) {
     const next = cart.filter((item) => item.slug !== slug);
+    setCart(next);
+    localStorage.setItem("dud_cart", JSON.stringify(next));
+    window.dispatchEvent(new Event("dud-cart-updated"));
+  }
+
+  function updatePrintCheck(slug: string, checked: boolean) {
+    const next = cart.map((item) => item.slug === slug ? {
+      ...item,
+      printCheckRequested: checked,
+      printCheckFee: checked ? (item.printCheckFee || PRINT_CHECK_FEE) : 0,
+      printCheckStatus: checked ? "idle" as const : undefined
+    } : item);
     setCart(next);
     localStorage.setItem("dud_cart", JSON.stringify(next));
     window.dispatchEvent(new Event("dud-cart-updated"));
@@ -168,6 +186,35 @@ export function CartQuoteView() {
     };
   }, [cartDrawerOpen]);
 
+  async function applyCoupon() {
+    const code = couponCode.trim();
+    if (!code) {
+      setAppliedCoupon(null);
+      setCouponMessage("Bitte Gutscheincode eingeben.");
+      return;
+    }
+    setCouponLoading(true);
+    setCouponMessage("");
+    try {
+      const response = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, subtotal })
+      });
+      const payload = await response.json().catch(() => ({ message: "Gutschein konnte nicht geprüft werden." }));
+      if (!response.ok) {
+        setAppliedCoupon(null);
+        setCouponMessage(payload.message ?? "Gutschein ist nicht gültig.");
+        return;
+      }
+      setAppliedCoupon({ code: payload.code, discountAmount: Number(payload.discountAmount || 0) });
+      setCouponCode(payload.code);
+      setCouponMessage(`Gutschein ${payload.code} angewendet.`);
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
   async function startStripeCheckout() {
     if (!hasItems) {
       setState("error");
@@ -196,6 +243,7 @@ export function CartQuoteView() {
         shippingCost,
         shippingName: selectedRate?.name,
         processingFee: PROCESSING_FEE,
+        couponCode: appliedCoupon?.code,
         legalAccepted,
         printApprovalAccepted
       })
@@ -239,6 +287,7 @@ export function CartQuoteView() {
         quantity: item.quantity,
         price: (item.unitPrice ?? 0) * item.quantity + (item.printCheckRequested ? (item.printCheckFee ?? PRINT_CHECK_FEE) : 0),
         config: {
+          ...(item.config ?? {}),
           Kategorie: item.category,
           Lieferung: deliveryMethod === "abholung" ? "Abholung" : "Versand",
           PrintCheck: item.printCheckRequested ? `Ja (+${formatEuro(item.printCheckFee ?? PRINT_CHECK_FEE)})` : "Nein",
@@ -246,7 +295,9 @@ export function CartQuoteView() {
           Hinweis: notes.trim() || "-"
         }
       })),
-      total: grandTotal
+      total: grandTotal,
+      couponCode: appliedCoupon?.code,
+      couponDiscount
     };
 
     const response = await fetch("/api/orders", {
@@ -261,6 +312,8 @@ export function CartQuoteView() {
         shippingCost,
         shippingName: selectedRate?.name,
         processingFee: PROCESSING_FEE,
+        couponCode: appliedCoupon?.code,
+        couponDiscount,
         legalAccepted,
         printApprovalAccepted
       })
@@ -483,6 +536,7 @@ export function CartQuoteView() {
               )}
             </div>
           )}
+
         </div>
 
         <aside className="lg:sticky lg:top-24 lg:h-fit">
@@ -502,16 +556,74 @@ export function CartQuoteView() {
                 <span className="text-muted-foreground">Bearbeitung</span>
                 <span className="font-semibold">{formatEuro(PROCESSING_FEE)}</span>
               </div>
+              {couponDiscount > 0 ? (
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span>Gutschein {appliedCoupon?.code}</span>
+                  <span className="font-semibold">-{formatEuro(couponDiscount)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Versand</span>
                 <span className="font-semibold">{loadingRates ? "Berechne..." : formatEuro(shippingCost)}</span>
               </div>
+            </div>
+            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+              <label className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">Gutschein</label>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={couponCode}
+                  onChange={(event) => {
+                    setCouponCode(event.target.value);
+                    setAppliedCoupon(null);
+                    setCouponMessage("");
+                  }}
+                  className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold uppercase outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  placeholder="CODE"
+                />
+                <Button type="button" variant="outline" className="h-10 border-slate-200 bg-white px-3 text-xs" onClick={() => void applyCoupon()} disabled={couponLoading || !hasItems}>
+                  {couponLoading ? "Prüft..." : "Einlösen"}
+                </Button>
+              </div>
+              {couponMessage ? (
+                <p className={appliedCoupon ? "mt-2 text-xs font-semibold text-emerald-700" : "mt-2 text-xs font-semibold text-red-600"}>
+                  {couponMessage}
+                </p>
+              ) : null}
             </div>
             <div className="my-4 h-px bg-slate-200" />
             <div className="flex items-center justify-between">
               <span className="text-sm font-bold">Gesamt</span>
               <span className="text-xl font-black text-slate-950">{formatEuro(grandTotal)}</span>
             </div>
+
+            {cart.some((item) => item.printCheckFileName || item.printCheckFileUrl) ? (
+              <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+                  <div>
+                    <p className="text-sm font-black text-slate-900">Profi Print-Check</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">Optional direkt vor der Zahlung buchen. Ohne Auswahl wird die Datei nur hochgeladen.</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {cart.filter((item) => item.printCheckFileName || item.printCheckFileUrl).map((item) => (
+                    <label key={`print-check-${item.slug}`} className={item.printCheckRequested ? "flex cursor-pointer items-start gap-3 rounded-md border border-emerald-300 bg-white p-3" : "flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 bg-white p-3 hover:border-emerald-300"}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(item.printCheckRequested)}
+                        onChange={(event) => updatePrintCheck(item.slug, event.target.checked)}
+                        className="mt-1 h-4 w-4 shrink-0 accent-emerald-700"
+                      />
+                      <span className="min-w-0 text-xs leading-5">
+                        <span className="block font-black text-slate-900">KI + manuelle Prüfung + {formatEuro(item.printCheckFee || PRINT_CHECK_FEE)}</span>
+                        <span className="block font-semibold text-slate-700">{item.name}</span>
+                        <span className="block break-all text-slate-500">Datei: {item.printCheckFileName ?? item.printCheckFileUrl}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-5 grid gap-3 border-y border-slate-200 py-4">
               <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-slate-600">
@@ -593,6 +705,17 @@ export function CartQuoteView() {
                         </div>
                         <span className="text-sm font-bold">{formatEuro((item.unitPrice ?? 0) * item.quantity)}</span>
                       </div>
+                      {item.printCheckFileName || item.printCheckFileUrl ? (
+                        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+                          <p className="font-semibold">Datei hochgeladen</p>
+                          <p className="mt-0.5 break-all">{item.printCheckFileName ?? item.printCheckFileUrl}</p>
+                          {item.printCheckRequested ? (
+                            <p className="mt-1 font-semibold text-emerald-700">Profi Print-Check gebucht (+{formatEuro(item.printCheckFee ?? PRINT_CHECK_FEE)})</p>
+                          ) : (
+                            <p className="mt-1 text-slate-500">Ohne Profi Print-Check</p>
+                          )}
+                        </div>
+                      ) : null}
                       <button
                         type="button"
                         className="mt-3 text-xs font-semibold text-rose-600 hover:underline"

@@ -36,6 +36,65 @@ model CatalogProduct {
   @@index([visible, published])
 }
 
+model CatalogProperty {
+  slug      String   @id
+  name      String
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model CatalogIndustry {
+  slug       String   @id
+  name       String
+  visible    Boolean  @default(true)
+  published  Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  featured   Boolean  @default(false)
+  data       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([visible, published, sortOrder])
+  @@index([featured, sortOrder])
+}
+
+model StudentArticle {
+  slug            String    @id
+  title           String
+  excerpt         String
+  category        String
+  status          String    @default("draft")
+  featured        Boolean   @default(false)
+  sortOrder       Int       @default(0)
+  publishDate     DateTime?
+  featuredImage   String?
+  seoTitle        String?
+  metaDescription String?
+  canonicalUrl    String?
+  tags            Json
+  body            String
+  faqs            Json
+  relatedProducts Json
+  relatedArticles Json
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, publishDate])
+  @@index([featured, sortOrder])
+  @@index([category])
+}
+
+model HomepageSetting {
+  id        String   @id @default("homepage")
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
 model CustomerAccount {
   id           String   @id
   email        String   @unique
@@ -74,6 +133,8 @@ model AdminOrder {
   shippingCost    Float?
   shippingName    String?
   processingFee   Float?
+  couponCode      String?
+  couponDiscount  Float?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -90,7 +151,7 @@ model AdminQuote {
 }
 
 model AdminInvoice {
-  id                String    @id
+  id                String    @id @default(cuid())
   customer          String
   email             String?
   orderId           String?   @unique
@@ -134,13 +195,21 @@ model Coupon {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  customer  String
-  rating    Int
-  comment   String
-  published Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(cuid())
+  customer      String
+  email         String?
+  orderId       String?
+  productSlug   String?
+  productName   String?
+  rating        Int
+  comment       String
+  published     Boolean  @default(false)
+  adminNote     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email, createdAt])
+  @@index([orderId])
 }
 
 model NewsletterSubscriber {
@@ -149,6 +218,21 @@ model NewsletterSubscriber {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model NewsletterCampaign {
+  id             String    @id @default(cuid())
+  subject        String
+  preheader      String?
+  body           String
+  ctaLabel       String?
+  ctaUrl         String?
+  status         String    @default("draft")
+  recipientCount Int       @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }
 
 model CompanyInformation {

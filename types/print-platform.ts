@@ -60,6 +60,94 @@ export type ProductCategoryProperty = {
   stepPrice?: number;
 };
 
+export type ProductPriceTier = {
+  quantity: number;
+  fromQuantity?: number;
+  toQuantity?: number;
+  price: number;
+  unitPrice?: number;
+};
+
+export type ProductPropertyPriceMode = "included" | "fixed" | "tiered";
+
+export type ProductPropertyTierPrice = {
+  quantity: number;
+  fromQuantity?: number;
+  toQuantity?: number;
+  price: number;
+  unitPrice?: number;
+};
+
+export type ProductPropertyValue = {
+  propertyValueId?: string;
+  value: string;
+  label?: string;
+  labelOverride?: string;
+  enabled?: boolean;
+  defaultSelected?: boolean;
+  sortOrder?: number;
+  pricingMode: ProductPropertyPriceMode;
+  fixedPrice?: number;
+  tierPrices?: ProductPropertyTierPrice[];
+};
+
+export type ProductPricingProperty = {
+  propertyId?: string;
+  name: string;
+  required?: boolean;
+  sortOrder?: number;
+  stepPrice?: number;
+  values: ProductPropertyValue[];
+};
+
+export type GlobalPropertyValue = {
+  id: string;
+  value: string;
+  label?: string;
+  sortOrder: number;
+  active: boolean;
+};
+
+export type GlobalProperty = {
+  slug: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  values: GlobalPropertyValue[];
+  usageCount?: number;
+};
+
+export type ShowroomImage = {
+  image: string;
+  title: string;
+  description?: string;
+};
+
+export type SolutionGroup = {
+  title: string;
+  items: string[];
+};
+
+export type ProductIndustry = {
+  slug: string;
+  name: string;
+  description: string;
+  heroImage?: string;
+  seoTitle?: string;
+  metaDescription?: string;
+  visible?: boolean;
+  published?: boolean;
+  sortOrder?: number;
+  featured?: boolean;
+  productSlugs?: string[];
+  serviceLinks?: Array<{
+    label: string;
+    href: string;
+  }>;
+  solutionGroups?: SolutionGroup[];
+  showroomImages?: ShowroomImage[];
+};
+
 export type ProductCategory = {
   slug: MainCategory;
   name: string;
@@ -69,6 +157,7 @@ export type ProductCategory = {
   quantitySteps?: number[];
   defaultPropertyTemplate?: string;
   logo?: string;
+  showroomImages?: ShowroomImage[];
   properties?: ProductCategoryProperty[];
 };
 
@@ -85,6 +174,25 @@ export type ProductCatalogItem = {
   gallery: string[];
   rating: number;
   basePrice: number;
+  pricingType?: "fixed" | "tiered" | "area" | "hourly";
+  areaPricing?: {
+    defaultWidthCm?: number;
+    defaultHeightCm?: number;
+    minAreaM2?: number;
+  };
+  productStatus?: "draft" | "active" | "inactive";
+  purchaseMode?: "online" | "request" | "both" | "disabled";
+  isBestseller?: boolean;
+  bestsellerSortOrder?: number;
+  isStudentShop?: boolean;
+  studentShopSortOrder?: number;
+  priceTiers?: ProductPriceTier[];
+  pricingProperties?: ProductPricingProperty[];
+  priceHistory?: Array<{
+    changedAt: string;
+    user?: string;
+    summary: string;
+  }>;
   deliveryText: string;
   tags: string[];
   variants: ProductVariant[];
@@ -92,6 +200,24 @@ export type ProductCatalogItem = {
   quantitySteps?: number[];
   propertyTemplate?: string;
   enabledCategoryProperties?: string[];
+  industrySlugs?: string[];
+};
+
+export type HomepageSettings = {
+  bestsellerEnabled: boolean;
+  bestsellerTitle: string;
+  bestsellerSubtitle: string;
+  bestsellerSortOrder: number;
+  studentShopEnabled: boolean;
+  studentShopTitle: string;
+  studentShopDescription: string;
+  studentShopImage: string;
+  studentShopLink: string;
+  studentShopSortOrder: number;
+  googleReviewsEnabled: boolean;
+  googleReviewsTitle: string;
+  googleReviewsSubtitle: string;
+  googleReviewsSortOrder: number;
 };
 
 export type FileCheckResult = {

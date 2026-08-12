@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Menu, Search, User, ShoppingCart, X, ArrowRight, Store, Newspaper, MessageCircle, Palette, PanelsTopLeft } from "lucide-react";
+import { Building2, GraduationCap, Menu, Search, User, ShoppingCart, X, ArrowRight, Store, Star, MessageCircle, PanelsTopLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { createElement, type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,9 +14,10 @@ import type { ProductCatalogItem } from "@/types/print-platform";
 
 const navIconByHref: Record<string, ComponentType<{ className?: string }>> = {
   "/leistungen": Store,
-  "/werbeagentur": Palette,
-  "/werbetechnik": PanelsTopLeft,
-  "/news": Newspaper,
+  "/druckservice": PanelsTopLeft,
+  "/branchen": Building2,
+  "/studenten": GraduationCap,
+  "/referenzen": Star,
   "/kontakt": MessageCircle
 };
 
