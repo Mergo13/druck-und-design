@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       allowedExtensions: ALLOWED_EXTENSIONS,
       maxBytes: MAX_FILE_SIZE,
       optimizeForWeb: true,
-      filenameBase: `${industrySlug}-${imageRole}`
+      preserveOriginalName: true
     });
 
     const industry = await getIndustryBySlug(industrySlug);

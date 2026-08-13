@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       allowedExtensions: ALLOWED_EXTENSIONS,
       maxBytes: MAX_FILE_SIZE,
       optimizeForWeb: true,
-      filenameBase: slotKey
+      preserveOriginalName: true
     }));
   } catch (error) {
     return NextResponse.json({ message: error instanceof Error ? error.message : "Upload fehlgeschlagen." }, { status: 400 });

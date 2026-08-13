@@ -10,6 +10,7 @@ type SaveFileOptions = {
   maxBytes: number;
   optimizeForWeb?: boolean;
   filenameBase?: string;
+  preserveOriginalName?: boolean;
 };
 
 type PreparedUpload = {
@@ -191,6 +192,23 @@ async function prepareUpload(file: File, optimizeForWeb: boolean): Promise<Prepa
   };
 }
 
+async function unusedFilename(dir: string, filename: string) {
+  const extension = getExtension(filename);
+  const base = extension ? filename.slice(0, -extension.length) : filename;
+  let candidate = filename;
+  let index = 2;
+
+  while (true) {
+    try {
+      await fs.access(path.join(dir, candidate));
+      candidate = `${base}-${index}${extension}`;
+      index += 1;
+    } catch {
+      return candidate;
+    }
+  }
+}
+
 export async function saveUploadedFile(file: File, options: SaveFileOptions) {
   if (file.size <= 0 || file.size > options.maxBytes) {
     throw new Error(`Datei ist zu groß oder leer. Maximal ${Math.round(options.maxBytes / 1024 / 1024)} MB.`);
@@ -214,9 +232,10 @@ export async function saveUploadedFile(file: File, options: SaveFileOptions) {
   const relativeDir = path.join("uploads", options.folder);
   const absoluteDir = path.join(process.cwd(), "public", relativeDir);
   await fs.mkdir(absoluteDir, { recursive: true });
-  await fs.writeFile(path.join(absoluteDir, safeName), prepared.buffer);
+  const filename = options.preserveOriginalName ? await unusedFilename(absoluteDir, prepared.filename) : safeName;
+  await fs.writeFile(path.join(absoluteDir, filename), prepared.buffer);
   return {
-    url: `/${relativeDir.replace(/\\/g, "/")}/${safeName}`,
+    url: `/${relativeDir.replace(/\\/g, "/")}/${filename}`,
     name: prepared.originalName,
     size: prepared.buffer.length,
     originalSize: prepared.originalSize,
