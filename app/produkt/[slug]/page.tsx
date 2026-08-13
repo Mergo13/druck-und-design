@@ -8,6 +8,8 @@ import { CheckCircle2 } from "lucide-react";
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getPublicProductBySlug(slug);

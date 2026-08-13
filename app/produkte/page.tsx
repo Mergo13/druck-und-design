@@ -4,6 +4,8 @@ import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Produkte",
   description: "Druckprodukte online konfigurieren und anfragen."

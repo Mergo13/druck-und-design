@@ -10,6 +10,8 @@ import { StructuredData } from "@/components/structured-data";
 import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Studenten Druckservice in Wels | Abschlussarbeiten, Skripten & Poster",
   description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell in Wels drucken. Studentenrabatt mit gültigem Studentenausweis.",

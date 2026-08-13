@@ -8,6 +8,8 @@ import { ShowroomSection } from "@/components/showroom/showroom-section";
 import { getCategoryShowroom } from "@/lib/showroom-content";
 import { getSiteImageMap } from "@/lib/site-images";
 
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({ params }: { params: Promise<{ kategorie: string }> }): Promise<Metadata> {
   const { kategorie } = await params;
   const category = (await getPublicCategories()).find((item) => item.slug === kategorie);

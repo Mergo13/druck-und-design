@@ -9,6 +9,8 @@ import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
 import { studentLandingPages } from "@/lib/student-content";
 
+export const dynamic = "force-dynamic";
+
 export function generateStaticParams() {
   return studentLandingPages.map((page) => ({ slug: page.slug }));
 }

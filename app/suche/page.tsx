@@ -3,6 +3,8 @@ import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
 
+export const dynamic = "force-dynamic";
+
 export default async function SearchPage({ searchParams }: { searchParams?: Promise<{ q?: string; kategorie?: string }> }) {
   const params = await searchParams;
   const initialQuery = params?.q ?? "";
