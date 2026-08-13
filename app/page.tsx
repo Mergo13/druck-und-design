@@ -291,7 +291,8 @@ export default async function HomePage() {
 
 function HomepageProductCard({ product }: { product: ProductCatalogItem }) {
   const purchaseMode = product.purchaseMode ?? "online";
-  const unoptimizedImage = product.heroImage.startsWith("/uploads/");
+  const heroImage = product.heroImage || "/uploads/products/abschlussarbeiten.webp";
+  const unoptimizedImage = heroImage.startsWith("/uploads/");
   const cta = purchaseMode === "request"
     ? { href: "/kontakt", label: "Angebot anfragen" }
     : purchaseMode === "disabled"
@@ -301,7 +302,7 @@ function HomepageProductCard({ product }: { product: ProductCatalogItem }) {
   return (
     <Card className="group h-full overflow-hidden border border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.07)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-[0_22px_48px_rgba(17,85,204,.12)]">
       <div className="relative aspect-[4/3] overflow-hidden bg-brand-mist">
-        <Image src={product.heroImage} alt={product.name} fill unoptimized={unoptimizedImage} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
+        <Image src={heroImage} alt={product.name} fill unoptimized={unoptimizedImage} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
       </div>
       <CardContent className="p-5">
         <h3 className="text-lg font-black text-brand-ink">{product.name}</h3>

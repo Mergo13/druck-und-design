@@ -11,6 +11,7 @@ import type { Product } from "@/types";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
 type CardProduct = Product | ProductCatalogItem;
+const fallbackProductImage = "/uploads/products/abschlussarbeiten.webp";
 
 export function ProductCard({
   product,
@@ -23,7 +24,7 @@ export function ProductCard({
   isSelected?: boolean;
   onToggleSelect?: (slug: string) => void;
 }) {
-  const image = "heroImage" in product ? product.heroImage : product.image;
+  const image = ("heroImage" in product ? product.heroImage : product.image) || fallbackProductImage;
   const unoptimizedImage = image.startsWith("/uploads/");
   const priceLabel = "basePrice" in product ? `Ab ${formatEuro(product.basePrice)}` : "Preis auf Anfrage";
 

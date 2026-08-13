@@ -422,6 +422,29 @@ function parseCsvRows(input: string): Record<string, string>[] {
   });
 }
 
+function normalizeCsvKey(value: string) {
+  return value
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function csvCell(row: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    const direct = row[key];
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+  }
+  const normalized = new Map(Object.entries(row).map(([key, value]) => [normalizeCsvKey(key), value]));
+  for (const key of keys) {
+    const value = normalized.get(normalizeCsvKey(key));
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
 function csvBool(value: string | undefined, fallback = true) {
   if (!value) return fallback;
   return ["1", "true", "ja", "yes", "aktiv"].includes(value.trim().toLowerCase());
@@ -3334,14 +3357,30 @@ a4-farbkopien,A4 Farbkopien,druck,0.45,tiered,draft,Farbkopien in A4,A4 Farbkopi
 banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,1-999:29.90,100,100,0.25,banner|werbetechnik`
 };
 
+type CatalogCsvTarget = "properties" | "categories" | "products";
+
+function detectCatalogCsvTarget(rows: Record<string, string>[], fallback: CatalogCsvTarget): CatalogCsvTarget {
+  const keys = new Set(rows.flatMap((row) => Object.keys(row).map(normalizeCsvKey)));
+  if (["category", "kategorie", "baseprice", "preis", "pricingtype", "preisart", "productstatus", "heroimage", "short", "kurztext"].some((key) => keys.has(key))) {
+    return "products";
+  }
+  if (["logo", "description", "beschreibung", "defaultpropertytemplate", "quantitysteps", "showroomimages"].some((key) => keys.has(key))) {
+    return "categories";
+  }
+  if (["values", "werte", "eigenschaft"].some((key) => keys.has(key))) {
+    return "properties";
+  }
+  return fallback;
+}
+
 function CatalogCsvImportToolPage() {
   const notify = useNotify();
-  const [target, setTarget] = useState<"properties" | "categories" | "products">("properties");
+  const [target, setTarget] = useState<CatalogCsvTarget>("properties");
   const [csvText, setCsvText] = useState(csvExamples.properties);
   const [result, setResult] = useState("");
   const [importing, setImporting] = useState(false);
 
-  function changeTarget(nextTarget: "properties" | "categories" | "products") {
+  function changeTarget(nextTarget: CatalogCsvTarget) {
     setTarget(nextTarget);
     setCsvText(csvExamples[nextTarget]);
     setResult("");
@@ -3355,16 +3394,16 @@ function CatalogCsvImportToolPage() {
     reader.readAsText(file);
   }
 
-  function mapRow(row: Record<string, string>) {
-    if (target === "properties") {
-      const name = row.name || row.Name || row.Eigenschaft || "";
+  function mapRow(row: Record<string, string>, importTarget: CatalogCsvTarget) {
+    if (importTarget === "properties") {
+      const name = csvCell(row, "name", "Name", "Eigenschaft", "label", "Label") || csvCell(row, "slug");
       const slug = row.slug || csvSlug(name);
       return {
         slug,
         name,
-        active: csvBool(row.active ?? row.aktiv, true),
-        sortOrder: csvNumber(row.sortOrder ?? row.reihenfolge, 0),
-        values: csvList(row.values ?? row.werte).map((value, index) => ({
+        active: csvBool(csvCell(row, "active", "aktiv"), true),
+        sortOrder: csvNumber(csvCell(row, "sortOrder", "reihenfolge"), 0),
+        values: csvList(csvCell(row, "values", "werte")).map((value, index) => ({
           id: csvSlug(`${slug}-${value}`),
           value,
           sortOrder: index,
@@ -3372,49 +3411,51 @@ function CatalogCsvImportToolPage() {
         }))
       };
     }
-    if (target === "categories") {
-      const name = row.name || row.Name || "";
+    if (importTarget === "categories") {
+      const name = csvCell(row, "name", "Name", "Kategorie", "category", "label", "Label") || csvCell(row, "slug");
       return {
-        slug: row.slug || csvSlug(name),
+        slug: csvCell(row, "slug") || csvSlug(name),
         name,
-        description: row.description || row.beschreibung || "",
-        visible: csvBool(row.visible ?? row.sichtbar, true),
-        published: csvBool(row.published ?? row.veroeffentlicht, true),
-        logo: row.logo || row.image || ""
+        description: csvCell(row, "description", "beschreibung"),
+        visible: csvBool(csvCell(row, "visible", "sichtbar"), true),
+        published: csvBool(csvCell(row, "published", "veroeffentlicht", "veröffentlicht"), true),
+        logo: csvCell(row, "logo", "image", "bild", "imagePath", "image_path")
       };
     }
-    const name = row.name || row.Name || "";
-    const basePrice = csvNumber(row.basePrice ?? row.preis, 0);
-    const pricingType = (row.pricingType || row.preisart || (row.defaultWidthCm || row.defaultHeightCm ? "area" : "")).toLowerCase();
-    const priceTiers = csvPriceTiers(row.priceTiers ?? row.staffelpreise, basePrice);
+    const name = csvCell(row, "name", "Name", "Produkt", "product", "label", "Label") || csvCell(row, "slug");
+    const basePrice = csvNumber(csvCell(row, "basePrice", "preis"), 0);
+    const defaultWidthCm = csvCell(row, "defaultWidthCm", "breiteCm");
+    const defaultHeightCm = csvCell(row, "defaultHeightCm", "hoeheCm", "höheCm");
+    const pricingType = (csvCell(row, "pricingType", "preisart") || (defaultWidthCm || defaultHeightCm ? "area" : "")).toLowerCase();
+    const priceTiers = csvPriceTiers(csvCell(row, "priceTiers", "staffelpreise"), basePrice);
     return {
-      slug: row.slug || csvSlug(name),
+      slug: csvCell(row, "slug") || csvSlug(name),
       name,
-      category: row.category || row.kategorie || "",
+      category: csvCell(row, "category", "kategorie"),
       basePrice,
-      productStatus: row.productStatus || row.status || "draft",
-      visible: (row.productStatus || row.status) === "active",
-      published: (row.productStatus || row.status) === "active",
-      short: row.short || row.kurztext || "",
-      description: row.description || row.beschreibung || "",
-      seo: row.seo || "",
-      heroImage: row.heroImage || row.image || "",
-      gallery: csvList(row.gallery),
-      rating: csvNumber(row.rating, 4.8),
+      productStatus: csvCell(row, "productStatus", "status") || "draft",
+      visible: (csvCell(row, "productStatus", "status") || "draft") === "active",
+      published: (csvCell(row, "productStatus", "status") || "draft") === "active",
+      short: csvCell(row, "short", "kurztext"),
+      description: csvCell(row, "description", "beschreibung"),
+      seo: csvCell(row, "seo"),
+      heroImage: csvCell(row, "heroImage", "hero_image", "image", "bild", "imagePath", "image_path"),
+      gallery: csvList(csvCell(row, "gallery", "galerie")),
+      rating: csvNumber(csvCell(row, "rating", "bewertung"), 4.8),
       pricingType: pricingType === "area" ? "area" : priceTiers.length > 1 ? "tiered" : "fixed",
       areaPricing: pricingType === "area" ? {
-        defaultWidthCm: csvNumber(row.defaultWidthCm ?? row.breiteCm, 100),
-        defaultHeightCm: csvNumber(row.defaultHeightCm ?? row.hoeheCm, 100),
-        minAreaM2: csvNumber(row.minAreaM2 ?? row.mindestflaeche, 0)
+        defaultWidthCm: csvNumber(defaultWidthCm, 100),
+        defaultHeightCm: csvNumber(defaultHeightCm, 100),
+        minAreaM2: csvNumber(csvCell(row, "minAreaM2", "mindestflaeche", "mindestfläche"), 0)
       } : undefined,
       priceTiers,
-      deliveryText: row.deliveryText || row.lieferzeit || "2-5 Werktage",
-      tags: csvList(row.tags),
+      deliveryText: csvCell(row, "deliveryText", "lieferzeit") || "2-5 Werktage",
+      tags: csvList(csvCell(row, "tags")),
       variants: [],
       pricingProperties: [],
       quantitySteps: priceTiers.map((tier) => tier.fromQuantity ?? tier.quantity),
       production: {
-        baseProductionDays: csvNumber(row.baseProductionDays, 3),
+        baseProductionDays: csvNumber(csvCell(row, "baseProductionDays", "produktionstage"), 3),
         expressAvailable: false,
         preflightProfile: "standard-print",
         renderPipeline: "pdf-x4"
@@ -3428,10 +3469,20 @@ function CatalogCsvImportToolPage() {
     try {
       const rows = parseCsvRows(csvText);
       if (!rows.length) throw new Error("CSV enthält keine Datenzeilen.");
+      const importTarget = detectCatalogCsvTarget(rows, target);
       let imported = 0;
-      for (const row of rows) {
-        const payload = mapRow(row);
-        const response = await fetch(`/api/catalog/${target}`, {
+      const skipped: string[] = [];
+      for (const [index, row] of rows.entries()) {
+        const payload = mapRow(row, importTarget) as { slug?: string; name?: string };
+        if (!payload.name?.trim()) {
+          skipped.push(`Zeile ${index + 2}: Name fehlt`);
+          continue;
+        }
+        if (!payload.slug?.trim()) {
+          skipped.push(`Zeile ${index + 2}: Slug fehlt`);
+          continue;
+        }
+        const response = await fetch(`/api/catalog/${importTarget}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -3442,8 +3493,9 @@ function CatalogCsvImportToolPage() {
         }
         imported += 1;
       }
-      setResult(`${imported} Datensätze importiert.`);
-      notify(`${imported} Datensätze importiert.`, { type: "success" });
+      const summary = `${imported} Datensätze importiert${importTarget !== target ? ` (${importTarget} automatisch erkannt)` : ""}.${skipped.length ? ` Übersprungen: ${skipped.join("; ")}` : ""}`;
+      setResult(summary);
+      notify(summary, { type: skipped.length ? "warning" : "success" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "CSV Import fehlgeschlagen.";
       setResult(message);

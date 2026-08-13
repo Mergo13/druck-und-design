@@ -10,10 +10,13 @@ interface ProductGalleryProps {
   name: string;
 }
 
+const fallbackProductImage = "/uploads/products/abschlussarbeiten.webp";
+
 export function ProductGallery({ images, name }: ProductGalleryProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [mainImage, setMainImage] = useState(0);
   const galleryImages = Array.from(new Set(images.filter(Boolean)));
+  if (!galleryImages.length) galleryImages.push(fallbackProductImage);
   const isRuntimeUpload = (image: string) => image.startsWith("/uploads/");
 
   const openLightbox = (index: number) => {
