@@ -13,7 +13,7 @@ import { navigationItems } from "@/data/navigation";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
 const navIconByHref: Record<string, ComponentType<{ className?: string }>> = {
-  "/leistungen": Store,
+  "/produkte": Store,
   "/druckservice": PanelsTopLeft,
   "/branchen": Building2,
   "/studenten": GraduationCap,

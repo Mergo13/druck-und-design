@@ -3,7 +3,6 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { put } from "@vercel/blob";
 
 type SaveFileOptions = {
   folder: "products" | "contact" | "print-check";
@@ -188,27 +187,9 @@ export async function saveUploadedFile(file: File, options: SaveFileOptions) {
 
   const prepared = await prepareUpload(file, Boolean(options.optimizeForWeb));
   const safeName = `${Date.now()}-${randomUUID().slice(0, 8)}-${prepared.filename}`;
-  const useRemoteStorage = process.env.UPLOAD_STORAGE === "vercel-blob" || process.env.NODE_ENV === "production";
-
-  if (useRemoteStorage) {
-    const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
-    if (!token) {
-      throw new Error("BLOB_READ_WRITE_TOKEN muss für Produktions-Uploads gesetzt sein.");
-    }
-    const blob = await put(`${options.folder}/${safeName}`, prepared.buffer, {
-      access: "public",
-      addRandomSuffix: true,
-      token,
-      contentType: prepared.mimeType
-    });
-    return {
-      url: blob.url,
-      name: prepared.originalName,
-      size: prepared.buffer.length,
-      originalSize: prepared.originalSize,
-      optimized: prepared.optimized,
-      mimeType: prepared.mimeType
-    };
+  const storage = process.env.UPLOAD_STORAGE?.trim() || "local";
+  if (storage !== "local") {
+    throw new Error("UPLOAD_STORAGE muss auf 'local' gesetzt sein.");
   }
 
   const relativeDir = path.join("uploads", options.folder);

@@ -71,7 +71,7 @@ export default async function StudentenPage() {
   const products = await getPublicProducts();
   const bySlug = productMap(products);
   const thesisProduct = bySlug.get("abschlussarbeiten") ?? products.find((product) => product.isStudentShop) ?? products[0];
-  const thesisHref = thesisProduct ? `/produkt/${thesisProduct.slug}` : "/leistungen";
+  const thesisHref = thesisProduct ? `/produkt/${thesisProduct.slug}` : "/produkte";
   const studentProducts = products
     .filter((product) => product.isStudentShop || ["abschlussarbeiten", "spiralbindung", "plakate", "magazine"].includes(product.slug))
     .sort((a, b) => Number(a.studentShopSortOrder ?? 999) - Number(b.studentShopSortOrder ?? 999))
@@ -115,7 +115,7 @@ export default async function StudentenPage() {
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {categoryCards.map(([label, key, href]) => {
             const product = bySlug.get(key);
-            const safeHref = href.startsWith("/produkt/") && !product ? "/leistungen" : href;
+            const safeHref = href.startsWith("/produkt/") && !product ? "/produkte" : href;
             return (
               <Link key={label} href={safeHref} className="group rounded-lg border border-slate-200 bg-white p-5 shadow-[0_12px_30px_rgba(17,34,68,.06)] transition hover:-translate-y-1 hover:border-brand-blue/35 hover:shadow-[0_18px_40px_rgba(17,85,204,.12)]">
                 <p className="text-lg font-black text-brand-ink transition group-hover:text-brand-blue">{label}</p>
@@ -209,7 +209,7 @@ export default async function StudentenPage() {
           <div className="container-page">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <SectionHeading eyebrow="Produkte" title="Passende Studenten-Produkte" />
-              <Button asChild variant="outline" className="w-fit"><Link href="/leistungen">Alle Produkte ansehen</Link></Button>
+              <Button asChild variant="outline" className="w-fit"><Link href="/produkte">Alle Produkte ansehen</Link></Button>
             </div>
             <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {studentProducts.map((product) => (

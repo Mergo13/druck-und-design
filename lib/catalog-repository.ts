@@ -273,7 +273,7 @@ const defaultIndustries: ProductIndustry[] = [
       { image: "/uploads/werbetechnik3.jpg", title: "Schaufenster", description: "Aktionen und Öffnungszeiten sichtbar kommunizieren." },
       { image: "/uploads/drucken3.jpg", title: "POS-Drucksorten", description: "Flyer, Plakate und Beilagen für Kampagnen." }
     ],
-    serviceLinks: [{ label: "Leistungen", href: "/leistungen" }, { label: "Kontakt", href: "/kontakt" }]
+    serviceLinks: [{ label: "Produkte", href: "/produkte" }, { label: "Kontakt", href: "/kontakt" }]
   },
   {
     slug: "industrie-produktion",
@@ -332,7 +332,7 @@ const defaultIndustries: ProductIndustry[] = [
     productSlugs: ["Roll-up", "plakate", "flyer", "bodenaufkleber"],
     solutionGroups: [{ title: "Vor Ort sichtbar", items: ["Roll-ups", "Banner", "Plakate", "Leitsysteme"] }],
     showroomImages: [{ image: "/uploads/drucken3.jpg", title: "Eventkommunikation", description: "Sichtbare Ausstattung für Besucherführung und Aktionen." }],
-    serviceLinks: [{ label: "Leistungen", href: "/leistungen" }, { label: "Kontakt", href: "/kontakt" }]
+    serviceLinks: [{ label: "Produkte", href: "/produkte" }, { label: "Kontakt", href: "/kontakt" }]
   },
   {
     slug: "kunst-kreativ",
@@ -359,7 +359,7 @@ const defaultIndustries: ProductIndustry[] = [
     productSlugs: ["flyer", "faltblaetter", "magazine", "seo-content-paket"],
     solutionGroups: [{ title: "Unternehmenskommunikation", items: ["Flyer", "Broschüren", "Schilder", "Präsentationen"] }],
     showroomImages: [{ image: "/uploads/drucken.jpg", title: "Business Print", description: "Saubere Drucksorten und Markenunterlagen für den Alltag." }],
-    serviceLinks: [{ label: "Leistungen", href: "/leistungen" }, { label: "Werbeagentur", href: "/werbeagentur" }]
+    serviceLinks: [{ label: "Produkte", href: "/produkte" }, { label: "Werbeagentur", href: "/werbeagentur" }]
   },
   {
     slug: "beauty-kosmetik",

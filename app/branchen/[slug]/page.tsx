@@ -76,7 +76,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
                 <Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Projekt anfragen</Link>
               </Button>
               <Button asChild variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/20">
-                <Link href="/leistungen">Produkte ansehen</Link>
+                <Link href="/produkte">Produkte ansehen</Link>
               </Button>
             </div>
           </div>
@@ -122,7 +122,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
                 <h2 className="mt-2 text-3xl font-black text-brand-ink md:text-4xl">Passende Produkte</h2>
               </div>
               <Button asChild variant="outline" className="w-fit">
-                <Link href="/leistungen">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/produkte">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
               </Button>
             </div>
             <div className="mt-7 grid gap-6 md:grid-cols-2 xl:grid-cols-3">

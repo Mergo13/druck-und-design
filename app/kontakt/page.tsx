@@ -3,10 +3,10 @@ import { PageHero } from "@/components/page-hero";
 import { ContactForm } from "@/features/contact/contact-form";
 
 export default function ContactPage() {
-  const supportCards: Array<[LucideIcon, string, string, string]> = [
+  const supportCards: Array<[LucideIcon, string, string, string, string?]> = [
     [Phone, "Telefon", "+43 (0) 7242 63 2 39", "Mo-Do 8:00-18:00, Fr 8:00-14:00 Uhr"],
     [Mail, "E-Mail", "kontakt@druck-und-design.at", "Antwort meist am selben Werktag"],
-    [MessageCircle, "WhatsApp", "+43 (0) 7242 63 2 39", "Direkt für schnelle Rückfragen"],
+    [MessageCircle, "WhatsApp", "+43 678 1298801", "Direkt für schnelle Rückfragen", "https://wa.me/436781298801"],
     [MapPin, "Standort", "Wels, Oberösterreich", "Termin nach Vereinbarung"]
   ];
 
@@ -16,14 +16,26 @@ export default function ContactPage() {
       <section className="container-page grid gap-8 py-10 lg:grid-cols-[1fr_420px]">
         <ContactForm />
         <aside className="grid gap-4">
-          {supportCards.map(([Icon, title, value, text]) => (
-            <div className="rounded-lg border p-5 shadow-soft" key={title}>
+          {supportCards.map(([Icon, title, value, text, href]) => {
+            const content = (
+              <>
               <Icon className="h-6 w-6 text-primary" />
               <h2 className="mt-4 font-black">{title}</h2>
               <p className="mt-1 font-semibold">{value}</p>
               <p className="mt-1 text-sm text-muted-foreground">{text}</p>
-            </div>
-          ))}
+              </>
+            );
+
+            return href ? (
+              <a className="rounded-lg border p-5 shadow-soft transition hover:border-brand-blue/30 hover:bg-brand-mist" href={href} key={title} rel="noreferrer" target="_blank">
+                {content}
+              </a>
+            ) : (
+              <div className="rounded-lg border p-5 shadow-soft" key={title}>
+                {content}
+              </div>
+            );
+          })}
           <div className="h-64 overflow-hidden rounded-lg border bg-slate-100">
             <iframe
               title="Google Maps: Roseggerstrasse 11, 4600 Wels"

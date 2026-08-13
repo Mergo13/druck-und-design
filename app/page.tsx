@@ -71,7 +71,7 @@ export default async function HomePage() {
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Design, Digitaldruck, Großformat, Beschriftung, Textildruck und Webdesign - von der Idee bis zur fertigen Umsetzung.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/leistungen">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/produkte">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="border-white/40 bg-black/15 text-white hover:bg-black/35">
                 <Link href="/kontakt">Angebot anfragen</Link>
@@ -96,7 +96,7 @@ export default async function HomePage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <SectionHeading eyebrow={homepageSettings.bestsellerSubtitle} title={homepageSettings.bestsellerTitle} description="Direkt aus dem Shop-Katalog, mit aktuellen Produktdaten und Preisen." />
             <Button asChild variant="outline" className="w-fit">
-              <Link href="/leistungen">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
+              <Link href="/produkte">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
             </Button>
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -104,7 +104,7 @@ export default async function HomePage() {
               <HomepageProductCard key={product.slug} product={product} />
             ))}
           </div>
-          <Link href="/leistungen" className="mt-6 inline-flex items-center gap-2 text-sm font-black text-brand-blue hover:text-brand-ink">
+          <Link href="/produkte" className="mt-6 inline-flex items-center gap-2 text-sm font-black text-brand-blue hover:text-brand-ink">
             Alle Produkte ansehen <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
@@ -275,7 +275,7 @@ export default async function HomePage() {
             </div>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
-              <Button asChild variant="secondary"><Link href="/leistungen">Leistungen ansehen</Link></Button>
+              <Button asChild variant="secondary"><Link href="/produkte">Produkte ansehen</Link></Button>
             </div>
           </CardContent>
         </Card>

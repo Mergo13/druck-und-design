@@ -22,7 +22,7 @@ export function CheckoutSuccess() {
       {sessionId ? <p className="mt-2 text-sm text-muted-foreground">Session: {sessionId}</p> : null}
       <p className="mt-6 max-w-xl text-xs leading-5 text-muted-foreground">{LEGAL_DOCUMENT_FOOTER}</p>
       <div className="mt-8 flex gap-3">
-        <Button asChild><Link href="/leistungen">Weiter einkaufen</Link></Button>
+        <Button asChild><Link href="/produkte">Weiter einkaufen</Link></Button>
         <Button asChild variant="outline"><Link href="/konto">Zum Konto</Link></Button>
       </div>
     </section>

@@ -32,7 +32,7 @@ export function LoginForm() {
     const requestedPath = searchParams.get("next");
     const nextPath = requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
       ? requestedPath
-      : "/leistungen";
+      : "/produkte";
     router.push(nextPath);
     router.refresh();
   }
