@@ -1118,9 +1118,14 @@ function ProductImageUploadControls() {
   const [uploadingHero, setUploadingHero] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
-  async function uploadFile(file: File) {
+  async function uploadFile(file: File, imageRole: "hero" | "gallery") {
     const formData = new FormData();
     formData.append("file", file);
+    if (record?.slug) {
+      formData.append("targetSlug", record.slug);
+      formData.append("targetType", "product");
+      formData.append("imageRole", imageRole);
+    }
     const response = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
     if (!response.ok) {
       throw new Error("Upload failed");
@@ -1134,7 +1139,7 @@ function ProductImageUploadControls() {
     if (!file) return;
     setUploadingHero(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, "hero");
       setValue("heroImage", url, { shouldDirty: true });
       notify("Hero image updated.", { type: "success" });
     } catch {
@@ -1150,7 +1155,10 @@ function ProductImageUploadControls() {
     if (!files.length) return;
     setUploadingGallery(true);
     try {
-      const urls = await Promise.all(files.map((file) => uploadFile(file)));
+      const urls: string[] = [];
+      for (const file of files) {
+        urls.push(await uploadFile(file, "gallery"));
+      }
       const nextGallery = Array.from(new Set([...(gallery ?? []), ...urls]));
       setValue("gallery", nextGallery, { shouldDirty: true });
       notify(`${urls.length} image${urls.length === 1 ? "" : "s"} added to gallery.`, { type: "success" });
@@ -2050,6 +2058,18 @@ function IndustryImageUploadControls() {
     return payload.url;
   }
 
+  async function deleteImage(imageRole: string, url?: string) {
+    const industrySlug = String(slug || record?.slug || "").trim();
+    if (!industrySlug) throw new Error("Bitte zuerst den Branchen-Slug eintragen.");
+    const response = await fetch("/api/uploads/industry-image", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ industrySlug, imageRole, url })
+    });
+    const payload = await response.json().catch(() => ({})) as { message?: string };
+    if (!response.ok) throw new Error(payload.message ?? "Löschen fehlgeschlagen.");
+  }
+
   async function onHeroImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -2109,6 +2129,33 @@ function IndustryImageUploadControls() {
     }
   }
 
+  async function onHeroImageDelete() {
+    setUploadingHero(true);
+    try {
+      await deleteImage("hero", currentHero);
+      setValue("heroImage", "", { shouldDirty: true });
+      notify("Hero-Bild gelöscht.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Löschen fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingHero(false);
+    }
+  }
+
+  async function onShowroomDelete(index: number) {
+    setUploadingShowroom(true);
+    try {
+      const item = currentShowroom[index];
+      await deleteImage(`showroom-${index + 1}`, item?.image);
+      setValue("showroomImages", currentShowroom.filter((_, itemIndex) => itemIndex !== index), { shouldDirty: true });
+      notify(`Showroom-Bild ${index + 1} gelöscht.`, { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Löschen fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingShowroom(false);
+    }
+  }
+
   return (
     <Box sx={{ display: "grid", gap: 1.5, mb: 1 }}>
       <Typography variant="subtitle2">Branchenbilder</Typography>
@@ -2123,8 +2170,13 @@ function IndustryImageUploadControls() {
         </Button>
       </Box>
       {currentHero ? (
-        <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100 }}>
-          <img src={currentHero} alt="Branche" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <Box sx={{ display: "grid", gap: 0.75, width: 180 }}>
+          <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", height: 100 }}>
+            <img src={currentHero} alt="Branche" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+          </Box>
+          <Button variant="outlined" color="error" size="small" startIcon={<DeleteOutlineIcon />} disabled={uploadingHero} onClick={() => void onHeroImageDelete()}>
+            Hero löschen
+          </Button>
         </Box>
       ) : null}
       {currentShowroom.length > 0 ? (
@@ -2142,6 +2194,9 @@ function IndustryImageUploadControls() {
                 <Button variant="outlined" size="small" component="label" disabled={uploadingShowroom}>
                   {uploadingShowroom ? "Upload..." : `Bild ${index + 1} ersetzen`}
                   <input type="file" accept="image/*,.heic,.heif" hidden onChange={(event) => void onShowroomReplace(index, event)} />
+                </Button>
+                <Button variant="outlined" color="error" size="small" startIcon={<DeleteOutlineIcon />} disabled={uploadingShowroom} onClick={() => void onShowroomDelete(index)}>
+                  Löschen
                 </Button>
               </Box>
             ))}
@@ -2492,6 +2547,11 @@ function CategoryImageUploadControls() {
   async function uploadFile(file: File) {
     const formData = new FormData();
     formData.append("file", file);
+    if (record?.slug) {
+      formData.append("targetType", "category");
+      formData.append("targetSlug", record.slug);
+      formData.append("imageRole", "logo");
+    }
     const response = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
     if (!response.ok) throw new Error("Upload failed");
     const payload = await response.json() as { url: string };
@@ -3036,12 +3096,11 @@ function CatalogImageImportToolPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [productsRes, categoriesRes] = await Promise.all([
-          fetch("/api/catalog/products?scope=admin"),
-          fetch("/api/catalog/categories?scope=admin")
-        ]);
-        if (productsRes.ok) setProducts(await productsRes.json() as Array<{ slug: string; name: string }>);
-        if (categoriesRes.ok) setCategories(await categoriesRes.json() as Array<{ slug: string; name: string }>);
+        const res = await fetch("/api/admin/tools?action=image-targets");
+        if (!res.ok) throw new Error("Bild-Ziele konnten nicht geladen werden.");
+        const payload = await res.json() as { products: Array<{ slug: string; name: string }>; categories: Array<{ slug: string; name: string }> };
+        setProducts(payload.products);
+        setCategories(payload.categories);
       } catch {
         notify("Produkte/Kategorien konnten nicht geladen werden.", { type: "error" });
       }

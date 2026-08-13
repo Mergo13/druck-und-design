@@ -14,7 +14,7 @@ function extensionOf(name: string) {
 
 export async function POST(request: Request) {
   await ensureAdminBootstrap();
-  const permission = await requireModulePermission("usersRoles", "update");
+  const permission = await requireModulePermission("fileUploads", "create");
   if (!permission.ok) return NextResponse.json({ message: permission.message }, { status: permission.status });
 
   const form = await request.formData();

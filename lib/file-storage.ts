@@ -51,6 +51,10 @@ function isImageMime(mimeType: string) {
   return mimeType.startsWith("image/");
 }
 
+function isImageExtension(extension: string) {
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".heic", ".heif", ".tif", ".tiff"].includes(extension);
+}
+
 function isVideoMime(mimeType: string) {
   return mimeType.startsWith("video/");
 }
@@ -164,6 +168,7 @@ async function optimizeVideo(file: File, input: Buffer): Promise<PreparedUpload>
 
 async function prepareUpload(file: File, optimizeForWeb: boolean): Promise<PreparedUpload> {
   const input = Buffer.from(await file.arrayBuffer());
+  const extension = getExtension(file.name);
   if (!optimizeForWeb) {
     return {
       buffer: input,
@@ -174,7 +179,7 @@ async function prepareUpload(file: File, optimizeForWeb: boolean): Promise<Prepa
       originalName: file.name
     };
   }
-  if (isImageMime(file.type)) return optimizeImage(file, input);
+  if (isImageMime(file.type) || isImageExtension(extension)) return optimizeImage(file, input);
   if (isVideoMime(file.type)) return optimizeVideo(file, input);
   return {
     buffer: input,
@@ -218,4 +223,25 @@ export async function saveUploadedFile(file: File, options: SaveFileOptions) {
     optimized: prepared.optimized,
     mimeType: prepared.mimeType
   };
+}
+
+export async function deleteManagedUploadedFile(url: string, allowedFolders: Array<SaveFileOptions["folder"]>) {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("\0") || trimmed.includes("..")) {
+    return { deleted: false };
+  }
+
+  const normalizedAllowedPrefixes = allowedFolders.map((folder) => `/uploads/${folder}/`);
+  if (!normalizedAllowedPrefixes.some((prefix) => trimmed.startsWith(prefix))) {
+    return { deleted: false };
+  }
+
+  const absolutePath = path.resolve(process.cwd(), "public", trimmed.replace(/^\/+/, ""));
+  const uploadsRoot = path.resolve(process.cwd(), "public", "uploads");
+  if (!absolutePath.startsWith(`${uploadsRoot}${path.sep}`)) {
+    return { deleted: false };
+  }
+
+  await fs.unlink(absolutePath).catch(() => undefined);
+  return { deleted: true };
 }

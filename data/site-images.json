@@ -1,6 +1,6 @@
 {
   "brand.logo": "/brand/logo-dud.png",
-  "home.hero.1": "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=2200&q=80",
+  "home.hero.1": "/uploads/site-images/home.hero.1.heic",
   "home.hero.2": "https://images.unsplash.com/photo-1467232004584-a241de8bcf5d?auto=format&fit=crop&w=2200&q=80",
   "home.hero.3": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=2200&q=80",
   "home.service.druckservice": "/uploads/drucken.jpg",
