@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getPublicIndustries } from "@/lib/catalog-repository";
 import { getSiteImageMap } from "@/lib/site-images";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Lösungen für Branchen",
   description: "Druck, Werbetechnik und Designlösungen für Bau, Gastronomie, Praxen, Industrie, Handel, Vereine und weitere Branchen."

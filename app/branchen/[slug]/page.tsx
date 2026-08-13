@@ -12,6 +12,8 @@ import { withoutPrices } from "@/lib/product-price-visibility";
 import { prisma } from "@/lib/prisma";
 import { getSiteImageMap } from "@/lib/site-images";
 
+export const dynamic = "force-dynamic";
+
 export async function generateStaticParams() {
   const industries = await getPublicIndustries();
   return industries.map((industry) => ({ slug: industry.slug }));
