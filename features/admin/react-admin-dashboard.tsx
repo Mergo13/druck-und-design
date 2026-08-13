@@ -5,7 +5,6 @@ import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { Alert, Box, Button, Card, CardContent, Grid, IconButton, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
-import Image from "next/image";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Admin,
@@ -180,6 +179,41 @@ const adminTheme = createTheme({
     }
   }
 });
+
+function AdminImagePreview({ src, alt, sx, children }: { src?: string; alt: string; sx?: object; children?: ReactNode }) {
+  const value = String(src ?? "").trim();
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [value]);
+
+  return (
+    <Box sx={{ position: "relative", overflow: "hidden", bgcolor: "#f8fafc", display: "grid", placeItems: "center", ...sx }}>
+      {value && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={value}
+          alt={alt}
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <Box sx={{ minWidth: 0, px: 1, textAlign: "center" }}>
+          <Typography variant="caption" sx={{ display: "block", fontWeight: 900, color: "#64748b" }}>
+            Bild fehlt
+          </Typography>
+          {value ? (
+            <Typography variant="caption" sx={{ display: "block", maxWidth: "100%", color: "#94a3b8" }} noWrap title={value}>
+              {value}
+            </Typography>
+          ) : null}
+        </Box>
+      )}
+      {children}
+    </Box>
+  );
+}
 
 function normalizeCatalogRecordForAdmin(record: AdminRecord): AdminRecord {
   if (!Array.isArray(record.properties)) return record;
@@ -1204,9 +1238,7 @@ function ProductImageUploadControls() {
               <DeleteOutlineIcon fontSize="inherit" />
             </IconButton>
           </Box>
-          <Box sx={{ mt: 0.5, border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100, position: "relative" }}>
-            <Image src={currentHero} alt="Hero" fill style={{ objectFit: "cover" }} />
-          </Box>
+          <AdminImagePreview src={currentHero} alt="Hero" sx={{ mt: 0.5, border: "1px solid #e2e8f0", borderRadius: "6px", width: 180, height: 100 }} />
         </Box>
       ) : null}
       {currentGallery.length > 0 ? (
@@ -1214,8 +1246,7 @@ function ProductImageUploadControls() {
           <Typography variant="caption" color="text.secondary">Galerie ({currentGallery.length})</Typography>
           <Box sx={{ mt: 0.5, display: "flex", gap: 1, flexWrap: "wrap" }}>
             {currentGallery.slice(0, 12).map((url) => (
-              <Box key={url} sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 84, height: 56, position: "relative" }}>
-                <Image src={url} alt="Gallery" fill style={{ objectFit: "cover" }} />
+              <AdminImagePreview key={url} src={url} alt="Gallery" sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", width: 84, height: 56 }}>
                 <IconButton
                   size="small"
                   aria-label="Remove gallery image"
@@ -1224,7 +1255,7 @@ function ProductImageUploadControls() {
                 >
                   <DeleteOutlineIcon sx={{ fontSize: 14 }} />
                 </IconButton>
-              </Box>
+              </AdminImagePreview>
             ))}
           </Box>
         </Box>
@@ -2171,9 +2202,7 @@ function IndustryImageUploadControls() {
       </Box>
       {currentHero ? (
         <Box sx={{ display: "grid", gap: 0.75, width: 180 }}>
-          <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", height: 100 }}>
-            <img src={currentHero} alt="Branche" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-          </Box>
+          <AdminImagePreview src={currentHero} alt="Branche" sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", height: 100 }} />
           <Button variant="outlined" color="error" size="small" startIcon={<DeleteOutlineIcon />} disabled={uploadingHero} onClick={() => void onHeroImageDelete()}>
             Hero löschen
           </Button>
@@ -2185,9 +2214,7 @@ function IndustryImageUploadControls() {
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             {currentShowroom.map((item, index) => (
               <Box key={`${item.image}-${index}`} sx={{ display: "grid", gap: 0.75, width: 160 }}>
-                <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", height: 92, bgcolor: "#f8fafc" }}>
-                  <img src={item.image} alt={item.title || `Showroom ${index + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                </Box>
+                <AdminImagePreview src={item.image} alt={item.title || `Showroom ${index + 1}`} sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", height: 92 }} />
                 <Typography variant="caption" sx={{ fontWeight: 800 }} noWrap>
                   {item.title || `Showroom ${index + 1}`}
                 </Typography>
@@ -2593,11 +2620,7 @@ function CategoryImageUploadControls() {
           </Button>
         ) : null}
       </Box>
-      {currentLogo ? (
-        <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100, position: "relative" }}>
-          <Image src={currentLogo} alt="Category" fill style={{ objectFit: "cover" }} />
-        </Box>
-      ) : null}
+      {currentLogo ? <AdminImagePreview src={currentLogo} alt="Category" sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", width: 180, height: 100 }} /> : null}
     </Box>
   );
 }
@@ -3021,10 +3044,9 @@ function UploadFoldersToolPage() {
                   {item.files.map((file) => (
                     <Box key={`${item.key}-${file.name}`} sx={{ display: "flex", alignItems: "center", gap: 1, border: "1px solid #e2e8f0", borderRadius: 1, p: 0.75 }}>
                       {file.isImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={file.url} alt={file.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, border: "1px solid #e2e8f0" }} />
+                        <AdminImagePreview src={file.url} alt={file.name} sx={{ width: 40, height: 40, borderRadius: 1, border: "1px solid #e2e8f0" }} />
                       ) : (
-                    <Box sx={{ width: 40, height: 40, borderRadius: 1, border: `1px solid ${adminColors.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: adminColors.muted }}>
+                        <Box sx={{ width: 40, height: 40, borderRadius: 1, border: `1px solid ${adminColors.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: adminColors.muted }}>
                           Datei
                         </Box>
                       )}
@@ -3253,8 +3275,7 @@ function CatalogImageImportToolPage() {
                 {uploadedMimeType.startsWith("video/") ? (
                   <video src={uploadedUrl} controls muted style={{ width: 180, height: 100, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={uploadedUrl} alt="Hochgeladenes Bild" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
+                  <AdminImagePreview src={uploadedUrl} alt="Hochgeladenes Bild" sx={{ width: 120, height: 80, borderRadius: "6px", border: "1px solid #e2e8f0" }} />
                 )}
               </Box>
             ) : null}
@@ -3621,9 +3642,7 @@ function SiteImagesToolPage() {
             return (
               <Card key={slot.key} variant="outlined" sx={{ overflow: "hidden", borderRadius: 2, borderColor: isDirty ? adminColors.blue : adminColors.border }}>
                 <CardContent sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", md: "220px 1fr" }, p: 0 }}>
-                  <Box sx={{ minHeight: 150, position: "relative", borderRight: { md: "1px solid #e2e8f0" }, bgcolor: "#f8fafc" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={value} alt={slot.label} style={{ width: "100%", height: "100%", minHeight: 150, objectFit: "cover", display: "block" }} />
+                  <AdminImagePreview src={value} alt={slot.label} sx={{ minHeight: 150, borderRight: { md: "1px solid #e2e8f0" } }}>
                     <Box sx={{ position: "absolute", left: 10, top: 10, display: "flex", gap: 0.75, flexWrap: "wrap" }}>
                       <Box sx={{ borderRadius: 999, bgcolor: isDefault ? "#f1f5f9" : "#dbeafe", color: isDefault ? "#475569" : adminColors.blue, px: 1, py: 0.25, fontSize: 11, fontWeight: 900 }}>
                         {isDefault ? "Default" : "Custom"}
@@ -3634,7 +3653,7 @@ function SiteImagesToolPage() {
                         </Box>
                       ) : null}
                     </Box>
-                  </Box>
+                  </AdminImagePreview>
                   <Box sx={{ display: "grid", gap: 1, p: 2 }}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                       <Box>
