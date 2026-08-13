@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { requireModulePermission } from "@/lib/admin-permissions";
 import { saveUploadedFile } from "@/lib/file-storage";
+import { siteImageSlots } from "@/lib/site-images";
 
 const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".heic", ".heif"];
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -18,9 +19,13 @@ export async function POST(request: Request) {
 
   const form = await request.formData();
   const file = form.get("file");
+  const slotKey = String(form.get("slotKey") ?? "").trim();
 
   if (!(file instanceof File)) {
     return NextResponse.json({ message: "Keine Datei empfangen." }, { status: 400 });
+  }
+  if (!siteImageSlots.some((slot) => slot.key === slotKey)) {
+    return NextResponse.json({ message: "Unbekannter Bild-Slot." }, { status: 400 });
   }
 
   const extension = extensionOf(file.name);
@@ -32,10 +37,11 @@ export async function POST(request: Request) {
 
   try {
     return NextResponse.json(await saveUploadedFile(file, {
-      folder: "products",
+      folder: "site-images",
       allowedExtensions: ALLOWED_EXTENSIONS,
       maxBytes: MAX_FILE_SIZE,
-      optimizeForWeb: true
+      optimizeForWeb: true,
+      filenameBase: slotKey
     }));
   } catch (error) {
     return NextResponse.json({ message: error instanceof Error ? error.message : "Upload fehlgeschlagen." }, { status: 400 });

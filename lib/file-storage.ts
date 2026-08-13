@@ -5,10 +5,11 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 type SaveFileOptions = {
-  folder: "products" | "contact" | "print-check";
+  folder: "products" | "contact" | "print-check" | "site-images" | "industries";
   allowedExtensions: readonly string[];
   maxBytes: number;
   optimizeForWeb?: boolean;
+  filenameBase?: string;
 };
 
 type PreparedUpload = {
@@ -24,6 +25,15 @@ const execFileAsync = promisify(execFile);
 
 function sanitizeFilename(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function sanitizeFilenameBase(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
 }
 
 function getExtension(name: string) {
@@ -186,7 +196,11 @@ export async function saveUploadedFile(file: File, options: SaveFileOptions) {
   }
 
   const prepared = await prepareUpload(file, Boolean(options.optimizeForWeb));
-  const safeName = `${Date.now()}-${randomUUID().slice(0, 8)}-${prepared.filename}`;
+  const preparedExtension = getExtension(prepared.filename);
+  const preferredBase = options.filenameBase ? sanitizeFilenameBase(options.filenameBase) : "";
+  const safeName = preferredBase
+    ? `${preferredBase}${preparedExtension || extension}`
+    : `${Date.now()}-${randomUUID().slice(0, 8)}-${prepared.filename}`;
   const storage = process.env.UPLOAD_STORAGE?.trim() || "local";
   if (storage !== "local") {
     throw new Error("UPLOAD_STORAGE muss auf 'local' gesetzt sein.");

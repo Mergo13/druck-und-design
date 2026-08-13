@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const [industry, siteImages] = await Promise.all([getPublicIndustryBySlug(slug), getSiteImageMap()]);
   if (!industry) return { title: "Branche" };
-  const heroImage = siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage;
+  const heroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
   return {
     title: industry.seoTitle || `${industry.name} | druck&design studio`,
     description: industry.metaDescription || industry.description,
@@ -48,10 +48,10 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
   if (!industry) notFound();
 
   const authenticated = Boolean(session);
-  const industryHeroImage = siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage;
+  const industryHeroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
   const showroomImages = (industry.showroomImages ?? []).map((item, index) => ({
     ...item,
-    image: siteImages[`industry.${industry.slug}.showroom.${index + 1}`] ?? item.image
+    image: item.image || siteImages[`industry.${industry.slug}.showroom.${index + 1}`]
   }));
   const linkedProductSlugs = new Set(industry.productSlugs ?? []);
   const relatedRawProducts = rawProducts

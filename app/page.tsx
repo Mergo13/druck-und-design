@@ -137,11 +137,13 @@ export default async function HomePage() {
             </Button>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {featuredIndustries.map((industry) => (
+            {featuredIndustries.map((industry) => {
+              const heroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
+              return (
               <Card key={industry.slug} className="group overflow-hidden border border-slate-200 bg-white shadow-[0_14px_38px_rgba(17,34,68,.08)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-[0_24px_54px_rgba(17,85,204,.13)]">
-                {siteImages[`industry.${industry.slug}.hero`] || industry.heroImage ? (
+                {heroImage ? (
                   <div className="relative aspect-[16/9] overflow-hidden bg-brand-mist">
-                    <img src={siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage} alt={industry.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
+                    <img src={heroImage} alt={industry.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
                     <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-brand-ink/45 to-transparent" />
                   </div>
                 ) : null}
@@ -155,7 +157,8 @@ export default async function HomePage() {
                   </Link>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </section>
       ) : null}

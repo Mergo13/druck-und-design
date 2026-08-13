@@ -2029,6 +2029,7 @@ function IndustryImageUploadControls() {
   const notify = useNotify();
   const { setValue } = useFormContext();
   const record = useRecordContext<AdminRecord & ProductIndustry>();
+  const slug = useWatch({ name: "slug" }) as string | undefined;
   const heroImage = useWatch({ name: "heroImage" }) as string | undefined;
   const showroomImages = (useWatch({ name: "showroomImages" }) as ProductIndustry["showroomImages"] | undefined) ?? [];
   const [uploadingHero, setUploadingHero] = useState(false);
@@ -2036,12 +2037,16 @@ function IndustryImageUploadControls() {
   const currentHero = heroImage ?? record?.heroImage;
   const currentShowroom = showroomImages.length ? showroomImages : (record?.showroomImages ?? []);
 
-  async function uploadFile(file: File) {
+  async function uploadFile(file: File, imageRole: string) {
+    const industrySlug = String(slug || record?.slug || "").trim();
+    if (!industrySlug) throw new Error("Bitte zuerst den Branchen-Slug eintragen.");
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
-    if (!response.ok) throw new Error("Upload failed");
-    const payload = await response.json() as { url: string };
+    formData.append("industrySlug", industrySlug);
+    formData.append("imageRole", imageRole);
+    const response = await fetch("/api/uploads/industry-image", { method: "POST", body: formData });
+    const payload = await response.json().catch(() => ({})) as { url?: string; message?: string };
+    if (!response.ok || !payload.url) throw new Error(payload.message ?? "Upload failed");
     return payload.url;
   }
 
@@ -2050,7 +2055,7 @@ function IndustryImageUploadControls() {
     if (!file) return;
     setUploadingHero(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, "hero");
       setValue("heroImage", url, { shouldDirty: true });
       notify("Hero-Bild aktualisiert.", { type: "success" });
     } catch {
@@ -2061,20 +2066,43 @@ function IndustryImageUploadControls() {
     }
   }
 
+  async function onShowroomReplace(index: number, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingShowroom(true);
+    try {
+      const url = await uploadFile(file, `showroom-${index + 1}`);
+      const nextShowroom = [...currentShowroom];
+      const current = nextShowroom[index] ?? { title: "", description: "" };
+      nextShowroom[index] = {
+        ...current,
+        image: url,
+        title: current.title || file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ")
+      };
+      setValue("showroomImages", nextShowroom, { shouldDirty: true });
+      notify(`Showroom-Bild ${index + 1} aktualisiert.`, { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Bild-Upload fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingShowroom(false);
+      event.target.value = "";
+    }
+  }
+
   async function onShowroomImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     setUploadingShowroom(true);
     try {
-      const uploaded = await Promise.all(files.map(async (file) => ({
-        image: await uploadFile(file),
+      const uploaded = await Promise.all(files.map(async (file, index) => ({
+        image: await uploadFile(file, `showroom-${currentShowroom.length + index + 1}`),
         title: file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
         description: ""
       })));
       setValue("showroomImages", [...currentShowroom, ...uploaded], { shouldDirty: true });
       notify(`${uploaded.length} Showroom-Bild(er) hinzugefügt.`, { type: "success" });
-    } catch {
-      notify("Bild-Upload fehlgeschlagen.", { type: "error" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Bild-Upload fehlgeschlagen.", { type: "error" });
     } finally {
       setUploadingShowroom(false);
       event.target.value = "";
@@ -2097,6 +2125,27 @@ function IndustryImageUploadControls() {
       {currentHero ? (
         <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100 }}>
           <img src={currentHero} alt="Branche" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        </Box>
+      ) : null}
+      {currentShowroom.length > 0 ? (
+        <Box sx={{ display: "grid", gap: 1 }}>
+          <Typography variant="caption" color="text.secondary">Showroom Bilder ersetzen</Typography>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {currentShowroom.map((item, index) => (
+              <Box key={`${item.image}-${index}`} sx={{ display: "grid", gap: 0.75, width: 160 }}>
+                <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", height: 92, bgcolor: "#f8fafc" }}>
+                  <img src={item.image} alt={item.title || `Showroom ${index + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                </Box>
+                <Typography variant="caption" sx={{ fontWeight: 800 }} noWrap>
+                  {item.title || `Showroom ${index + 1}`}
+                </Typography>
+                <Button variant="outlined" size="small" component="label" disabled={uploadingShowroom}>
+                  {uploadingShowroom ? "Upload..." : `Bild ${index + 1} ersetzen`}
+                  <input type="file" accept="image/*,.heic,.heif" hidden onChange={(event) => void onShowroomReplace(index, event)} />
+                </Button>
+              </Box>
+            ))}
+          </Box>
         </Box>
       ) : null}
     </Box>
@@ -3412,6 +3461,7 @@ function SiteImagesToolPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("slotKey", slotKey);
       const res = await fetch("/api/uploads/site-image", { method: "POST", body: formData });
       const payload = await res.json().catch(() => ({})) as { url?: string; message?: string };
       if (!res.ok || !payload.url) throw new Error(payload.message ?? "Upload fehlgeschlagen.");
