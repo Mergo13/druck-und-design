@@ -3412,7 +3412,7 @@ function SiteImagesToolPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
+      const res = await fetch("/api/uploads/site-image", { method: "POST", body: formData });
       const payload = await res.json().catch(() => ({})) as { url?: string; message?: string };
       if (!res.ok || !payload.url) throw new Error(payload.message ?? "Upload fehlgeschlagen.");
       const nextImages = { ...images, [slotKey]: payload.url };
