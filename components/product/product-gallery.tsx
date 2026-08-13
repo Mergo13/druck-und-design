@@ -14,6 +14,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null);
   const [mainImage, setMainImage] = useState(0);
   const galleryImages = Array.from(new Set(images.filter(Boolean)));
+  const isRuntimeUpload = (image: string) => image.startsWith("/uploads/");
 
   const openLightbox = (index: number) => {
     setSelectedImage(index);
@@ -82,6 +83,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
               src={galleryImages[mainImage]}
               alt={`${name} - Ansicht ${mainImage + 1}`}
               fill
+              unoptimized={isRuntimeUpload(galleryImages[mainImage])}
               className="object-contain p-4 transition-transform duration-700 group-hover:scale-[1.025]"
               priority
               sizes="(min-width: 1024px) 60vw, 100vw"
@@ -115,6 +117,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
               src={image}
               alt={`${name} Thumbnail ${index + 1}`}
               fill
+              unoptimized={isRuntimeUpload(image)}
               className={`object-cover transition ${mainImage === index ? "scale-105" : ""}`}
               sizes="140px"
             />
@@ -173,6 +176,7 @@ export function ProductGallery({ images, name }: ProductGalleryProps) {
                     src={galleryImages[selectedImage]}
                     alt={`${name} Fullscreen`}
                     fill
+                    unoptimized={isRuntimeUpload(galleryImages[selectedImage])}
                     className="object-contain"
                   />
                 </motion.div>

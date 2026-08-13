@@ -24,13 +24,14 @@ export function ProductCard({
   onToggleSelect?: (slug: string) => void;
 }) {
   const image = "heroImage" in product ? product.heroImage : product.image;
+  const unoptimizedImage = image.startsWith("/uploads/");
   const priceLabel = "basePrice" in product ? `Ab ${formatEuro(product.basePrice)}` : "Preis auf Anfrage";
 
   return (
     <motion.div whileHover={{ y: -7 }} transition={{ type: "spring", stiffness: 280, damping: 24 }}>
       <Card className="group h-full overflow-hidden border-slate-200/80 bg-white shadow-[0_12px_35px_rgba(17,34,68,.08)] hover:border-brand-blue/30 hover:shadow-[0_25px_55px_rgba(17,85,204,.13)]">
         <div className="relative aspect-[4/3] overflow-hidden bg-brand-mist">
-          <Image src={image} alt={`${product.name} Demo-Bild`} fill className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" />
+          <Image src={image} alt={`${product.name} Demo-Bild`} fill unoptimized={unoptimizedImage} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" />
           <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-brand-ink/25 to-transparent" />
         </div>
         <CardContent>

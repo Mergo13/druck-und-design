@@ -69,10 +69,15 @@ function productMap(products: Awaited<ReturnType<typeof getPublicProducts>>) {
   return new Map(products.map((product) => [product.slug, product]));
 }
 
+function isRuntimeUploadImage(src: string) {
+  return src.startsWith("/uploads/");
+}
+
 export default async function StudentenPage() {
   const products = await getPublicProducts();
   const bySlug = productMap(products);
   const thesisProduct = bySlug.get("abschlussarbeiten") ?? products.find((product) => product.isStudentShop) ?? products[0];
+  const thesisImage = thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp";
   const thesisHref = thesisProduct ? `/produkt/${thesisProduct.slug}` : "/produkte";
   const studentProducts = products
     .filter((product) => product.isStudentShop || ["abschlussarbeiten", "spiralbindung", "plakate", "magazine"].includes(product.slug))
@@ -91,7 +96,7 @@ export default async function StudentenPage() {
       }} />
       <section className="relative overflow-hidden bg-slate-950 text-white">
         <div className="absolute inset-0">
-          <Image src={thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt="Studenten Druckservice in Wels" fill priority className="object-cover opacity-45" sizes="100vw" />
+          <Image src={thesisImage} alt="Studenten Druckservice in Wels" fill priority unoptimized={isRuntimeUploadImage(thesisImage)} className="object-cover opacity-45" sizes="100vw" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/88 to-slate-950/25" />
         </div>
         <div className="container-page relative py-24 md:py-32">
@@ -146,7 +151,7 @@ export default async function StudentenPage() {
           </div>
           <Card className="overflow-hidden border-slate-200 shadow-[0_18px_45px_rgba(17,34,68,.08)]">
             <div className="relative aspect-[4/3] bg-brand-mist">
-              <Image src={thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt="Abschlussarbeiten drucken und binden" fill className="object-cover" sizes="(min-width: 1024px) 45vw, 100vw" />
+              <Image src={thesisImage} alt="Abschlussarbeiten drucken und binden" fill unoptimized={isRuntimeUploadImage(thesisImage)} className="object-cover" sizes="(min-width: 1024px) 45vw, 100vw" />
             </div>
           </Card>
         </div>
@@ -157,11 +162,12 @@ export default async function StudentenPage() {
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           {bindingCards.map(([title, text, slug, href]) => {
             const product = bySlug.get(slug) ?? thesisProduct;
+            const productImage = product?.heroImage || "/uploads/products/abschlussarbeiten.webp";
             const safeHref = bySlug.get(slug) ? href : thesisHref;
             return (
               <Card key={title} className="overflow-hidden border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.06)]">
                 <div className="relative aspect-[4/3] bg-brand-mist">
-                  <Image src={product?.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt={title} fill className="object-cover" sizes="(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw" />
+                  <Image src={productImage} alt={title} fill unoptimized={isRuntimeUploadImage(productImage)} className="object-cover" sizes="(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw" />
                 </div>
                 <CardContent className="p-5">
                   <h3 className="text-lg font-black text-brand-ink">{title}</h3>
@@ -217,7 +223,7 @@ export default async function StudentenPage() {
               {studentProducts.map((product) => (
                 <Link key={product.slug} href={`/produkt/${product.slug}`} className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.06)] transition hover:-translate-y-1 hover:border-brand-blue/30">
                   <div className="relative aspect-[4/3] bg-brand-mist">
-                    <Image src={product.heroImage} alt={product.name} fill className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
+                    <Image src={product.heroImage} alt={product.name} fill unoptimized={isRuntimeUploadImage(product.heroImage)} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
                   </div>
                   <div className="p-5">
                     <h3 className="text-lg font-black text-brand-ink group-hover:text-brand-blue">{product.name}</h3>
