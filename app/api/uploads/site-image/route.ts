@@ -4,7 +4,7 @@ import { requireModulePermission } from "@/lib/admin-permissions";
 import { saveUploadedFile } from "@/lib/file-storage";
 import { siteImageSlots } from "@/lib/site-images";
 
-const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".heic", ".heif"];
+const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"];
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 function extensionOf(name: string) {
@@ -29,8 +29,7 @@ export async function POST(request: Request) {
   }
 
   const extension = extensionOf(file.name);
-  const isHeicImage = extension === ".heic" || extension === ".heif";
-  const isImage = (file.type.startsWith("image/") && file.type !== "image/svg+xml") || isHeicImage;
+  const isImage = file.type.startsWith("image/") && file.type !== "image/svg+xml";
   if (!isImage) {
     return NextResponse.json({ message: "Nur Bilddateien sind erlaubt." }, { status: 400 });
   }

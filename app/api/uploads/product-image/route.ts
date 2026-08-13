@@ -4,7 +4,7 @@ import { requireModulePermission } from "@/lib/admin-permissions";
 import { saveUploadedFile } from "@/lib/file-storage";
 import { getCategories, getProducts, upsertCategory, upsertProduct } from "@/lib/catalog-repository";
 
-const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".heic", ".heif", ".mp4", ".mov", ".webm"];
+const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".mp4", ".mov", ".webm"];
 const MAX_FILE_SIZE = 80 * 1024 * 1024;
 
 function extensionOf(name: string) {
@@ -33,8 +33,7 @@ export async function POST(request: Request) {
   }
 
   const extension = extensionOf(file.name);
-  const isHeicImage = extension === ".heic" || extension === ".heif";
-  const isImage = (file.type.startsWith("image/") && file.type !== "image/svg+xml") || isHeicImage;
+  const isImage = file.type.startsWith("image/") && file.type !== "image/svg+xml";
   const isVideo = file.type.startsWith("video/");
   if (!isImage && !isVideo) {
     return NextResponse.json({ message: "Nur Bild- oder Videodateien sind erlaubt." }, { status: 400 });

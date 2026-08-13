@@ -1189,11 +1189,11 @@ function ProductImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingHero}>
           {uploadingHero ? "Lädt hoch..." : "Hauptbild hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onHeroImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={onHeroImageChange} />
         </Button>
         <Button variant="outlined" component="label" disabled={uploadingGallery}>
           {uploadingGallery ? "Fügt hinzu..." : "Galeriebilder hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onGalleryImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden onChange={onGalleryImageChange} />
         </Button>
       </Box>
       {currentHero ? (
@@ -2162,11 +2162,11 @@ function IndustryImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingHero}>
           {uploadingHero ? "Lädt hoch..." : "Hero-Bild hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onHeroImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={onHeroImageChange} />
         </Button>
         <Button variant="outlined" component="label" disabled={uploadingShowroom}>
           {uploadingShowroom ? "Fügt hinzu..." : "Showroom-Bilder hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onShowroomImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden onChange={onShowroomImageChange} />
         </Button>
       </Box>
       {currentHero ? (
@@ -2193,7 +2193,7 @@ function IndustryImageUploadControls() {
                 </Typography>
                 <Button variant="outlined" size="small" component="label" disabled={uploadingShowroom}>
                   {uploadingShowroom ? "Upload..." : `Bild ${index + 1} ersetzen`}
-                  <input type="file" accept="image/*,.heic,.heif" hidden onChange={(event) => void onShowroomReplace(index, event)} />
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={(event) => void onShowroomReplace(index, event)} />
                 </Button>
                 <Button variant="outlined" color="error" size="small" startIcon={<DeleteOutlineIcon />} disabled={uploadingShowroom} onClick={() => void onShowroomDelete(index)}>
                   Löschen
@@ -2585,7 +2585,7 @@ function CategoryImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingLogo}>
           {uploadingLogo ? "Uploading..." : "Upload Category Image"}
-          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onLogoChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={onLogoChange} />
         </Button>
         {currentLogo ? (
           <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />} onClick={removeLogo}>
@@ -3236,7 +3236,7 @@ function CatalogImageImportToolPage() {
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
               <Button variant="outlined" component="label" disabled={uploading}>
                 {uploading ? "Optimiert..." : "Bild/Video hochladen"}
-                <input type="file" accept="image/*,.heic,.heif,video/mp4,video/webm,video/quicktime" multiple hidden onChange={uploadImage} />
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime" multiple hidden onChange={uploadImage} />
               </Button>
               <Button variant="contained" onClick={() => void assignUploadedImage()} disabled={saving || !uploadedUrl || !targetSlug || uploadedMimeType.startsWith("video/")}>
                 Bild zuweisen
@@ -3658,7 +3658,7 @@ function SiteImagesToolPage() {
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                       <Button variant="contained" component="label" disabled={uploadingKey === slot.key || saving}>
                         {uploadingKey === slot.key ? "Upload..." : "Upload"}
-                        <input type="file" accept="image/*,.heic,.heif" hidden onChange={(event) => void uploadForSlot(slot.key, event)} />
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={(event) => void uploadForSlot(slot.key, event)} />
                       </Button>
                       <Button variant="outlined" disabled={saving || !isDirty} onClick={() => void save()}>
                         Änderungen speichern
