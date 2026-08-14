@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, FileText, Loader2, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, UploadCloud } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatEuro } from "@/lib/utils";
@@ -92,7 +92,6 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
   const sheets = calculateSheets(pageCount, selection.printSides);
   const color = resolveColorCounts(selection, analysis ?? undefined);
   const bindings = getAvailableBindings({ pages: pageCount, sheets, format: selection.format, presetKey: selection.presetKey });
-  const availableBindings = bindings.filter((binding) => binding.available);
   const blockThickness = estimateBlockThicknessMm(sheets, selection.paper);
   const selectedProductConfig = activeProduct ? productPriceConfig(activeProduct, selection) : {};
 
@@ -179,10 +178,8 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.message ?? "PDF-Upload fehlgeschlagen.");
       const serverAnalysis = payload.analysis as PdfAnalysis;
-      setUploadState("analyzing");
-      const browser = await analyzePdfInBrowser(file, serverAnalysis);
-      setAnalysis(browser.analysis);
-      setThumbnails(browser.thumbnails);
+      setAnalysis(serverAnalysis);
+      setThumbnails([]);
       setUploadState("done");
     } catch (error) {
       setUploadState("error");
@@ -315,7 +312,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
               )}
               <p className="mt-3 text-lg font-black text-brand-ink">PDF hochladen</p>
               <p className="mt-1 text-sm text-slate-600">Ziehe deine Datei hierher oder wähle sie aus. Wir analysieren dein Dokument automatisch.</p>
-              {uploadState === "analyzing" ? <p className="mt-3 text-sm font-bold text-brand-blue">Farbseiten und Vorschau werden analysiert...</p> : null}
+              {uploadState === "analyzing" ? <p className="mt-3 text-sm font-bold text-brand-blue">PDF wird analysiert...</p> : null}
             </label>
 
             {message ? (
@@ -337,8 +334,8 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                   <Metric label="Seiten" value={`${analysis.pages}`} />
                   <Metric label="Format" value={analysis.dominantFormat ?? "Sonderformat"} sub={analysis.widthMm && analysis.heightMm ? `${analysis.widthMm} x ${analysis.heightMm} mm` : undefined} />
                   <Metric label="Ausrichtung" value={analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : "Quadratisch"} />
-                  <Metric label="Farbseiten" value={`${analysis.colorPages.length}`} />
-                  <Metric label="SW-Seiten" value={`${analysis.bwPages.length}`} />
+                  <Metric label="Farbseiten" value={analysis.colorPages.length ? `${analysis.colorPages.length}` : "Manuell wählbar"} />
+                  <Metric label="SW-Seiten" value={analysis.bwPages.length ? `${analysis.bwPages.length}` : "Manuell wählbar"} />
                   <Metric label="Blätter" value={`${sheets}`} sub={selection.printSides === "duplex" ? "bei beidseitigem Druck" : "bei einseitigem Druck"} />
                 </div>
                 {analysis.warnings.length ? (
@@ -367,11 +364,11 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                   </div>
                 ) : null}
                 <div className="mt-5">
-                  <p className="text-sm font-black text-brand-ink">Farbseiten erkannt: {analysis.colorPages.length}</p>
+                  <p className="text-sm font-black text-brand-ink">Farbseiten</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {analysis.colorPages.slice(0, 40).map((page) => <span key={page} className="rounded bg-brand-blue px-2 py-1 text-xs font-bold text-white">{page} Farbe</span>)}
                     {analysis.colorPages.length > 40 ? <span className="rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">+{analysis.colorPages.length - 40} weitere</span> : null}
-                    {!analysis.colorPages.length ? <span className="text-xs font-semibold text-slate-500">Keine Farbseiten erkannt.</span> : null}
+                    {!analysis.colorPages.length ? <span className="text-xs font-semibold text-slate-500">Automatische Farberkennung ist serverseitig deaktiviert. Wähle bei Bedarf „Alles Farbe“ oder „Seiten selbst auswählen“.</span> : null}
                   </div>
                 </div>
               </div>
@@ -429,7 +426,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                       <label key={mode} className={selection.colorMode === mode ? "rounded-md border border-brand-blue bg-white p-3 ring-2 ring-brand-blue/10" : "rounded-md border border-slate-200 bg-white p-3"}>
                         <input type="radio" className="mr-2 accent-brand-blue" checked={selection.colorMode === mode} onChange={() => setSelection({ ...selection, colorMode: mode })} />
                         <span className="text-sm font-bold">{colorModeLabel(mode)}</span>
-                        {mode === "auto" ? <span className="ml-2 text-xs text-slate-500">{analysis.colorPages.length} Farbseiten · {analysis.bwPages.length} SW-Seiten</span> : null}
+                        {mode === "auto" ? <span className="ml-2 text-xs text-slate-500">{analysis.colorPages.length ? `${analysis.colorPages.length} Farbseiten · ${analysis.bwPages.length} SW-Seiten` : "ohne erkannte Farbseiten"}</span> : null}
                       </label>
                     ))}
                   </div>
@@ -526,64 +523,4 @@ function VariantCard({ title, text, price, active }: { title: string; text: stri
       {price !== undefined ? <p className="mt-3 text-sm font-black text-brand-blue">{formatEuro(price)}</p> : <p className="mt-3 text-xs font-bold text-slate-500">Wird aus bestehenden Optionen berechnet.</p>}
     </div>
   );
-}
-
-async function analyzePdfInBrowser(file: File, serverAnalysis: PdfAnalysis): Promise<{ analysis: PdfAnalysis; thumbnails: Thumb[] }> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
-  const data = await file.arrayBuffer();
-  const pdf = await pdfjs.getDocument({ data }).promise;
-  const colorPages: number[] = [];
-  const thumbnails: Thumb[] = [];
-  const thumbPages = Array.from(new Set([1, Math.min(2, pdf.numPages), Math.max(1, Math.ceil(pdf.numPages / 2)), pdf.numPages])).filter((page) => page >= 1 && page <= pdf.numPages);
-
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: 0.22 });
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) continue;
-    canvas.width = Math.max(1, Math.floor(viewport.width));
-    canvas.height = Math.max(1, Math.floor(viewport.height));
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
-    if (pageHasColor(context, canvas.width, canvas.height)) colorPages.push(pageNumber);
-    if (thumbPages.includes(pageNumber)) {
-      thumbnails.push({
-        page: pageNumber,
-        label: pageNumber === 1 ? "Erste Seite" : pageNumber === pdf.numPages ? "Letzte Seite" : `Seite ${pageNumber}`,
-        url: canvas.toDataURL("image/jpeg", 0.72)
-      });
-    }
-  }
-
-  const bwPages = Array.from({ length: pdf.numPages }, (_, index) => index + 1).filter((page) => !colorPages.includes(page));
-  return {
-    analysis: {
-      ...serverAnalysis,
-      pages: pdf.numPages,
-      colorPages,
-      bwPages,
-      warnings: serverAnalysis.warnings
-    },
-    thumbnails
-  };
-}
-
-function pageHasColor(context: CanvasRenderingContext2D, width: number, height: number) {
-  const data = context.getImageData(0, 0, width, height).data;
-  let colored = 0;
-  let sampled = 0;
-  for (let index = 0; index < data.length; index += 4 * 6) {
-    const alpha = data[index + 3];
-    if (alpha < 20) continue;
-    const r = data[index];
-    const g = data[index + 1];
-    const b = data[index + 2];
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    sampled += 1;
-    if (max - min > 18 && max > 40) colored += 1;
-    if (sampled > 0 && colored / sampled > 0.012) return true;
-  }
-  return sampled > 0 && colored / sampled > 0.012;
 }
