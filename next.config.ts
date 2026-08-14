@@ -3,9 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
-  experimental: {
-    devtoolSegmentExplorer: false
-  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
@@ -25,12 +22,6 @@ const nextConfig: NextConfig = {
         { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }
       ]
     }];
-  },
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.cache = false;
-    }
-    return config;
   }
 };
 
