@@ -7,16 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { StructuredData } from "@/components/structured-data";
+import { StudentPrintConfigurator } from "@/features/student/student-print-configurator";
 import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
-  title: "Studenten Druckservice in Wels | Abschlussarbeiten, Skripten & Poster",
-  description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell in Wels drucken. Studentenrabatt mit gültigem Studentenausweis.",
+  title: "Studenten Shop & Druckservice in Wels | Abschlussarbeiten, Skripten & Poster",
+  description: "Studenten Shop und Druckservice in Wels für Abschlussarbeiten, Skripten, Poster und Bindungen. Studentenrabatt mit gültigem Studentenausweis.",
   alternates: { canonical: "/studenten" },
   openGraph: {
-    title: "Studenten Druckservice in Wels",
-    description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell & professionell drucken.",
+    title: "Studenten Shop & Druckservice in Wels",
+    description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell drucken.",
     url: "/studenten",
     type: "website",
     locale: "de_AT"
@@ -56,22 +59,27 @@ const benefits = [
 ] as const;
 
 const bindingCards = [
-  ["Spiralbindung", "Affordable and practical.", "spiralbindung", "/produkt/spiralbindung"],
-  ["Klebebindung", "Clean professional finish.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Softcover", "Lightweight premium option.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Hardcover", "Premium solution for Bachelor-, Master- and Diplomarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Hardcover + Gold/Silber", "Premium presentation option.", "abschlussarbeiten", "/produkt/abschlussarbeiten"]
+  ["Spiralbindung", "Praktisch für Skripten, Projektarbeiten und häufiges Umblättern.", "spiralbindung", "/produkt/spiralbindung"],
+  ["Klebebindung", "Sauberer Abschluss für Seminar- und Projektarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
+  ["Softcover", "Leichte, hochwertige Lösung für umfangreiche Dokumente.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
+  ["Hardcover", "Premium-Lösung für Bachelor-, Master- und Diplomarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
+  ["Hardcover + Gold/Silber", "Hochwertige Präsentation für finale Abgaben.", "abschlussarbeiten", "/produkt/abschlussarbeiten"]
 ] as const;
 
 function productMap(products: Awaited<ReturnType<typeof getPublicProducts>>) {
   return new Map(products.map((product) => [product.slug, product]));
 }
 
+function isRuntimeUploadImage(src?: string) {
+  return Boolean(src?.startsWith("/uploads/"));
+}
+
 export default async function StudentenPage() {
   const products = await getPublicProducts();
   const bySlug = productMap(products);
   const thesisProduct = bySlug.get("abschlussarbeiten") ?? products.find((product) => product.isStudentShop) ?? products[0];
-  const thesisHref = thesisProduct ? `/produkt/${thesisProduct.slug}` : "/leistungen";
+  const thesisImage = thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp";
+  const thesisHref = thesisProduct ? `/produkt/${thesisProduct.slug}` : "/produkte";
   const studentProducts = products
     .filter((product) => product.isStudentShop || ["abschlussarbeiten", "spiralbindung", "plakate", "magazine"].includes(product.slug))
     .sort((a, b) => Number(a.studentShopSortOrder ?? 999) - Number(b.studentShopSortOrder ?? 999))
@@ -82,20 +90,20 @@ export default async function StudentenPage() {
       <StructuredData data={{
         "@context": "https://schema.org",
         "@type": "WebPage",
-        name: "Studenten Druckservice in Wels",
-        description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell & professionell drucken.",
+        name: "Studenten Shop & Druckservice in Wels",
+        description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell drucken.",
         url: "https://druck-und-design.at/studenten",
         inLanguage: "de-AT"
       }} />
       <section className="relative overflow-hidden bg-slate-950 text-white">
         <div className="absolute inset-0">
-          <Image src={thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt="Studenten Druckservice in Wels" fill priority className="object-cover opacity-45" sizes="100vw" />
+          <Image src={thesisImage} alt="Studenten Shop und Druckservice in Wels" fill priority unoptimized={isRuntimeUploadImage(thesisImage)} className="object-cover opacity-45" sizes="100vw" />
           <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/88 to-slate-950/25" />
         </div>
         <div className="container-page relative py-24 md:py-32">
           <Badge variant="outline" className="border-white/25 bg-white/10 text-white">Studenten-Shop</Badge>
-          <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight md:text-6xl">Studenten Druckservice in Wels</h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-white/82">Abschlussarbeiten, Skripten, Poster und Bindungen schnell & professionell drucken.</p>
+          <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight md:text-6xl">Studenten Shop & Druckservice in Wels</h1>
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-white/82">Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell drucken.</p>
           <div className="mt-7 inline-flex rounded-full border border-white/20 bg-white px-4 py-2 text-sm font-black text-brand-ink shadow-lg">
             Studentenrabatt mit gültigem Studentenausweis
           </div>
@@ -110,12 +118,14 @@ export default async function StudentenPage() {
         </div>
       </section>
 
+      <StudentPrintConfigurator products={products} />
+
       <section className="container-page py-16">
         <SectionHeading eyebrow="Studenten-Shop" title="Was möchtest du drucken oder binden?" description="Direkte Einstiege in bestehende Produkte und passende Ratgeberseiten." />
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {categoryCards.map(([label, key, href]) => {
             const product = bySlug.get(key);
-            const safeHref = href.startsWith("/produkt/") && !product ? "/leistungen" : href;
+            const safeHref = href.startsWith("/produkt/") && !product ? "/produkte" : href;
             return (
               <Link key={label} href={safeHref} className="group rounded-lg border border-slate-200 bg-white p-5 shadow-[0_12px_30px_rgba(17,34,68,.06)] transition hover:-translate-y-1 hover:border-brand-blue/35 hover:shadow-[0_18px_40px_rgba(17,85,204,.12)]">
                 <p className="text-lg font-black text-brand-ink transition group-hover:text-brand-blue">{label}</p>
@@ -144,7 +154,7 @@ export default async function StudentenPage() {
           </div>
           <Card className="overflow-hidden border-slate-200 shadow-[0_18px_45px_rgba(17,34,68,.08)]">
             <div className="relative aspect-[4/3] bg-brand-mist">
-              <Image src={thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt="Abschlussarbeiten drucken und binden" fill className="object-cover" sizes="(min-width: 1024px) 45vw, 100vw" />
+              <Image src={thesisImage} alt="Abschlussarbeiten drucken und binden" fill unoptimized={isRuntimeUploadImage(thesisImage)} className="object-cover" sizes="(min-width: 1024px) 45vw, 100vw" />
             </div>
           </Card>
         </div>
@@ -155,11 +165,12 @@ export default async function StudentenPage() {
         <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           {bindingCards.map(([title, text, slug, href]) => {
             const product = bySlug.get(slug) ?? thesisProduct;
+            const productImage = product?.heroImage || "/uploads/products/abschlussarbeiten.webp";
             const safeHref = bySlug.get(slug) ? href : thesisHref;
             return (
               <Card key={title} className="overflow-hidden border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.06)]">
                 <div className="relative aspect-[4/3] bg-brand-mist">
-                  <Image src={product?.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt={title} fill className="object-cover" sizes="(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw" />
+                  <Image src={productImage} alt={title} fill unoptimized={isRuntimeUploadImage(productImage)} className="object-cover" sizes="(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw" />
                 </div>
                 <CardContent className="p-5">
                   <h3 className="text-lg font-black text-brand-ink">{title}</h3>
@@ -209,13 +220,13 @@ export default async function StudentenPage() {
           <div className="container-page">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <SectionHeading eyebrow="Produkte" title="Passende Studenten-Produkte" />
-              <Button asChild variant="outline" className="w-fit"><Link href="/leistungen">Alle Produkte ansehen</Link></Button>
+              <Button asChild variant="outline" className="w-fit"><Link href="/produkte">Alle Produkte ansehen</Link></Button>
             </div>
             <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
               {studentProducts.map((product) => (
                 <Link key={product.slug} href={`/produkt/${product.slug}`} className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.06)] transition hover:-translate-y-1 hover:border-brand-blue/30">
                   <div className="relative aspect-[4/3] bg-brand-mist">
-                    <Image src={product.heroImage} alt={product.name} fill className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
+                    <Image src={product.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt={product.name} fill unoptimized={isRuntimeUploadImage(product.heroImage)} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
                   </div>
                   <div className="p-5">
                     <h3 className="text-lg font-black text-brand-ink group-hover:text-brand-blue">{product.name}</h3>

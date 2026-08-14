@@ -33,7 +33,7 @@ export function ServicePortfolioPage({
   description,
   features,
   portfolio,
-  ctaLink = "/leistungen",
+  ctaLink = "/produkte",
   ctaText = "Leistungen entdecken"
 }: ServicePortfolioPageProps) {
   return (

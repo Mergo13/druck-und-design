@@ -4,7 +4,7 @@ import { ShopStatusBadge } from "@/components/layout/shop-status-badge";
 
 const cols: Array<Array<{ label: string; href: string }>> = [
   [
-    { label: "Leistungen", href: "/leistungen" },
+    { label: "Produkte", href: "/produkte" },
     { label: "Druckservice", href: "/druckservice" },
     { label: "Werbeagentur", href: "/werbeagentur" },
     { label: "Werbetechnik", href: "/werbetechnik" }

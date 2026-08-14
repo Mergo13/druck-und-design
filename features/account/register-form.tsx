@@ -28,7 +28,7 @@ export function RegisterForm() {
       setLoading(false);
       return;
     }
-    router.push("/leistungen");
+    router.push("/produkte");
     router.refresh();
   }
 

@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import path from "path";
 import Stripe from "stripe";
 import { getSessionUser } from "@/lib/auth";
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
@@ -6,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getUserByEmail } from "@/lib/catalog-repository";
 
 const printCheckFee = Number(process.env.PRINT_CHECK_FEE_EUR?.trim() || "9.99");
+const checkoutItemsDir = path.join(process.cwd(), "data", "stripe-checkout-items");
 
 type CheckoutItem = {
   slug: string;
@@ -194,6 +197,23 @@ export async function POST(request: Request) {
   if (!session.url) {
     return NextResponse.json({ message: "Stripe-Checkout konnte nicht gestartet werden." }, { status: 500 });
   }
+
+  await fs.mkdir(checkoutItemsDir, { recursive: true });
+  await fs.writeFile(path.join(checkoutItemsDir, `${session.id}.json`), JSON.stringify({
+    createdAt: new Date().toISOString(),
+    items: items.map((item) => ({
+      slug: item.slug,
+      name: item.name,
+      category: item.category,
+      quantity: Math.max(1, item.quantity || 1),
+      unitPrice: item.unitPrice ?? 0,
+      config: item.config ?? {},
+      printCheckRequested: item.printCheckRequested ?? false,
+      printCheckFee: item.printCheckFee ?? 0,
+      printCheckFileName: item.printCheckFileName,
+      printCheckFileUrl: item.printCheckFileUrl
+    }))
+  }, null, 2), "utf8");
 
   return NextResponse.json({ url: session.url });
 }

@@ -43,7 +43,7 @@ export function LocalSeoPageView({ page }: { page: LocalSeoPage }) {
           <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight md:text-6xl">{page.heading}</h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-white/75">{page.description}</p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button asChild size="lg"><Link href="/leistungen">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link></Button>
+            <Button asChild size="lg"><Link href="/produkte">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link></Button>
             <Button asChild variant="outline" size="lg" className="border-white/40 bg-black/15 text-white hover:bg-black/35">
               <Link href="/kontakt">Angebot anfragen</Link>
             </Button>

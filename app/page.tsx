@@ -71,7 +71,7 @@ export default async function HomePage() {
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/90">Design, Digitaldruck, Großformat, Beschriftung, Textildruck und Webdesign - von der Idee bis zur fertigen Umsetzung.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button asChild size="lg">
-                <Link href="/leistungen">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/produkte">Produkte entdecken <ArrowRight className="h-4 w-4" /></Link>
               </Button>
               <Button asChild variant="outline" size="lg" className="border-white/40 bg-black/15 text-white hover:bg-black/35">
                 <Link href="/kontakt">Angebot anfragen</Link>
@@ -96,7 +96,7 @@ export default async function HomePage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <SectionHeading eyebrow={homepageSettings.bestsellerSubtitle} title={homepageSettings.bestsellerTitle} description="Direkt aus dem Shop-Katalog, mit aktuellen Produktdaten und Preisen." />
             <Button asChild variant="outline" className="w-fit">
-              <Link href="/leistungen">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
+              <Link href="/produkte">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
             </Button>
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -104,7 +104,7 @@ export default async function HomePage() {
               <HomepageProductCard key={product.slug} product={product} />
             ))}
           </div>
-          <Link href="/leistungen" className="mt-6 inline-flex items-center gap-2 text-sm font-black text-brand-blue hover:text-brand-ink">
+          <Link href="/produkte" className="mt-6 inline-flex items-center gap-2 text-sm font-black text-brand-blue hover:text-brand-ink">
             Alle Produkte ansehen <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
@@ -137,11 +137,13 @@ export default async function HomePage() {
             </Button>
           </div>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
-            {featuredIndustries.map((industry) => (
+            {featuredIndustries.map((industry) => {
+              const heroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
+              return (
               <Card key={industry.slug} className="group overflow-hidden border border-slate-200 bg-white shadow-[0_14px_38px_rgba(17,34,68,.08)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-[0_24px_54px_rgba(17,85,204,.13)]">
-                {siteImages[`industry.${industry.slug}.hero`] || industry.heroImage ? (
+                {heroImage ? (
                   <div className="relative aspect-[16/9] overflow-hidden bg-brand-mist">
-                    <img src={siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage} alt={industry.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
+                    <img src={heroImage} alt={industry.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
                     <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-brand-ink/45 to-transparent" />
                   </div>
                 ) : null}
@@ -155,7 +157,8 @@ export default async function HomePage() {
                   </Link>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
           </div>
         </section>
       ) : null}
@@ -275,7 +278,7 @@ export default async function HomePage() {
             </div>
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
               <Button asChild variant="accent"><Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Jetzt anfragen</Link></Button>
-              <Button asChild variant="secondary"><Link href="/leistungen">Leistungen ansehen</Link></Button>
+              <Button asChild variant="secondary"><Link href="/produkte">Produkte ansehen</Link></Button>
             </div>
           </CardContent>
         </Card>
@@ -288,6 +291,8 @@ export default async function HomePage() {
 
 function HomepageProductCard({ product }: { product: ProductCatalogItem }) {
   const purchaseMode = product.purchaseMode ?? "online";
+  const heroImage = product.heroImage || "/uploads/products/abschlussarbeiten.webp";
+  const unoptimizedImage = heroImage.startsWith("/uploads/");
   const cta = purchaseMode === "request"
     ? { href: "/kontakt", label: "Angebot anfragen" }
     : purchaseMode === "disabled"
@@ -297,7 +302,7 @@ function HomepageProductCard({ product }: { product: ProductCatalogItem }) {
   return (
     <Card className="group h-full overflow-hidden border border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.07)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-[0_22px_48px_rgba(17,85,204,.12)]">
       <div className="relative aspect-[4/3] overflow-hidden bg-brand-mist">
-        <Image src={product.heroImage} alt={product.name} fill className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
+        <Image src={heroImage} alt={product.name} fill unoptimized={unoptimizedImage} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
       </div>
       <CardContent className="p-5">
         <h3 className="text-lg font-black text-brand-ink">{product.name}</h3>

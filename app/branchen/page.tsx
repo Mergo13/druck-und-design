@@ -6,6 +6,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getPublicIndustries } from "@/lib/catalog-repository";
 import { getSiteImageMap } from "@/lib/site-images";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Lösungen für Branchen",
   description: "Druck, Werbetechnik und Designlösungen für Bau, Gastronomie, Praxen, Industrie, Handel, Vereine und weitere Branchen."
@@ -27,7 +29,7 @@ export default async function IndustriesOverviewPage() {
               <Link href="/kontakt">Projekt besprechen <ArrowRight className="h-4 w-4" /></Link>
             </Button>
             <Button asChild variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/20">
-              <Link href="/leistungen">Produkte ansehen</Link>
+              <Link href="/produkte">Produkte ansehen</Link>
             </Button>
           </div>
         </div>
@@ -35,11 +37,13 @@ export default async function IndustriesOverviewPage() {
 
       <div className="container-page py-12">
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {industries.map((industry) => (
+          {industries.map((industry) => {
+            const heroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
+            return (
             <Card key={industry.slug} className="group overflow-hidden border-slate-200 bg-white shadow-[0_14px_38px_rgba(17,34,68,.08)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-[0_24px_54px_rgba(17,85,204,.13)]">
-              {siteImages[`industry.${industry.slug}.hero`] || industry.heroImage ? (
+              {heroImage ? (
                 <div className="relative aspect-[16/9] overflow-hidden bg-brand-mist">
-                  <img src={siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage} alt={industry.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
+                  <img src={heroImage} alt={industry.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" />
                   <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-brand-ink/45 to-transparent" />
                 </div>
               ) : null}
@@ -53,7 +57,8 @@ export default async function IndustriesOverviewPage() {
                 </Link>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

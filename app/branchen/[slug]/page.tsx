@@ -12,6 +12,8 @@ import { withoutPrices } from "@/lib/product-price-visibility";
 import { prisma } from "@/lib/prisma";
 import { getSiteImageMap } from "@/lib/site-images";
 
+export const dynamic = "force-dynamic";
+
 export async function generateStaticParams() {
   const industries = await getPublicIndustries();
   return industries.map((industry) => ({ slug: industry.slug }));
@@ -21,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const [industry, siteImages] = await Promise.all([getPublicIndustryBySlug(slug), getSiteImageMap()]);
   if (!industry) return { title: "Branche" };
-  const heroImage = siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage;
+  const heroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
   return {
     title: industry.seoTitle || `${industry.name} | druck&design studio`,
     description: industry.metaDescription || industry.description,
@@ -48,10 +50,10 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
   if (!industry) notFound();
 
   const authenticated = Boolean(session);
-  const industryHeroImage = siteImages[`industry.${industry.slug}.hero`] ?? industry.heroImage;
+  const industryHeroImage = industry.heroImage || siteImages[`industry.${industry.slug}.hero`];
   const showroomImages = (industry.showroomImages ?? []).map((item, index) => ({
     ...item,
-    image: siteImages[`industry.${industry.slug}.showroom.${index + 1}`] ?? item.image
+    image: item.image || siteImages[`industry.${industry.slug}.showroom.${index + 1}`]
   }));
   const linkedProductSlugs = new Set(industry.productSlugs ?? []);
   const relatedRawProducts = rawProducts
@@ -76,7 +78,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
                 <Link href="/kontakt"><PhoneCall className="h-4 w-4" /> Projekt anfragen</Link>
               </Button>
               <Button asChild variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/20">
-                <Link href="/leistungen">Produkte ansehen</Link>
+                <Link href="/produkte">Produkte ansehen</Link>
               </Button>
             </div>
           </div>
@@ -122,7 +124,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
                 <h2 className="mt-2 text-3xl font-black text-brand-ink md:text-4xl">Passende Produkte</h2>
               </div>
               <Button asChild variant="outline" className="w-fit">
-                <Link href="/leistungen">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
+                <Link href="/produkte">Alle Produkte ansehen <ArrowRight className="h-4 w-4" /></Link>
               </Button>
             </div>
             <div className="mt-7 grid gap-6 md:grid-cols-2 xl:grid-cols-3">

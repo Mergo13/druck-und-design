@@ -61,7 +61,7 @@ export default async function DruckservicePage() {
         image: siteImages[`druckservice.portfolio.${index + 1}`] ?? item.image
       }))}
       ctaText="Druckprodukte entdecken"
-      ctaLink="/leistungen"
+      ctaLink="/produkte"
     />
   );
 }

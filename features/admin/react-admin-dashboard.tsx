@@ -5,7 +5,6 @@ import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import { Alert, Box, Button, Card, CardContent, Grid, IconButton, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
-import Image from "next/image";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Admin,
@@ -180,6 +179,41 @@ const adminTheme = createTheme({
     }
   }
 });
+
+function AdminImagePreview({ src, alt, sx, children }: { src?: string; alt: string; sx?: object; children?: ReactNode }) {
+  const value = String(src ?? "").trim();
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [value]);
+
+  return (
+    <Box sx={{ position: "relative", overflow: "hidden", bgcolor: "#f8fafc", display: "grid", placeItems: "center", ...sx }}>
+      {value && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={value}
+          alt={alt}
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <Box sx={{ minWidth: 0, px: 1, textAlign: "center" }}>
+          <Typography variant="caption" sx={{ display: "block", fontWeight: 900, color: "#64748b" }}>
+            Bild fehlt
+          </Typography>
+          {value ? (
+            <Typography variant="caption" sx={{ display: "block", maxWidth: "100%", color: "#94a3b8" }} noWrap title={value}>
+              {value}
+            </Typography>
+          ) : null}
+        </Box>
+      )}
+      {children}
+    </Box>
+  );
+}
 
 function normalizeCatalogRecordForAdmin(record: AdminRecord): AdminRecord {
   if (!Array.isArray(record.properties)) return record;
@@ -386,6 +420,29 @@ function parseCsvRows(input: string): Record<string, string>[] {
     const cells = parseLine(line);
     return Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ""]));
   });
+}
+
+function normalizeCsvKey(value: string) {
+  return value
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function csvCell(row: Record<string, string>, ...keys: string[]) {
+  for (const key of keys) {
+    const direct = row[key];
+    if (typeof direct === "string" && direct.trim()) return direct.trim();
+  }
+  const normalized = new Map(Object.entries(row).map(([key, value]) => [normalizeCsvKey(key), value]));
+  for (const key of keys) {
+    const value = normalized.get(normalizeCsvKey(key));
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
 }
 
 function csvBool(value: string | undefined, fallback = true) {
@@ -1118,9 +1175,14 @@ function ProductImageUploadControls() {
   const [uploadingHero, setUploadingHero] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
-  async function uploadFile(file: File) {
+  async function uploadFile(file: File, imageRole: "hero" | "gallery") {
     const formData = new FormData();
     formData.append("file", file);
+    if (record?.slug) {
+      formData.append("targetSlug", record.slug);
+      formData.append("targetType", "product");
+      formData.append("imageRole", imageRole);
+    }
     const response = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
     if (!response.ok) {
       throw new Error("Upload failed");
@@ -1134,7 +1196,7 @@ function ProductImageUploadControls() {
     if (!file) return;
     setUploadingHero(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, "hero");
       setValue("heroImage", url, { shouldDirty: true });
       notify("Hero image updated.", { type: "success" });
     } catch {
@@ -1150,7 +1212,10 @@ function ProductImageUploadControls() {
     if (!files.length) return;
     setUploadingGallery(true);
     try {
-      const urls = await Promise.all(files.map((file) => uploadFile(file)));
+      const urls: string[] = [];
+      for (const file of files) {
+        urls.push(await uploadFile(file, "gallery"));
+      }
       const nextGallery = Array.from(new Set([...(gallery ?? []), ...urls]));
       setValue("gallery", nextGallery, { shouldDirty: true });
       notify(`${urls.length} image${urls.length === 1 ? "" : "s"} added to gallery.`, { type: "success" });
@@ -1181,11 +1246,11 @@ function ProductImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingHero}>
           {uploadingHero ? "Lädt hoch..." : "Hauptbild hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onHeroImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={onHeroImageChange} />
         </Button>
         <Button variant="outlined" component="label" disabled={uploadingGallery}>
           {uploadingGallery ? "Fügt hinzu..." : "Galeriebilder hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onGalleryImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden onChange={onGalleryImageChange} />
         </Button>
       </Box>
       {currentHero ? (
@@ -1196,9 +1261,7 @@ function ProductImageUploadControls() {
               <DeleteOutlineIcon fontSize="inherit" />
             </IconButton>
           </Box>
-          <Box sx={{ mt: 0.5, border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100, position: "relative" }}>
-            <Image src={currentHero} alt="Hero" fill style={{ objectFit: "cover" }} />
-          </Box>
+          <AdminImagePreview src={currentHero} alt="Hero" sx={{ mt: 0.5, border: "1px solid #e2e8f0", borderRadius: "6px", width: 180, height: 100 }} />
         </Box>
       ) : null}
       {currentGallery.length > 0 ? (
@@ -1206,8 +1269,7 @@ function ProductImageUploadControls() {
           <Typography variant="caption" color="text.secondary">Galerie ({currentGallery.length})</Typography>
           <Box sx={{ mt: 0.5, display: "flex", gap: 1, flexWrap: "wrap" }}>
             {currentGallery.slice(0, 12).map((url) => (
-              <Box key={url} sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 84, height: 56, position: "relative" }}>
-                <Image src={url} alt="Gallery" fill style={{ objectFit: "cover" }} />
+              <AdminImagePreview key={url} src={url} alt="Gallery" sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", width: 84, height: 56 }}>
                 <IconButton
                   size="small"
                   aria-label="Remove gallery image"
@@ -1216,7 +1278,7 @@ function ProductImageUploadControls() {
                 >
                   <DeleteOutlineIcon sx={{ fontSize: 14 }} />
                 </IconButton>
-              </Box>
+              </AdminImagePreview>
             ))}
           </Box>
         </Box>
@@ -2029,6 +2091,7 @@ function IndustryImageUploadControls() {
   const notify = useNotify();
   const { setValue } = useFormContext();
   const record = useRecordContext<AdminRecord & ProductIndustry>();
+  const slug = useWatch({ name: "slug" }) as string | undefined;
   const heroImage = useWatch({ name: "heroImage" }) as string | undefined;
   const showroomImages = (useWatch({ name: "showroomImages" }) as ProductIndustry["showroomImages"] | undefined) ?? [];
   const [uploadingHero, setUploadingHero] = useState(false);
@@ -2036,13 +2099,29 @@ function IndustryImageUploadControls() {
   const currentHero = heroImage ?? record?.heroImage;
   const currentShowroom = showroomImages.length ? showroomImages : (record?.showroomImages ?? []);
 
-  async function uploadFile(file: File) {
+  async function uploadFile(file: File, imageRole: string) {
+    const industrySlug = String(slug || record?.slug || "").trim();
+    if (!industrySlug) throw new Error("Bitte zuerst den Branchen-Slug eintragen.");
     const formData = new FormData();
     formData.append("file", file);
-    const response = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
-    if (!response.ok) throw new Error("Upload failed");
-    const payload = await response.json() as { url: string };
+    formData.append("industrySlug", industrySlug);
+    formData.append("imageRole", imageRole);
+    const response = await fetch("/api/uploads/industry-image", { method: "POST", body: formData });
+    const payload = await response.json().catch(() => ({})) as { url?: string; message?: string };
+    if (!response.ok || !payload.url) throw new Error(payload.message ?? "Upload failed");
     return payload.url;
+  }
+
+  async function deleteImage(imageRole: string, url?: string) {
+    const industrySlug = String(slug || record?.slug || "").trim();
+    if (!industrySlug) throw new Error("Bitte zuerst den Branchen-Slug eintragen.");
+    const response = await fetch("/api/uploads/industry-image", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ industrySlug, imageRole, url })
+    });
+    const payload = await response.json().catch(() => ({})) as { message?: string };
+    if (!response.ok) throw new Error(payload.message ?? "Löschen fehlgeschlagen.");
   }
 
   async function onHeroImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -2050,7 +2129,7 @@ function IndustryImageUploadControls() {
     if (!file) return;
     setUploadingHero(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, "hero");
       setValue("heroImage", url, { shouldDirty: true });
       notify("Hero-Bild aktualisiert.", { type: "success" });
     } catch {
@@ -2061,23 +2140,73 @@ function IndustryImageUploadControls() {
     }
   }
 
+  async function onShowroomReplace(index: number, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingShowroom(true);
+    try {
+      const url = await uploadFile(file, `showroom-${index + 1}`);
+      const nextShowroom = [...currentShowroom];
+      const current = nextShowroom[index] ?? { title: "", description: "" };
+      nextShowroom[index] = {
+        ...current,
+        image: url,
+        title: current.title || file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ")
+      };
+      setValue("showroomImages", nextShowroom, { shouldDirty: true });
+      notify(`Showroom-Bild ${index + 1} aktualisiert.`, { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Bild-Upload fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingShowroom(false);
+      event.target.value = "";
+    }
+  }
+
   async function onShowroomImageChange(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) return;
     setUploadingShowroom(true);
     try {
-      const uploaded = await Promise.all(files.map(async (file) => ({
-        image: await uploadFile(file),
+      const uploaded = await Promise.all(files.map(async (file, index) => ({
+        image: await uploadFile(file, `showroom-${currentShowroom.length + index + 1}`),
         title: file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " "),
         description: ""
       })));
       setValue("showroomImages", [...currentShowroom, ...uploaded], { shouldDirty: true });
       notify(`${uploaded.length} Showroom-Bild(er) hinzugefügt.`, { type: "success" });
-    } catch {
-      notify("Bild-Upload fehlgeschlagen.", { type: "error" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Bild-Upload fehlgeschlagen.", { type: "error" });
     } finally {
       setUploadingShowroom(false);
       event.target.value = "";
+    }
+  }
+
+  async function onHeroImageDelete() {
+    setUploadingHero(true);
+    try {
+      await deleteImage("hero", currentHero);
+      setValue("heroImage", "", { shouldDirty: true });
+      notify("Hero-Bild gelöscht.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Löschen fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingHero(false);
+    }
+  }
+
+  async function onShowroomDelete(index: number) {
+    setUploadingShowroom(true);
+    try {
+      const item = currentShowroom[index];
+      await deleteImage(`showroom-${index + 1}`, item?.image);
+      setValue("showroomImages", currentShowroom.filter((_, itemIndex) => itemIndex !== index), { shouldDirty: true });
+      notify(`Showroom-Bild ${index + 1} gelöscht.`, { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Löschen fehlgeschlagen.", { type: "error" });
+    } finally {
+      setUploadingShowroom(false);
     }
   }
 
@@ -2087,16 +2216,41 @@ function IndustryImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingHero}>
           {uploadingHero ? "Lädt hoch..." : "Hero-Bild hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onHeroImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={onHeroImageChange} />
         </Button>
         <Button variant="outlined" component="label" disabled={uploadingShowroom}>
           {uploadingShowroom ? "Fügt hinzu..." : "Showroom-Bilder hochladen"}
-          <input type="file" accept="image/*,.heic,.heif" multiple hidden onChange={onShowroomImageChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" multiple hidden onChange={onShowroomImageChange} />
         </Button>
       </Box>
       {currentHero ? (
-        <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100 }}>
-          <img src={currentHero} alt="Branche" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        <Box sx={{ display: "grid", gap: 0.75, width: 180 }}>
+          <AdminImagePreview src={currentHero} alt="Branche" sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", height: 100 }} />
+          <Button variant="outlined" color="error" size="small" startIcon={<DeleteOutlineIcon />} disabled={uploadingHero} onClick={() => void onHeroImageDelete()}>
+            Hero löschen
+          </Button>
+        </Box>
+      ) : null}
+      {currentShowroom.length > 0 ? (
+        <Box sx={{ display: "grid", gap: 1 }}>
+          <Typography variant="caption" color="text.secondary">Showroom Bilder ersetzen</Typography>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            {currentShowroom.map((item, index) => (
+              <Box key={`${item.image}-${index}`} sx={{ display: "grid", gap: 0.75, width: 160 }}>
+                <AdminImagePreview src={item.image} alt={item.title || `Showroom ${index + 1}`} sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", height: 92 }} />
+                <Typography variant="caption" sx={{ fontWeight: 800 }} noWrap>
+                  {item.title || `Showroom ${index + 1}`}
+                </Typography>
+                <Button variant="outlined" size="small" component="label" disabled={uploadingShowroom}>
+                  {uploadingShowroom ? "Upload..." : `Bild ${index + 1} ersetzen`}
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={(event) => void onShowroomReplace(index, event)} />
+                </Button>
+                <Button variant="outlined" color="error" size="small" startIcon={<DeleteOutlineIcon />} disabled={uploadingShowroom} onClick={() => void onShowroomDelete(index)}>
+                  Löschen
+                </Button>
+              </Box>
+            ))}
+          </Box>
         </Box>
       ) : null}
     </Box>
@@ -2443,6 +2597,11 @@ function CategoryImageUploadControls() {
   async function uploadFile(file: File) {
     const formData = new FormData();
     formData.append("file", file);
+    if (record?.slug) {
+      formData.append("targetType", "category");
+      formData.append("targetSlug", record.slug);
+      formData.append("imageRole", "logo");
+    }
     const response = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
     if (!response.ok) throw new Error("Upload failed");
     const payload = await response.json() as { url: string };
@@ -2476,7 +2635,7 @@ function CategoryImageUploadControls() {
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
         <Button variant="outlined" component="label" disabled={uploadingLogo}>
           {uploadingLogo ? "Uploading..." : "Upload Category Image"}
-          <input type="file" accept="image/*,.heic,.heif" hidden onChange={onLogoChange} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={onLogoChange} />
         </Button>
         {currentLogo ? (
           <Button variant="outlined" color="error" startIcon={<DeleteOutlineIcon />} onClick={removeLogo}>
@@ -2484,11 +2643,7 @@ function CategoryImageUploadControls() {
           </Button>
         ) : null}
       </Box>
-      {currentLogo ? (
-        <Box sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", overflow: "hidden", width: 180, height: 100, position: "relative" }}>
-          <Image src={currentLogo} alt="Category" fill style={{ objectFit: "cover" }} />
-        </Box>
-      ) : null}
+      {currentLogo ? <AdminImagePreview src={currentLogo} alt="Category" sx={{ border: "1px solid #e2e8f0", borderRadius: "6px", width: 180, height: 100 }} /> : null}
     </Box>
   );
 }
@@ -2912,10 +3067,9 @@ function UploadFoldersToolPage() {
                   {item.files.map((file) => (
                     <Box key={`${item.key}-${file.name}`} sx={{ display: "flex", alignItems: "center", gap: 1, border: "1px solid #e2e8f0", borderRadius: 1, p: 0.75 }}>
                       {file.isImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={file.url} alt={file.name} style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 4, border: "1px solid #e2e8f0" }} />
+                        <AdminImagePreview src={file.url} alt={file.name} sx={{ width: 40, height: 40, borderRadius: 1, border: "1px solid #e2e8f0" }} />
                       ) : (
-                    <Box sx={{ width: 40, height: 40, borderRadius: 1, border: `1px solid ${adminColors.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: adminColors.muted }}>
+                        <Box sx={{ width: 40, height: 40, borderRadius: 1, border: `1px solid ${adminColors.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: adminColors.muted }}>
                           Datei
                         </Box>
                       )}
@@ -2987,12 +3141,11 @@ function CatalogImageImportToolPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [productsRes, categoriesRes] = await Promise.all([
-          fetch("/api/catalog/products?scope=admin"),
-          fetch("/api/catalog/categories?scope=admin")
-        ]);
-        if (productsRes.ok) setProducts(await productsRes.json() as Array<{ slug: string; name: string }>);
-        if (categoriesRes.ok) setCategories(await categoriesRes.json() as Array<{ slug: string; name: string }>);
+        const res = await fetch("/api/admin/tools?action=image-targets");
+        if (!res.ok) throw new Error("Bild-Ziele konnten nicht geladen werden.");
+        const payload = await res.json() as { products: Array<{ slug: string; name: string }>; categories: Array<{ slug: string; name: string }> };
+        setProducts(payload.products);
+        setCategories(payload.categories);
       } catch {
         notify("Produkte/Kategorien konnten nicht geladen werden.", { type: "error" });
       }
@@ -3128,7 +3281,7 @@ function CatalogImageImportToolPage() {
             <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
               <Button variant="outlined" component="label" disabled={uploading}>
                 {uploading ? "Optimiert..." : "Bild/Video hochladen"}
-                <input type="file" accept="image/*,.heic,.heif,video/mp4,video/webm,video/quicktime" multiple hidden onChange={uploadImage} />
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime" multiple hidden onChange={uploadImage} />
               </Button>
               <Button variant="contained" onClick={() => void assignUploadedImage()} disabled={saving || !uploadedUrl || !targetSlug || uploadedMimeType.startsWith("video/")}>
                 Bild zuweisen
@@ -3145,8 +3298,7 @@ function CatalogImageImportToolPage() {
                 {uploadedMimeType.startsWith("video/") ? (
                   <video src={uploadedUrl} controls muted style={{ width: 180, height: 100, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
                 ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={uploadedUrl} alt="Hochgeladenes Bild" style={{ width: 120, height: 80, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
+                  <AdminImagePreview src={uploadedUrl} alt="Hochgeladenes Bild" sx={{ width: 120, height: 80, borderRadius: "6px", border: "1px solid #e2e8f0" }} />
                 )}
               </Box>
             ) : null}
@@ -3205,14 +3357,30 @@ a4-farbkopien,A4 Farbkopien,druck,0.45,tiered,draft,Farbkopien in A4,A4 Farbkopi
 banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,1-999:29.90,100,100,0.25,banner|werbetechnik`
 };
 
+type CatalogCsvTarget = "properties" | "categories" | "products";
+
+function detectCatalogCsvTarget(rows: Record<string, string>[], fallback: CatalogCsvTarget): CatalogCsvTarget {
+  const keys = new Set(rows.flatMap((row) => Object.keys(row).map(normalizeCsvKey)));
+  if (["category", "kategorie", "baseprice", "preis", "pricingtype", "preisart", "productstatus", "heroimage", "short", "kurztext"].some((key) => keys.has(key))) {
+    return "products";
+  }
+  if (["logo", "description", "beschreibung", "defaultpropertytemplate", "quantitysteps", "showroomimages"].some((key) => keys.has(key))) {
+    return "categories";
+  }
+  if (["values", "werte", "eigenschaft"].some((key) => keys.has(key))) {
+    return "properties";
+  }
+  return fallback;
+}
+
 function CatalogCsvImportToolPage() {
   const notify = useNotify();
-  const [target, setTarget] = useState<"properties" | "categories" | "products">("properties");
+  const [target, setTarget] = useState<CatalogCsvTarget>("properties");
   const [csvText, setCsvText] = useState(csvExamples.properties);
   const [result, setResult] = useState("");
   const [importing, setImporting] = useState(false);
 
-  function changeTarget(nextTarget: "properties" | "categories" | "products") {
+  function changeTarget(nextTarget: CatalogCsvTarget) {
     setTarget(nextTarget);
     setCsvText(csvExamples[nextTarget]);
     setResult("");
@@ -3226,16 +3394,16 @@ function CatalogCsvImportToolPage() {
     reader.readAsText(file);
   }
 
-  function mapRow(row: Record<string, string>) {
-    if (target === "properties") {
-      const name = row.name || row.Name || row.Eigenschaft || "";
+  function mapRow(row: Record<string, string>, importTarget: CatalogCsvTarget) {
+    if (importTarget === "properties") {
+      const name = csvCell(row, "name", "Name", "Eigenschaft", "label", "Label") || csvCell(row, "slug");
       const slug = row.slug || csvSlug(name);
       return {
         slug,
         name,
-        active: csvBool(row.active ?? row.aktiv, true),
-        sortOrder: csvNumber(row.sortOrder ?? row.reihenfolge, 0),
-        values: csvList(row.values ?? row.werte).map((value, index) => ({
+        active: csvBool(csvCell(row, "active", "aktiv"), true),
+        sortOrder: csvNumber(csvCell(row, "sortOrder", "reihenfolge"), 0),
+        values: csvList(csvCell(row, "values", "werte")).map((value, index) => ({
           id: csvSlug(`${slug}-${value}`),
           value,
           sortOrder: index,
@@ -3243,49 +3411,51 @@ function CatalogCsvImportToolPage() {
         }))
       };
     }
-    if (target === "categories") {
-      const name = row.name || row.Name || "";
+    if (importTarget === "categories") {
+      const name = csvCell(row, "name", "Name", "Kategorie", "category", "label", "Label") || csvCell(row, "slug");
       return {
-        slug: row.slug || csvSlug(name),
+        slug: csvCell(row, "slug") || csvSlug(name),
         name,
-        description: row.description || row.beschreibung || "",
-        visible: csvBool(row.visible ?? row.sichtbar, true),
-        published: csvBool(row.published ?? row.veroeffentlicht, true),
-        logo: row.logo || row.image || ""
+        description: csvCell(row, "description", "beschreibung"),
+        visible: csvBool(csvCell(row, "visible", "sichtbar"), true),
+        published: csvBool(csvCell(row, "published", "veroeffentlicht", "veröffentlicht"), true),
+        logo: csvCell(row, "logo", "image", "bild", "imagePath", "image_path")
       };
     }
-    const name = row.name || row.Name || "";
-    const basePrice = csvNumber(row.basePrice ?? row.preis, 0);
-    const pricingType = (row.pricingType || row.preisart || (row.defaultWidthCm || row.defaultHeightCm ? "area" : "")).toLowerCase();
-    const priceTiers = csvPriceTiers(row.priceTiers ?? row.staffelpreise, basePrice);
+    const name = csvCell(row, "name", "Name", "Produkt", "product", "label", "Label") || csvCell(row, "slug");
+    const basePrice = csvNumber(csvCell(row, "basePrice", "preis"), 0);
+    const defaultWidthCm = csvCell(row, "defaultWidthCm", "breiteCm");
+    const defaultHeightCm = csvCell(row, "defaultHeightCm", "hoeheCm", "höheCm");
+    const pricingType = (csvCell(row, "pricingType", "preisart") || (defaultWidthCm || defaultHeightCm ? "area" : "")).toLowerCase();
+    const priceTiers = csvPriceTiers(csvCell(row, "priceTiers", "staffelpreise"), basePrice);
     return {
-      slug: row.slug || csvSlug(name),
+      slug: csvCell(row, "slug") || csvSlug(name),
       name,
-      category: row.category || row.kategorie || "",
+      category: csvCell(row, "category", "kategorie"),
       basePrice,
-      productStatus: row.productStatus || row.status || "draft",
-      visible: (row.productStatus || row.status) === "active",
-      published: (row.productStatus || row.status) === "active",
-      short: row.short || row.kurztext || "",
-      description: row.description || row.beschreibung || "",
-      seo: row.seo || "",
-      heroImage: row.heroImage || row.image || "",
-      gallery: csvList(row.gallery),
-      rating: csvNumber(row.rating, 4.8),
+      productStatus: csvCell(row, "productStatus", "status") || "draft",
+      visible: (csvCell(row, "productStatus", "status") || "draft") === "active",
+      published: (csvCell(row, "productStatus", "status") || "draft") === "active",
+      short: csvCell(row, "short", "kurztext"),
+      description: csvCell(row, "description", "beschreibung"),
+      seo: csvCell(row, "seo"),
+      heroImage: csvCell(row, "heroImage", "hero_image", "image", "bild", "imagePath", "image_path"),
+      gallery: csvList(csvCell(row, "gallery", "galerie")),
+      rating: csvNumber(csvCell(row, "rating", "bewertung"), 4.8),
       pricingType: pricingType === "area" ? "area" : priceTiers.length > 1 ? "tiered" : "fixed",
       areaPricing: pricingType === "area" ? {
-        defaultWidthCm: csvNumber(row.defaultWidthCm ?? row.breiteCm, 100),
-        defaultHeightCm: csvNumber(row.defaultHeightCm ?? row.hoeheCm, 100),
-        minAreaM2: csvNumber(row.minAreaM2 ?? row.mindestflaeche, 0)
+        defaultWidthCm: csvNumber(defaultWidthCm, 100),
+        defaultHeightCm: csvNumber(defaultHeightCm, 100),
+        minAreaM2: csvNumber(csvCell(row, "minAreaM2", "mindestflaeche", "mindestfläche"), 0)
       } : undefined,
       priceTiers,
-      deliveryText: row.deliveryText || row.lieferzeit || "2-5 Werktage",
-      tags: csvList(row.tags),
+      deliveryText: csvCell(row, "deliveryText", "lieferzeit") || "2-5 Werktage",
+      tags: csvList(csvCell(row, "tags")),
       variants: [],
       pricingProperties: [],
       quantitySteps: priceTiers.map((tier) => tier.fromQuantity ?? tier.quantity),
       production: {
-        baseProductionDays: csvNumber(row.baseProductionDays, 3),
+        baseProductionDays: csvNumber(csvCell(row, "baseProductionDays", "produktionstage"), 3),
         expressAvailable: false,
         preflightProfile: "standard-print",
         renderPipeline: "pdf-x4"
@@ -3299,10 +3469,20 @@ function CatalogCsvImportToolPage() {
     try {
       const rows = parseCsvRows(csvText);
       if (!rows.length) throw new Error("CSV enthält keine Datenzeilen.");
+      const importTarget = detectCatalogCsvTarget(rows, target);
       let imported = 0;
-      for (const row of rows) {
-        const payload = mapRow(row);
-        const response = await fetch(`/api/catalog/${target}`, {
+      const skipped: string[] = [];
+      for (const [index, row] of rows.entries()) {
+        const payload = mapRow(row, importTarget) as { slug?: string; name?: string };
+        if (!payload.name?.trim()) {
+          skipped.push(`Zeile ${index + 2}: Name fehlt`);
+          continue;
+        }
+        if (!payload.slug?.trim()) {
+          skipped.push(`Zeile ${index + 2}: Slug fehlt`);
+          continue;
+        }
+        const response = await fetch(`/api/catalog/${importTarget}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -3313,8 +3493,9 @@ function CatalogCsvImportToolPage() {
         }
         imported += 1;
       }
-      setResult(`${imported} Datensätze importiert.`);
-      notify(`${imported} Datensätze importiert.`, { type: "success" });
+      const summary = `${imported} Datensätze importiert${importTarget !== target ? ` (${importTarget} automatisch erkannt)` : ""}.${skipped.length ? ` Übersprungen: ${skipped.join("; ")}` : ""}`;
+      setResult(summary);
+      notify(summary, { type: skipped.length ? "warning" : "success" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "CSV Import fehlgeschlagen.";
       setResult(message);
@@ -3412,7 +3593,8 @@ function SiteImagesToolPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/uploads/product-image", { method: "POST", body: formData });
+      formData.append("slotKey", slotKey);
+      const res = await fetch("/api/uploads/site-image", { method: "POST", body: formData });
       const payload = await res.json().catch(() => ({})) as { url?: string; message?: string };
       if (!res.ok || !payload.url) throw new Error(payload.message ?? "Upload fehlgeschlagen.");
       const nextImages = { ...images, [slotKey]: payload.url };
@@ -3512,9 +3694,7 @@ function SiteImagesToolPage() {
             return (
               <Card key={slot.key} variant="outlined" sx={{ overflow: "hidden", borderRadius: 2, borderColor: isDirty ? adminColors.blue : adminColors.border }}>
                 <CardContent sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", md: "220px 1fr" }, p: 0 }}>
-                  <Box sx={{ minHeight: 150, position: "relative", borderRight: { md: "1px solid #e2e8f0" }, bgcolor: "#f8fafc" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={value} alt={slot.label} style={{ width: "100%", height: "100%", minHeight: 150, objectFit: "cover", display: "block" }} />
+                  <AdminImagePreview src={value} alt={slot.label} sx={{ minHeight: 150, borderRight: { md: "1px solid #e2e8f0" } }}>
                     <Box sx={{ position: "absolute", left: 10, top: 10, display: "flex", gap: 0.75, flexWrap: "wrap" }}>
                       <Box sx={{ borderRadius: 999, bgcolor: isDefault ? "#f1f5f9" : "#dbeafe", color: isDefault ? "#475569" : adminColors.blue, px: 1, py: 0.25, fontSize: 11, fontWeight: 900 }}>
                         {isDefault ? "Default" : "Custom"}
@@ -3525,7 +3705,7 @@ function SiteImagesToolPage() {
                         </Box>
                       ) : null}
                     </Box>
-                  </Box>
+                  </AdminImagePreview>
                   <Box sx={{ display: "grid", gap: 1, p: 2 }}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
                       <Box>
@@ -3549,7 +3729,7 @@ function SiteImagesToolPage() {
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                       <Button variant="contained" component="label" disabled={uploadingKey === slot.key || saving}>
                         {uploadingKey === slot.key ? "Upload..." : "Upload"}
-                        <input type="file" accept="image/*,.heic,.heif" hidden onChange={(event) => void uploadForSlot(slot.key, event)} />
+                        <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" hidden onChange={(event) => void uploadForSlot(slot.key, event)} />
                       </Button>
                       <Button variant="outlined" disabled={saving || !isDirty} onClick={() => void save()}>
                         Änderungen speichern

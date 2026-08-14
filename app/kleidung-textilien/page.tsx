@@ -56,7 +56,7 @@ export default function KleidungTextilienPage() {
       features={features}
       portfolio={portfolio}
       ctaText="Produkte entdecken"
-      ctaLink="/leistungen"
+      ctaLink="/produkte"
     />
   );
 }

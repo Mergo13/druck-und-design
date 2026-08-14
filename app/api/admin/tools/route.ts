@@ -146,7 +146,7 @@ function productionFilesystemResponse() {
   );
 }
 
-async function requirePermission(module: "usersRoles" | "backups" | "activityLogs" | "security" | "invoices" | "products" | "categories", permission: "view" | "create" | "update") {
+async function requirePermission(module: "usersRoles" | "backups" | "activityLogs" | "security" | "invoices" | "products" | "categories" | "fileUploads", permission: "view" | "create" | "update") {
   await ensureAdminBootstrap();
   const allowed = await requireModulePermission(module, permission);
   if (!allowed.ok) {
@@ -347,10 +347,12 @@ export async function GET(request: Request) {
   }
 
   if (action === "uploads") {
-    const permission = await requirePermission("activityLogs", "view");
+    const permission = await requirePermission("fileUploads", "view");
     if ("response" in permission) return permission.response;
     const folders = [
       { key: "products", label: "Product Images", relative: path.join("public", "uploads", "products") },
+      { key: "site-images", label: "Website Images", relative: path.join("public", "uploads", "site-images") },
+      { key: "industries", label: "Industry Images", relative: path.join("public", "uploads", "industries") },
       { key: "documents", label: "Documents", relative: path.join("public", "uploads", "documents") },
       { key: "contact", label: "Kontakt Form", relative: path.join("public", "uploads", "contact") }
     ];
@@ -388,10 +390,8 @@ export async function GET(request: Request) {
   }
 
   if (action === "catalog-image-import") {
-    const productsPermission = await requirePermission("products", "view");
-    if ("response" in productsPermission) return productsPermission.response;
-    const categoriesPermission = await requirePermission("categories", "view");
-    if ("response" in categoriesPermission) return categoriesPermission.response;
+    const permission = await requirePermission("fileUploads", "view");
+    if ("response" in permission) return permission.response;
     return NextResponse.json({
       examples: {
         json: {
@@ -403,8 +403,18 @@ export async function GET(request: Request) {
     });
   }
 
+  if (action === "image-targets") {
+    const permission = await requirePermission("fileUploads", "view");
+    if ("response" in permission) return permission.response;
+    const [products, categories] = await Promise.all([getProducts(), getCategories()]);
+    return NextResponse.json({
+      products: products.map((product) => ({ slug: product.slug, name: product.name })),
+      categories: categories.map((category) => ({ slug: category.slug, name: category.name }))
+    });
+  }
+
   if (action === "site-images") {
-    const permission = await requirePermission("usersRoles", "view");
+    const permission = await requirePermission("fileUploads", "view");
     if ("response" in permission) return permission.response;
     return NextResponse.json({ slots: siteImageSlots, images: await getSiteImageMap() });
   }
@@ -570,10 +580,8 @@ export async function POST(request: Request) {
   }
 
   if (action === "catalog-image-import") {
-    const productsPermission = await requirePermission("products", "update");
-    if ("response" in productsPermission) return productsPermission.response;
-    const categoriesPermission = await requirePermission("categories", "update");
-    if ("response" in categoriesPermission) return categoriesPermission.response;
+    const permission = await requirePermission("fileUploads", "update");
+    if ("response" in permission) return permission.response;
     const content = typeof body.content === "string" ? body.content : "";
     let rows: CatalogImageImportRow[] = [];
     try {
@@ -660,8 +668,8 @@ export async function POST(request: Request) {
     }
 
     await writeAuditLog({
-      actorEmail: productsPermission.sessionUser.email,
-      module: "products",
+      actorEmail: permission.sessionUser.email,
+      module: "fileUploads",
       action: "catalog-image-import",
       payload: {
         updatedProducts: result.updatedProducts.length,
@@ -674,13 +682,13 @@ export async function POST(request: Request) {
   }
 
   if (action === "site-images") {
-    const permission = await requirePermission("usersRoles", "update");
+    const permission = await requirePermission("fileUploads", "update");
     if ("response" in permission) return permission.response;
     const images = body.images && typeof body.images === "object" ? body.images as Record<string, string> : {};
     const saved = await saveSiteImageMap(images);
     await writeAuditLog({
       actorEmail: permission.sessionUser.email,
-      module: "usersRoles",
+      module: "fileUploads",
       action: "site-images-update",
       payload: { keys: Object.keys(saved) }
     });

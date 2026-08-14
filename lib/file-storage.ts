@@ -3,13 +3,14 @@ import path from "path";
 import { randomUUID } from "crypto";
 import { execFile } from "child_process";
 import { promisify } from "util";
-import { put } from "@vercel/blob";
 
 type SaveFileOptions = {
-  folder: "products" | "contact" | "print-check";
+  folder: "products" | "contact" | "print-check" | "site-images" | "industries";
   allowedExtensions: readonly string[];
   maxBytes: number;
   optimizeForWeb?: boolean;
+  filenameBase?: string;
+  preserveOriginalName?: boolean;
 };
 
 type PreparedUpload = {
@@ -27,6 +28,15 @@ function sanitizeFilename(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
+function sanitizeFilenameBase(name: string) {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+}
+
 function getExtension(name: string) {
   const lower = name.toLowerCase();
   return lower.includes(".") ? lower.slice(lower.lastIndexOf(".")) : "";
@@ -40,6 +50,10 @@ function filenameWithoutExtension(name: string) {
 
 function isImageMime(mimeType: string) {
   return mimeType.startsWith("image/");
+}
+
+function isImageExtension(extension: string) {
+  return [".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".heic", ".heif", ".tif", ".tiff"].includes(extension);
 }
 
 function isVideoMime(mimeType: string) {
@@ -155,6 +169,7 @@ async function optimizeVideo(file: File, input: Buffer): Promise<PreparedUpload>
 
 async function prepareUpload(file: File, optimizeForWeb: boolean): Promise<PreparedUpload> {
   const input = Buffer.from(await file.arrayBuffer());
+  const extension = getExtension(file.name);
   if (!optimizeForWeb) {
     return {
       buffer: input,
@@ -165,7 +180,7 @@ async function prepareUpload(file: File, optimizeForWeb: boolean): Promise<Prepa
       originalName: file.name
     };
   }
-  if (isImageMime(file.type)) return optimizeImage(file, input);
+  if (isImageMime(file.type) || isImageExtension(extension)) return optimizeImage(file, input);
   if (isVideoMime(file.type)) return optimizeVideo(file, input);
   return {
     buffer: input,
@@ -175,6 +190,23 @@ async function prepareUpload(file: File, optimizeForWeb: boolean): Promise<Prepa
     optimized: false,
     originalName: file.name
   };
+}
+
+async function unusedFilename(dir: string, filename: string) {
+  const extension = getExtension(filename);
+  const base = extension ? filename.slice(0, -extension.length) : filename;
+  let candidate = filename;
+  let index = 2;
+
+  while (true) {
+    try {
+      await fs.access(path.join(dir, candidate));
+      candidate = `${base}-${index}${extension}`;
+      index += 1;
+    } catch {
+      return candidate;
+    }
+  }
 }
 
 export async function saveUploadedFile(file: File, options: SaveFileOptions) {
@@ -187,40 +219,48 @@ export async function saveUploadedFile(file: File, options: SaveFileOptions) {
   }
 
   const prepared = await prepareUpload(file, Boolean(options.optimizeForWeb));
-  const safeName = `${Date.now()}-${randomUUID().slice(0, 8)}-${prepared.filename}`;
-  const useRemoteStorage = process.env.UPLOAD_STORAGE === "vercel-blob" || process.env.NODE_ENV === "production";
-
-  if (useRemoteStorage) {
-    const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
-    if (!token) {
-      throw new Error("BLOB_READ_WRITE_TOKEN muss für Produktions-Uploads gesetzt sein.");
-    }
-    const blob = await put(`${options.folder}/${safeName}`, prepared.buffer, {
-      access: "public",
-      addRandomSuffix: true,
-      token,
-      contentType: prepared.mimeType
-    });
-    return {
-      url: blob.url,
-      name: prepared.originalName,
-      size: prepared.buffer.length,
-      originalSize: prepared.originalSize,
-      optimized: prepared.optimized,
-      mimeType: prepared.mimeType
-    };
+  const preparedExtension = getExtension(prepared.filename);
+  const preferredBase = options.filenameBase ? sanitizeFilenameBase(options.filenameBase) : "";
+  const safeName = preferredBase
+    ? `${preferredBase}${preparedExtension || extension}`
+    : `${Date.now()}-${randomUUID().slice(0, 8)}-${prepared.filename}`;
+  const storage = process.env.UPLOAD_STORAGE?.trim() || "local";
+  if (storage !== "local") {
+    throw new Error("UPLOAD_STORAGE muss auf 'local' gesetzt sein.");
   }
 
   const relativeDir = path.join("uploads", options.folder);
   const absoluteDir = path.join(process.cwd(), "public", relativeDir);
   await fs.mkdir(absoluteDir, { recursive: true });
-  await fs.writeFile(path.join(absoluteDir, safeName), prepared.buffer);
+  const filename = options.preserveOriginalName ? await unusedFilename(absoluteDir, prepared.filename) : safeName;
+  await fs.writeFile(path.join(absoluteDir, filename), prepared.buffer);
   return {
-    url: `/${relativeDir.replace(/\\/g, "/")}/${safeName}`,
+    url: `/${relativeDir.replace(/\\/g, "/")}/${filename}`,
     name: prepared.originalName,
     size: prepared.buffer.length,
     originalSize: prepared.originalSize,
     optimized: prepared.optimized,
     mimeType: prepared.mimeType
   };
+}
+
+export async function deleteManagedUploadedFile(url: string, allowedFolders: Array<SaveFileOptions["folder"]>) {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.includes("\0") || trimmed.includes("..")) {
+    return { deleted: false };
+  }
+
+  const normalizedAllowedPrefixes = allowedFolders.map((folder) => `/uploads/${folder}/`);
+  if (!normalizedAllowedPrefixes.some((prefix) => trimmed.startsWith(prefix))) {
+    return { deleted: false };
+  }
+
+  const absolutePath = path.resolve(process.cwd(), "public", trimmed.replace(/^\/+/, ""));
+  const uploadsRoot = path.resolve(process.cwd(), "public", "uploads");
+  if (!absolutePath.startsWith(`${uploadsRoot}${path.sep}`)) {
+    return { deleted: false };
+  }
+
+  await fs.unlink(absolutePath).catch(() => undefined);
+  return { deleted: true };
 }
