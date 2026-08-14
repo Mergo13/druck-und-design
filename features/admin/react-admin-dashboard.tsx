@@ -4554,7 +4554,7 @@ function CRMToolPage() {
 export function ReactAdminDashboard() {
   return (
     <div className="mx-auto w-full max-w-[1600px] bg-[#f3f6fb] text-[#0a1020]">
-    <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme}>
+    <Admin basename="/admin" dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme}>
       <CustomRoutes>
         <Route path="/tools/maintenance" element={<MaintenanceToolPage />} />
         <Route path="/tools/online-shop" element={<OnlineShopToolPage />} />
