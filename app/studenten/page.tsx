@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { StructuredData } from "@/components/structured-data";
+import { StudentPrintConfigurator } from "@/features/student/student-print-configurator";
 import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
 
@@ -58,11 +59,11 @@ const benefits = [
 ] as const;
 
 const bindingCards = [
-  ["Spiralbindung", "Affordable and practical.", "spiralbindung", "/produkt/spiralbindung"],
-  ["Klebebindung", "Clean professional finish.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Softcover", "Lightweight premium option.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Hardcover", "Premium solution for Bachelor-, Master- and Diplomarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Hardcover + Gold/Silber", "Premium presentation option.", "abschlussarbeiten", "/produkt/abschlussarbeiten"]
+  ["Spiralbindung", "Praktisch für Skripten, Projektarbeiten und häufiges Umblättern.", "spiralbindung", "/produkt/spiralbindung"],
+  ["Klebebindung", "Sauberer Abschluss für Seminar- und Projektarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
+  ["Softcover", "Leichte, hochwertige Lösung für umfangreiche Dokumente.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
+  ["Hardcover", "Premium-Lösung für Bachelor-, Master- und Diplomarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
+  ["Hardcover + Gold/Silber", "Hochwertige Präsentation für finale Abgaben.", "abschlussarbeiten", "/produkt/abschlussarbeiten"]
 ] as const;
 
 function productMap(products: Awaited<ReturnType<typeof getPublicProducts>>) {
@@ -116,6 +117,8 @@ export default async function StudentenPage() {
           </div>
         </div>
       </section>
+
+      <StudentPrintConfigurator products={products} />
 
       <section className="container-page py-16">
         <SectionHeading eyebrow="Studenten-Shop" title="Was möchtest du drucken oder binden?" description="Direkte Einstiege in bestehende Produkte und passende Ratgeberseiten." />

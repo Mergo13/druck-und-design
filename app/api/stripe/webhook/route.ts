@@ -19,6 +19,28 @@ function parseStackLocation(error: unknown) {
   return stackLine || null;
 }
 
+async function readPendingCheckoutItems(sessionId: string) {
+  const file = path.join(process.cwd(), "data", "stripe-checkout-items", `${sessionId}.json`);
+  const raw = await fs.readFile(file, "utf8").catch(() => "");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as {
+      items?: Array<{
+        slug?: string;
+        name?: string;
+        category?: string;
+        quantity?: number;
+        unitPrice?: number;
+        config?: Record<string, string>;
+        printCheckFileName?: string;
+        printCheckFileUrl?: string;
+      }>;
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const stripeSecret = process.env.STRIPE_SECRET_KEY?.trim();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
@@ -111,9 +133,30 @@ export async function POST(request: Request) {
         logger.warn({ stripeSessionId: session.id, err }, "Failed to fetch line items from Stripe, using fallback empty list");
         return { data: [] };
       });
+      const pendingCheckout = await readPendingCheckoutItems(session.id);
       
       logger.info({ stripeSessionId: session.id, lineItemsCount: lineItems.data.length }, "Retrieved line items from Stripe");
-      const items: Order["items"] = lineItems.data.map((line, index) => {
+      const items: Order["items"] = pendingCheckout?.items?.length ? pendingCheckout.items.map((item, index) => {
+        const quantity = Math.max(1, Number(item.quantity || 1));
+        const unitPrice = Math.max(0, Number(item.unitPrice || 0));
+        return {
+          id: `${session.id}-${index + 1}`,
+          productSlug: item.slug || `item-${index + 1}`,
+          name: item.name || `Produkt ${index + 1}`,
+          quantity,
+          price: unitPrice,
+          config: {
+            ...(item.config ?? {}),
+            Kategorie: item.category || "",
+            PrintDatei: item.printCheckFileUrl ?? item.config?.PrintDatei ?? "-",
+            Dateiname: item.printCheckFileName ?? item.config?.Datei ?? "-",
+            checkout_session: session.id,
+            zahlung: "stripe",
+            AGB: session.metadata?.legalAcceptedAt ? `Akzeptiert am ${session.metadata.legalAcceptedAt}` : "Nicht dokumentiert",
+            Druckfreigabe: session.metadata?.printApprovalAcceptedAt ? `Erteilt am ${session.metadata.printApprovalAcceptedAt}` : "Nicht dokumentiert"
+          }
+        };
+      }) : lineItems.data.map((line, index) => {
         const quantity = line.quantity || 1;
         const unitPrice = (line.price?.unit_amount ?? line.amount_total ?? 0) / 100;
         
