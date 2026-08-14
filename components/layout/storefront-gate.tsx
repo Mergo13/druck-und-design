@@ -14,11 +14,11 @@ type StoreControlPayload = {
 
 export function StorefrontGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
-  const bypassesStorefrontGate = pathname.startsWith("/admin") || pathname === "/login";
+  const isAdminRoute = pathname.startsWith("/admin");
   const [control, setControl] = useState<StoreControlPayload | null>(null);
 
   useEffect(() => {
-    if (bypassesStorefrontGate) return;
+    if (isAdminRoute) return;
     void (async () => {
       try {
         const res = await fetch("/api/storefront/control", { cache: "no-store" });
@@ -29,9 +29,9 @@ export function StorefrontGate({ children }: { children: React.ReactNode }) {
         setControl(null);
       }
     })();
-  }, [bypassesStorefrontGate]);
+  }, [isAdminRoute]);
 
-  if (!bypassesStorefrontGate && control?.maintenanceMode && !control.isAdmin) {
+  if (!isAdminRoute && control?.maintenanceMode && !control.isAdmin) {
     return (
       <main className="min-h-screen bg-slate-950 text-white">
         <section className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 text-center">
@@ -57,12 +57,12 @@ export function StorefrontGate({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {!bypassesStorefrontGate && control?.vacationMode ? (
+      {!isAdminRoute && control?.vacationMode ? (
         <div className="bg-amber-100 px-4 py-2 text-center text-xs font-semibold text-amber-900">
           Urlaubsmodus aktiv: Lieferzeiten können aktuell länger sein.
         </div>
       ) : null}
-      {!bypassesStorefrontGate && control?.announcementBar ? (
+      {!isAdminRoute && control?.announcementBar ? (
         <div className="bg-slate-900 px-4 py-2 text-center text-xs font-semibold text-white">
           {control.announcementBar}
         </div>
