@@ -3,9 +3,27 @@
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import BackupIcon from "@mui/icons-material/Backup";
+import BeachAccessIcon from "@mui/icons-material/BeachAccess";
+import BuildCircleIcon from "@mui/icons-material/BuildCircle";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import ContactsIcon from "@mui/icons-material/Contacts";
+import DashboardCustomizeIcon from "@mui/icons-material/DashboardCustomize";
+import EmailIcon from "@mui/icons-material/Email";
+import EventAvailableIcon from "@mui/icons-material/EventAvailable";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import HomeWorkIcon from "@mui/icons-material/HomeWork";
+import ImageSearchIcon from "@mui/icons-material/ImageSearch";
+import PhotoLibraryIcon from "@mui/icons-material/PhotoLibrary";
+import PowerSettingsNewIcon from "@mui/icons-material/PowerSettingsNew";
+import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import ToggleOffIcon from "@mui/icons-material/ToggleOff";
+import ToggleOnIcon from "@mui/icons-material/ToggleOn";
 import { Alert, Box, Button, Card, CardContent, Grid, IconButton, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
-import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, ElementType, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Admin,
   ArrayInput,
@@ -489,21 +507,21 @@ function AdminDashboardHome() {
   const [vatPercent, setVatPercent] = useState(20);
   const [savingTax, setSavingTax] = useState(false);
 
-  const tools = [
-    { label: "Wartungsmodus", path: "/tools/maintenance", color: "primary" as const },
-    { label: "Online Shop", path: "/tools/online-shop", color: "primary" as const },
-    { label: "Urlaubsmodus", path: "/tools/vacation", color: "primary" as const },
-    { label: "E-Mail Konfiguration", path: "/tools/email", color: "primary" as const },
-    { label: "Upload-Ordner", path: "/tools/uploads", color: "primary" as const },
-    { label: "Bildpfade Import", path: "/tools/image-import", color: "primary" as const },
-    { label: "CSV Katalog Import", path: "/tools/catalog-csv", color: "primary" as const },
-    { label: "Homepage Inhalte", path: "/tools/homepage", color: "primary" as const },
-    { label: "Website Bilder", path: "/tools/site-images", color: "primary" as const },
-    { label: "Backup", path: "/tools/backup", color: "primary" as const },
-    { label: "Werbung", path: "/tools/werbung", color: "primary" as const },
-    { label: "CRM", path: "/tools/crm", color: "primary" as const },
-    { label: "Shutdown", path: "/tools/shutdown", color: "error" as const },
-    { label: "Layout Studio", path: "/tools/layouts", color: "inherit" as const }
+  const tools: Array<{ label: string; description: string; path: string; color: "primary" | "error" | "inherit"; icon: ElementType }> = [
+    { label: "Wartungsmodus", description: "Shop-Zugriff steuern", path: "/tools/maintenance", color: "primary", icon: BuildCircleIcon },
+    { label: "Online Shop", description: "Checkout und Verkauf", path: "/tools/online-shop", color: "primary", icon: StorefrontIcon },
+    { label: "Urlaubsmodus", description: "Lieferhinweise aktivieren", path: "/tools/vacation", color: "primary", icon: BeachAccessIcon },
+    { label: "E-Mail Konfiguration", description: "SMTP und Absender", path: "/tools/email", color: "primary", icon: EmailIcon },
+    { label: "Upload-Ordner", description: "Dateispeicher prüfen", path: "/tools/uploads", color: "primary", icon: FolderOpenIcon },
+    { label: "Bildpfade Import", description: "Produktbilder aktualisieren", path: "/tools/image-import", color: "primary", icon: ImageSearchIcon },
+    { label: "CSV Katalog Import", description: "Katalogdaten importieren", path: "/tools/catalog-csv", color: "primary", icon: TableChartIcon },
+    { label: "Homepage Inhalte", description: "Startseite bearbeiten", path: "/tools/homepage", color: "primary", icon: HomeWorkIcon },
+    { label: "Website Bilder", description: "Bild-Slots verwalten", path: "/tools/site-images", color: "primary", icon: PhotoLibraryIcon },
+    { label: "Backup", description: "Sicherung erstellen", path: "/tools/backup", color: "primary", icon: BackupIcon },
+    { label: "Werbung", description: "Kampagnen und Banner", path: "/tools/werbung", color: "primary", icon: CampaignIcon },
+    { label: "CRM", description: "Rechnungen und Kunden", path: "/tools/crm", color: "primary", icon: ContactsIcon },
+    { label: "Shutdown", description: "Notfall-Sperre", path: "/tools/shutdown", color: "error", icon: PowerSettingsNewIcon },
+    { label: "Layout Studio", description: "Vorlagen gestalten", path: "/tools/layouts", color: "inherit", icon: DashboardCustomizeIcon }
   ];
 
   useEffect(() => {
@@ -554,19 +572,51 @@ function AdminDashboardHome() {
       </Grid>
       <Grid size={{ xs: 12 }}>
         <Grid container spacing={1.5}>
-          {tools.map((tool) => (
+          {tools.map((tool) => {
+            const Icon = tool.icon;
+            const isDanger = tool.color === "error";
+            return (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={tool.path}>
               <Button
                 fullWidth
                 variant={tool.color === "inherit" ? "outlined" : "contained"}
                 color={tool.color}
-                sx={{ minHeight: 84, textAlign: "center", fontWeight: 700, fontSize: 15, borderRadius: 2 }}
+                sx={{
+                  minHeight: 104,
+                  justifyContent: "flex-start",
+                  gap: 1.5,
+                  textAlign: "left",
+                  borderRadius: 2,
+                  p: 1.75,
+                  bgcolor: tool.color === "primary" ? adminColors.blue : undefined,
+                  "&:hover": { bgcolor: tool.color === "primary" ? adminColors.blueDark : undefined }
+                }}
                 onClick={() => redirect(tool.path)}
               >
-                {tool.label}
+                <Box sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  flex: "0 0 auto",
+                  bgcolor: tool.color === "inherit" ? "rgba(17,85,204,.08)" : "rgba(255,255,255,.18)",
+                  color: tool.color === "inherit" ? adminColors.blue : "#fff"
+                }}>
+                  <Icon sx={{ fontSize: 30 }} />
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography component="span" sx={{ display: "block", fontWeight: 950, fontSize: 15.5, lineHeight: 1.15, color: tool.color === "inherit" ? adminColors.ink : "#fff" }}>
+                    {tool.label}
+                  </Typography>
+                  <Typography component="span" sx={{ display: "block", mt: 0.5, fontWeight: 700, fontSize: 12.5, lineHeight: 1.25, color: tool.color === "inherit" ? adminColors.muted : isDanger ? "rgba(255,255,255,.86)" : "rgba(255,255,255,.78)" }}>
+                    {tool.description}
+                  </Typography>
+                </Box>
               </Button>
             </Grid>
-          ))}
+            );
+          })}
         </Grid>
       </Grid>
       <Grid size={{ xs: 12, md: 3 }}>
@@ -2813,6 +2863,7 @@ function MaintenanceToolPage() {
   const { settings, loading, updateStoreControl } = useStoreSettings();
   const maintenanceOn = Boolean(settings?.storeControl.maintenanceMode);
   const [availableAt, setAvailableAt] = useState("");
+  const StatusIcon = maintenanceOn ? ToggleOnIcon : ToggleOffIcon;
 
   useEffect(() => {
     setAvailableAt(settings?.storeControl.maintenanceAvailableAt ?? "");
@@ -2838,29 +2889,103 @@ function MaintenanceToolPage() {
 
   return (
     <AdminToolShell
-      title="Maintenance Mode"
-      description="Aktiviert den Wartungsmodus für technische Arbeiten."
+      title="Wartungsmodus"
+      description="Öffentlichen Shop-Zugriff kontrollieren, Wiederverfügbarkeit kommunizieren und den Checkout bei technischen Arbeiten sauber absichern."
     >
-      <Button variant="contained" size="large" onClick={() => void toggle()} disabled={loading}>
-        {maintenanceOn ? "Wartungsmodus deaktivieren" : "Wartungsmodus aktivieren"}
-      </Button>
-      <Box sx={{ mt: 2, display: "grid", gap: 1 }}>
-        <MuiTextField
-          size="small"
-          label="Wieder verfügbar am"
-          placeholder="z. B. 06.06.2026, 09:00"
-          value={availableAt}
-          onChange={(event) => setAvailableAt(event.target.value)}
-        />
-        <Box>
-          <Button variant="outlined" onClick={() => void saveAvailability()} disabled={loading}>
-            Datum speichern
-          </Button>
-        </Box>
-      </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        Status: {maintenanceOn ? "AKTIV" : "INAKTIV"}
-      </Typography>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card variant="outlined" sx={{ height: "100%", borderColor: maintenanceOn ? "#f6c768" : "#b7e4c7", bgcolor: maintenanceOn ? "#fff8e6" : "#f0fff5" }}>
+            <CardContent sx={{ display: "grid", gap: 1.25 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{
+                  width: 58,
+                  height: 58,
+                  borderRadius: 2,
+                  display: "grid",
+                  placeItems: "center",
+                  bgcolor: maintenanceOn ? "#b54708" : "#027a48",
+                  color: "#fff"
+                }}>
+                  <StatusIcon sx={{ fontSize: 38 }} />
+                </Box>
+                <Box>
+                  <Typography variant="overline" sx={{ fontWeight: 950, letterSpacing: ".08em", color: maintenanceOn ? "#92400e" : "#02663d" }}>
+                    Shop-Status
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 950, lineHeight: 1.1 }}>
+                    {maintenanceOn ? "Wartung aktiv" : "Online verfügbar"}
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" sx={{ color: adminColors.muted }}>
+                {maintenanceOn
+                  ? "Besucher sehen die Wartungsseite. Admin-Bereiche bleiben erreichbar."
+                  : "Die öffentliche Website und der Shop sind normal erreichbar."}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card variant="outlined" sx={{ height: "100%" }}>
+            <CardContent sx={{ display: "grid", gap: 1.25 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ width: 58, height: 58, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "rgba(17,85,204,.1)", color: adminColors.blue }}>
+                  <EventAvailableIcon sx={{ fontSize: 34 }} />
+                </Box>
+                <Box>
+                  <Typography variant="overline" sx={{ fontWeight: 950, letterSpacing: ".08em", color: adminColors.blue }}>
+                    Zeitfenster
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 950, lineHeight: 1.1 }}>Wieder verfügbar</Typography>
+                </Box>
+              </Box>
+              <MuiTextField
+                size="small"
+                label="Anzeige auf Wartungsseite"
+                placeholder="z. B. 06.06.2026, 09:00"
+                value={availableAt}
+                onChange={(event) => setAvailableAt(event.target.value)}
+              />
+              <Button variant="outlined" startIcon={<EventAvailableIcon />} onClick={() => void saveAvailability()} disabled={loading}>
+                Wiederverfügbarkeit speichern
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card variant="outlined" sx={{ height: "100%" }}>
+            <CardContent sx={{ display: "grid", gap: 1.25 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ width: 58, height: 58, borderRadius: 2, display: "grid", placeItems: "center", bgcolor: "rgba(10,16,32,.08)", color: adminColors.ink }}>
+                  <ShieldOutlinedIcon sx={{ fontSize: 34 }} />
+                </Box>
+                <Box>
+                  <Typography variant="overline" sx={{ fontWeight: 950, letterSpacing: ".08em", color: adminColors.muted }}>
+                    Zugriff
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 950, lineHeight: 1.1 }}>Schaltung</Typography>
+                </Box>
+              </Box>
+              <Typography variant="body2" sx={{ color: adminColors.muted }}>
+                Schaltet die öffentliche Storefront in den Wartungsmodus oder zurück in den normalen Betrieb.
+              </Typography>
+              <Button
+                variant="contained"
+                color={maintenanceOn ? "success" : "warning"}
+                size="large"
+                startIcon={maintenanceOn ? <ToggleOffIcon /> : <ToggleOnIcon />}
+                onClick={() => void toggle()}
+                disabled={loading}
+                sx={{ minHeight: 48, fontWeight: 950 }}
+              >
+                {maintenanceOn ? "Wartung deaktivieren" : "Wartung aktivieren"}
+              </Button>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </AdminToolShell>
   );
 }
@@ -4429,7 +4554,7 @@ function CRMToolPage() {
 export function ReactAdminDashboard() {
   return (
     <div className="mx-auto w-full max-w-[1600px] bg-[#f3f6fb] text-[#0a1020]">
-    <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme}>
+    <Admin basename="/admin" dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme}>
       <CustomRoutes>
         <Route path="/tools/maintenance" element={<MaintenanceToolPage />} />
         <Route path="/tools/online-shop" element={<OnlineShopToolPage />} />

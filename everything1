@@ -1,0 +1,140 @@
+# Complete environment template for druck-und-design.at
+# Copy needed values into your real server .env or hosting environment.
+# This file is ignored by git because .gitignore contains .env*
+#
+# IMPORTANT:
+# - NEXT_PUBLIC_* values are visible in the browser. Never put secrets there.
+# - In production, the admin dashboard DOES NOT write .env files.
+# - Admin-editable runtime settings are stored in DB/admin modules, not here.
+
+# ---------------------------------------------------------------------------
+# Core runtime
+# ---------------------------------------------------------------------------
+NODE_ENV=production
+NEXT_PUBLIC_APP_URL=https://druck-und-design.at
+
+# ---------------------------------------------------------------------------
+# Security / admin access
+# ---------------------------------------------------------------------------
+# Used to sign customer/admin session cookies and admin 2FA tokens.
+# Must be at least 32 chars, random, and stable between deployments.
+AUTH_SECRET=replace-with-a-long-random-secret-minimum-32-characters
+
+# Comma-separated active admin emails. These users get bootstrapped as admins.
+ADMIN_EMAILS=admin@druck-und-design.at
+
+# Legacy/fallback admin display email used by the old admin dashboard.
+NEXT_PUBLIC_ADMIN_EMAIL=admin@druck-und-design.at
+
+# ---------------------------------------------------------------------------
+# Database
+# ---------------------------------------------------------------------------
+# Production should use LibSQL/Turso or another configured libsql URL.
+# Do not use file:./dev.db in production.
+DATABASE_URL=libsql://your-database.turso.io
+DATABASE_AUTH_TOKEN=replace-with-database-auth-token
+
+# ---------------------------------------------------------------------------
+# File uploads / media storage
+# ---------------------------------------------------------------------------
+# Store uploads directly on this server under public/uploads.
+# Use a persistent server directory/volume for public/uploads in production.
+UPLOAD_STORAGE=local
+
+# ---------------------------------------------------------------------------
+# Stripe payments
+# ---------------------------------------------------------------------------
+STRIPE_SECRET_KEY=sk_live_replace_me
+STRIPE_WEBHOOK_SECRET=whsec_replace_me
+
+# ---------------------------------------------------------------------------
+# Email / SMTP
+# Admin dashboard can edit these only in local/dev mode:
+# /admin#/tools/email
+# In production, set them here or in your host dashboard.
+# ---------------------------------------------------------------------------
+SMTP_HOST=smtp.example.at
+SMTP_PORT=587
+SMTP_USER=service@example.at
+SMTP_PASS=replace-with-smtp-password
+SMTP_FROM_EMAIL=service@example.at
+CONTACT_NOTIFY_EMAIL=kontakt@druck-und-design.at
+PRODUCT_SELECTION_NOTIFY_EMAIL=kontakt@druck-und-design.at
+
+# ---------------------------------------------------------------------------
+# CRM / invoices
+# Admin dashboard can edit CRM_API_URL and CRM_API_TOKEN only in local/dev mode:
+# /admin#/tools/crm
+# In production, set them here or in your host dashboard.
+# ---------------------------------------------------------------------------
+CRM_API_URL=https://crm.example.at/api/orders
+CRM_API_TOKEN=replace-with-crm-token
+CRM_INVOICE_PDF_URL_TEMPLATE=https://crm.example.at/pages/rechnung_pdf.php?id={invoice_id}
+CRM_INVOICE_CANCEL_URL=https://crm.example.at/api/invoices/cancel
+CRM_INVOICE_DELETE_URL=https://crm.example.at/api/invoices/delete
+CRM_INVOICE_MANAGE_URL=https://crm.example.at/admin/invoices
+
+# ---------------------------------------------------------------------------
+# Shipping / Sendcloud
+# ---------------------------------------------------------------------------
+SENDCLOUD_PUBLIC_KEY=replace-with-sendcloud-public-key
+SENDCLOUD_SECRET_KEY=replace-with-sendcloud-secret-key
+SENDCLOUD_FROM_COUNTRY=AT
+
+# ---------------------------------------------------------------------------
+# Print-check pricing
+# PRINT_CHECK_FEE_EUR is used server-side in checkout.
+# NEXT_PUBLIC_PRINT_CHECK_FEE_EUR is used client-side in cart UI.
+# Keep both values equal.
+# ---------------------------------------------------------------------------
+PRINT_CHECK_FEE_EUR=9.99
+NEXT_PUBLIC_PRINT_CHECK_FEE_EUR=9.99
+
+# ---------------------------------------------------------------------------
+# Analytics / marketing
+# Admin dashboard can edit these only in local/dev mode:
+# /admin#/tools/werbung
+# In production, set them here or in your host dashboard.
+# ---------------------------------------------------------------------------
+NEXT_PUBLIC_GA_MEASUREMENT_ID=
+NEXT_PUBLIC_CLARITY_PROJECT_ID=
+NEXT_PUBLIC_META_PIXEL_ID=
+GOOGLE_SITE_VERIFICATION=
+
+# ---------------------------------------------------------------------------
+# Optional infrastructure
+# ---------------------------------------------------------------------------
+REDIS_URL=
+NATS_URL=
+LOG_LEVEL=info
+
+# ---------------------------------------------------------------------------
+# Admin-dashboard settings stored in database, NOT in .env
+# ---------------------------------------------------------------------------
+# /admin#/tools/maintenance:
+# - maintenanceMode
+# - maintenanceAvailableAt
+#
+# /admin#/tools/vacation:
+# - vacationMode
+#
+# /admin#/tools/online-shop or /admin#/tools/checkout-lock:
+# - disableCheckout
+#
+# /admin#/tools/homepage:
+# - homepage bestseller section
+# - homepage student shop section
+# - homepage Google reviews section
+#
+# /admin#/tools/site-images:
+# - site-wide image slots
+#
+# /admin resources:
+# - products
+# - categories
+# - industries
+# - studentArticles
+# - studentVerifications
+# - coupons
+# - shipping/payment methods
+# - newsletter/reviews/orders/invoices
