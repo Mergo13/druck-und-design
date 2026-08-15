@@ -43,6 +43,9 @@ export function LoginForm() {
       <p className="mt-2 text-sm text-muted-foreground">Greifen Sie auf Warenkorb und Angebotsanfragen zu.</p>
       <label className="mt-6 grid gap-2 text-sm font-bold">E-Mail<Input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
       <label className="mt-4 grid gap-2 text-sm font-bold">Passwort<Input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+      <div className="mt-3 text-right text-sm">
+        <Link className="font-bold text-primary" href="/passwort-vergessen">Passwort vergessen?</Link>
+      </div>
       <Button className="mt-6 w-full" disabled={loading}>{loading ? "Bitte warten..." : "Einloggen"}</Button>
       {message ? <p className="mt-3 text-sm text-red-600">{message}</p> : null}
       <p className="mt-5 text-center text-sm text-muted-foreground">Noch kein Konto? <Link className="font-bold text-primary" href="/registrierung">Jetzt registrieren</Link></p>
