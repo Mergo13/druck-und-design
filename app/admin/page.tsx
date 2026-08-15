@@ -13,12 +13,12 @@ export const metadata: Metadata = {
 export default async function AdminPage() {
   const user = await getSessionUser();
   if (!user?.email) {
-    redirect("/admin/login");
+    redirect("/login?next=/admin");
   }
   await ensureAdminBootstrap();
   const admin = await prisma.adminUser.findUnique({ where: { email: user.email } });
   if (!admin?.active) {
-    redirect("/admin/login?error=forbidden");
+    redirect("/login?next=/admin&error=forbidden");
   }
   const verified = await isAdmin2FAVerifiedFor(user.email);
   if (!verified) {
