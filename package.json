@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "db:deploy": "prisma db push",
     "db:demo-catalog": "tsx scripts/reset-demo-catalog.ts",
+    "catalog:export": "tsx scripts/catalog-transfer.ts export",
+    "catalog:import": "tsx scripts/catalog-transfer.ts import",
     "deploy:check": "tsx scripts/check-production-env.ts",
     "security:audit": "npm audit --omit=dev",
     "postinstall": "prisma generate"
