@@ -3,7 +3,20 @@
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
-import { Alert, Box, Button, Card, CardContent, Grid, IconButton, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
+import DashboardIcon from "@mui/icons-material/Dashboard";
+import CategoryIcon from "@mui/icons-material/Category";
+import BusinessIcon from "@mui/icons-material/Business";
+import SchoolIcon from "@mui/icons-material/School";
+import ArticleIcon from "@mui/icons-material/Article";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import RequestQuoteIcon from "@mui/icons-material/RequestQuote";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
+import CardGiftcardIcon from "@mui/icons-material/CardGiftcard";
+import StarIcon from "@mui/icons-material/Star";
+import MailIcon from "@mui/icons-material/Mail";
+import CampaignIcon from "@mui/icons-material/Campaign";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import { Alert, Box, Button, Card, CardContent, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -19,6 +32,7 @@ import {
   Edit,
   EditButton,
   List,
+  Layout,
   NumberField,
   NumberInput,
   RaRecord,
@@ -2104,23 +2118,87 @@ function ProductHomepagePlacementFields() {
   );
 }
 
+function AdminFormSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#d8e0ea", bgcolor: "#fff" }}>
+      <CardContent sx={{ display: "grid", gap: 1.5, p: 2.25 }}>
+        <Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 950, color: "#0f172a", lineHeight: 1.2 }}>{title}</Typography>
+          <Typography variant="body2" sx={{ mt: 0.35, color: "#64748b", fontWeight: 600 }}>{description}</Typography>
+        </Box>
+        {children}
+      </CardContent>
+    </Card>
+  );
+}
+
+function AdminFormCanvas({ children }: { children: ReactNode }) {
+  return (
+    <Box sx={{
+      width: "100%",
+      display: "grid",
+      gap: 2,
+      color: "#0f172a",
+      "& .RaSimpleForm-main": { maxWidth: "none" },
+      "& .MuiFormControl-root": { minWidth: 0 },
+      "& .MuiInputBase-root": { bgcolor: "#fff", color: "#0f172a" },
+      "& .MuiInputLabel-root": { color: "#334155", fontWeight: 750 },
+      "& .MuiFormHelperText-root": { color: "#64748b" }
+    }}>
+      {children}
+    </Box>
+  );
+}
+
+function AdminFormHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <Box sx={{ px: 0.5 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 950, color: "#0f172a", lineHeight: 1.2 }}>{title}</Typography>
+      <Typography variant="body2" sx={{ mt: 0.35, color: "#64748b", fontWeight: 600 }}>{description}</Typography>
+    </Box>
+  );
+}
+
+function ProductFormFields({ duplicate = false }: { duplicate?: boolean }) {
+  return (
+    <AdminFormCanvas>
+      {duplicate ? <ProductDuplicateButton /> : null}
+      <AdminFormSection title="Produktbasis" description="Name, Kategorie und kurze Verkaufstexte für die Produktseite.">
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px 1fr 1fr" }, gap: 1.5 }}>
+          <TextInput source="slug" label="Slug" validate={[required()]} fullWidth />
+          <TextInput source="name" label="Produktname" validate={[required()]} fullWidth />
+          <ProductCategorySelect />
+        </Box>
+        <TextInput source="short" label="Kurzbeschreibung" multiline fullWidth />
+        <TextInput source="description" label="Beschreibung" multiline minRows={4} fullWidth />
+        <TextInput source="seo" label="SEO Beschreibung" multiline minRows={3} fullWidth />
+      </AdminFormSection>
+
+      <AdminFormSection title="Medien & Lieferung" description="Produktbilder, Galerie und Lieferhinweis für die sichtbare Produktseite.">
+        <ProductImageUploadControls />
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 260px" }, gap: 1.5 }}>
+          <TextInput source="heroImage" label="Hauptbild URL" fullWidth />
+          <TextInput source="deliveryText" label="Lieferzeit" helperText="z.B. 1 Tag oder 1-3 Tage" fullWidth />
+        </Box>
+      </AdminFormSection>
+
+      <AdminFormHeader title="Sichtbarkeit & Platzierung" description="Kaufmodus, Startseiten-Listen, Studentenrabatt und Branchenzuordnung." />
+      <Box sx={{ display: "grid", gap: 1.5 }}>
+        <ProductHomepagePlacementFields />
+        <ProductIndustryCheckboxes />
+      </Box>
+
+      <AdminFormHeader title="Preise & Konfigurator" description="Produktstaffeln, globale Eigenschaften, produktbezogene Overrides und Preisvorschau." />
+      <ProductPricingManager />
+    </AdminFormCanvas>
+  );
+}
+
 function ProductEdit() {
   return (
     <Edit>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", color: "#0f172a", bgcolor: "#fff", "& .RaSimpleForm-main": { maxWidth: "none" }, "& .MuiTypography-root": { color: "inherit" }, "& .MuiInputBase-root": { color: "#0f172a", bgcolor: "#fff" }, "& .MuiInputLabel-root": { color: "#334155" } }}>
-        <ProductDuplicateButton />
-        <ProductImageUploadControls />
-        <TextInput source="slug" validate={[required()]} />
-        <TextInput source="name" validate={[required()]} />
-        <ProductCategorySelect />
-        <TextInput source="short" multiline />
-        <TextInput source="description" multiline />
-        <TextInput source="seo" multiline />
-        <TextInput source="heroImage" />
-        <TextInput source="deliveryText" />
-        <ProductHomepagePlacementFields />
-        <ProductIndustryCheckboxes />
-        <ProductPricingManager />
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }}>
+        <ProductFormFields duplicate />
       </SimpleForm>
     </Edit>
   );
@@ -2129,19 +2207,8 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", color: "#0f172a", bgcolor: "#fff", "& .RaSimpleForm-main": { maxWidth: "none" }, "& .MuiTypography-root": { color: "inherit" }, "& .MuiInputBase-root": { color: "#0f172a", bgcolor: "#fff" }, "& .MuiInputLabel-root": { color: "#334155" } }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
-        <ProductImageUploadControls />
-        <TextInput source="slug" validate={[required()]} />
-        <TextInput source="name" validate={[required()]} />
-        <ProductCategorySelect />
-        <TextInput source="short" multiline />
-        <TextInput source="description" multiline />
-        <TextInput source="seo" multiline />
-        <TextInput source="heroImage" />
-        <TextInput source="deliveryText" />
-        <ProductHomepagePlacementFields />
-        <ProductIndustryCheckboxes />
-        <ProductPricingManager />
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+        <ProductFormFields />
       </SimpleForm>
     </Create>
   );
@@ -2663,34 +2730,63 @@ function CategoryPropertiesInput() {
   );
 }
 
+function CategoryFormFields() {
+  return (
+    <AdminFormCanvas>
+      <AdminFormSection title="Kategorie" description="Name, Slug und Beschreibung für die Katalogstruktur.">
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px 1fr" }, gap: 1.5 }}>
+          <TextInput source="slug" label="Slug" validate={[required()]} fullWidth />
+          <TextInput source="name" label="Kategoriename" validate={[required()]} fullWidth />
+        </Box>
+        <TextInput source="description" label="Beschreibung" multiline minRows={3} fullWidth />
+      </AdminFormSection>
+
+      <AdminFormSection title="Status & Vorlage" description="Steuert Sichtbarkeit und Standardvorlage für neue Produkte in dieser Kategorie.">
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.5 }}>
+          <BooleanInput source="visible" label="Sichtbar im Shop" />
+          <BooleanInput source="published" label="Veröffentlicht" />
+          <SelectInput
+            source="defaultPropertyTemplate"
+            label="Eigenschafts-Vorlage"
+            choices={[
+              { id: "print-basic", name: "Print Standard" },
+              { id: "large-format", name: "Werbetechnik" },
+              { id: "textile", name: "Textil" },
+              { id: "sticker", name: "Aufkleber" },
+              { id: "marketing-service", name: "Marketing Service" }
+            ]}
+            fullWidth
+          />
+        </Box>
+      </AdminFormSection>
+
+      <AdminFormSection title="Bild" description="Kategorie-Bild für Navigation, Landingpages und Kategorieübersichten.">
+        <CategoryImageUploadControls />
+        <TextInput source="logo" label="Bild URL" fullWidth />
+      </AdminFormSection>
+
+      <AdminFormSection title="Kategorie-Eigenschaften" description="Optionale Eigenschaften, die Produkte dieser Kategorie im Konfigurator verwenden können.">
+        <CategoryPropertiesInput />
+      </AdminFormSection>
+
+      <AdminFormSection title="Showroom" description="Zusätzliche Bilder für hochwertige Kategorie- und Branchenansichten.">
+        <ArrayInput source="showroomImages" label="Showroom Bilder">
+          <SimpleFormIterator disableClear>
+            <TextInput source="image" label="Bild URL" fullWidth />
+            <TextInput source="title" label="Titel" fullWidth />
+            <TextInput source="description" label="Beschreibung" multiline fullWidth />
+          </SimpleFormIterator>
+        </ArrayInput>
+      </AdminFormSection>
+    </AdminFormCanvas>
+  );
+}
+
 function CategoryEdit() {
   return (
     <Edit>
-      <SimpleForm>
-        <TextInput source="slug" validate={[required()]} />
-        <TextInput source="name" validate={[required()]} />
-        <TextInput source="description" multiline />
-        <BooleanInput source="visible" label="Sichtbar im Shop" />
-        <BooleanInput source="published" label="Veröffentlicht" />
-        <CategoryImageUploadControls />
-        <TextInput source="logo" label="Bild URL" />
-        <SelectInput
-          source="defaultPropertyTemplate"
-          choices={[
-            { id: "print-basic", name: "Print Standard" },
-            { id: "large-format", name: "Werbetechnik" },
-            { id: "textile", name: "Textil" },
-            { id: "sticker", name: "Aufkleber" },
-            { id: "marketing-service", name: "Marketing Service" }
-          ]}
-        />
-        <ArrayInput source="showroomImages" label="Showroom Bilder">
-          <SimpleFormIterator disableClear>
-            <TextInput source="image" label="Bild URL" />
-            <TextInput source="title" label="Titel" />
-            <TextInput source="description" label="Beschreibung" multiline />
-          </SimpleFormIterator>
-        </ArrayInput>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }}>
+        <CategoryFormFields />
       </SimpleForm>
     </Edit>
   );
@@ -2699,21 +2795,8 @@ function CategoryEdit() {
 function CategoryCreate() {
   return (
     <Create>
-      <SimpleForm defaultValues={{ visible: true, published: true, defaultPropertyTemplate: "print-basic", quantitySteps: [1, 10, 100, 1000], showroomImages: [] }}>
-        <TextInput source="slug" validate={[required()]} />
-        <TextInput source="name" validate={[required()]} />
-        <TextInput source="description" multiline />
-        <BooleanInput source="visible" label="Sichtbar im Shop" />
-        <BooleanInput source="published" label="Veröffentlicht" />
-        <CategoryImageUploadControls />
-        <TextInput source="logo" label="Bild URL" />
-        <ArrayInput source="showroomImages" label="Showroom Bilder">
-          <SimpleFormIterator disableClear>
-            <TextInput source="image" label="Bild URL" />
-            <TextInput source="title" label="Titel" />
-            <TextInput source="description" label="Beschreibung" multiline />
-          </SimpleFormIterator>
-        </ArrayInput>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: true, published: true, defaultPropertyTemplate: "print-basic", quantitySteps: [1, 10, 100, 1000], properties: [], showroomImages: [] }}>
+        <CategoryFormFields />
       </SimpleForm>
     </Create>
   );
@@ -2783,11 +2866,13 @@ function CategoryImageUploadControls() {
 
 function AdminToolShell({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
   return (
-    <Card>
-      <CardContent>
-        <Typography variant="h5">{title}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{description}</Typography>
-        {children ? <Box sx={{ mt: 2 }}>{children}</Box> : null}
+    <Card sx={{ borderRadius: 2.5, borderColor: "#d8e0ea", bgcolor: "#fff" }}>
+      <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Box sx={{ display: "grid", gap: 0.5, pb: 2, borderBottom: "1px solid #e2e8f0" }}>
+          <Typography variant="h5" sx={{ fontWeight: 950, color: "#0f172a", letterSpacing: 0 }}>{title}</Typography>
+          <Typography variant="body2" sx={{ color: "#64748b", fontWeight: 600, maxWidth: 820 }}>{description}</Typography>
+        </Box>
+        {children ? <Box sx={{ mt: 2.25 }}>{children}</Box> : null}
       </CardContent>
     </Card>
   );
@@ -4603,10 +4688,126 @@ function CRMToolPage() {
   );
 }
 
+const adminMenuGroups = [
+  {
+    label: "Übersicht",
+    items: [
+      { href: "#/", label: "Dashboard", description: "Umsatz, Aufträge und schnelle Aktionen", icon: <DashboardIcon /> }
+    ]
+  },
+  {
+    label: "Katalog & Preise",
+    items: [
+      { href: "#/products", label: "Produkte", description: "Produkte, Staffelpreise und Konfigurator", icon: <Inventory2Icon /> },
+      { href: "#/properties", label: "Eigenschaften", description: "Globale Werte, Aufpreise und Staffeln", icon: <LocalOfferIcon /> },
+      { href: "#/categories", label: "Kategorien", description: "Shop-Struktur, Eigenschaften und Bilder", icon: <CategoryIcon /> },
+      { href: "#/industries", label: "Branchen", description: "Landingpages und Branchen-Zuordnung", icon: <BusinessIcon /> }
+    ]
+  },
+  {
+    label: "Studenten",
+    items: [
+      { href: "#/studentArticles", label: "Ratgeber", description: "Studenten-Content und SEO Artikel", icon: <ArticleIcon /> },
+      { href: "#/studentVerifications", label: "Prüfung", description: "Studentenstatus kontrollieren", icon: <SchoolIcon /> }
+    ]
+  },
+  {
+    label: "Verkauf",
+    items: [
+      { href: "#/orders", label: "Bestellungen", description: "Webshop-Aufträge und Status", icon: <ReceiptLongIcon /> },
+      { href: "#/quotes", label: "Angebote", description: "Anfragen und individuelle Angebote", icon: <RequestQuoteIcon /> },
+      { href: "#/invoices", label: "Rechnungen", description: "Zahlungen, CRM und Dokumente", icon: <ReceiptLongIcon /> },
+      { href: "#/fileUploads", label: "Datei-Uploads", description: "Kundendaten und Druckdateien", icon: <UploadFileIcon /> }
+    ]
+  },
+  {
+    label: "Marketing",
+    items: [
+      { href: "#/coupons", label: "Gutscheine", description: "Codes, Rabatte und Aktionen", icon: <CardGiftcardIcon /> },
+      { href: "#/reviews", label: "Bewertungen", description: "Kundenstimmen freigeben", icon: <StarIcon /> },
+      { href: "#/newsletter", label: "Kontakte", description: "Newsletter-Abonnenten", icon: <MailIcon /> },
+      { href: "#/newsletterCampaigns", label: "Newsletter", description: "Kampagnen erstellen und senden", icon: <CampaignIcon /> }
+    ]
+  },
+  {
+    label: "Betrieb",
+    items: [
+      { href: "#/shipping", label: "Versandarten", description: "Liefermethoden und Preise", icon: <LocalShippingIcon /> }
+    ]
+  }
+];
+
+function AdminMenu() {
+  const [hash, setHash] = useState(typeof window === "undefined" ? "#/" : window.location.hash || "#/");
+
+  useEffect(() => {
+    const update = () => setHash(window.location.hash || "#/");
+    window.addEventListener("hashchange", update);
+    update();
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
+
+  return (
+    <Box sx={{ width: 292, px: 1.25, py: 1.5, bgcolor: "#f8fafc", minHeight: "100%" }}>
+      <Box sx={{ px: 1.25, pb: 1.5 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 950, color: "#0f172a", lineHeight: 1.1 }}>DUD Studio</Typography>
+        <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>Admin Navigation</Typography>
+      </Box>
+      {adminMenuGroups.map((group, groupIndex) => (
+        <Box key={group.label} sx={{ mb: 1.25 }}>
+          {groupIndex > 0 ? <Divider sx={{ my: 1.25 }} /> : null}
+          <Typography variant="caption" sx={{ display: "block", px: 1.25, pb: 0.75, color: "#64748b", fontWeight: 900, textTransform: "uppercase", letterSpacing: ".08em" }}>
+            {group.label}
+          </Typography>
+          <MuiList disablePadding sx={{ display: "grid", gap: 0.5 }}>
+            {group.items.map((item) => {
+              const active = item.href === "#/" ? hash === "#/" : hash.startsWith(item.href);
+              return (
+                <ListItemButton
+                  component="a"
+                  href={item.href}
+                  key={item.href}
+                  selected={active}
+                  sx={{
+                    minHeight: 58,
+                    alignItems: "flex-start",
+                    gap: 1,
+                    borderRadius: 1.5,
+                    px: 1.25,
+                    py: 1,
+                    color: active ? "#0d3f99" : "#334155",
+                    border: active ? "1px solid rgba(17,85,204,.22)" : "1px solid transparent",
+                    bgcolor: active ? "rgba(17,85,204,.08)" : "transparent",
+                    "&:hover": { bgcolor: active ? "rgba(17,85,204,.12)" : "#eef4ff", borderColor: "rgba(17,85,204,.16)" }
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 34, mt: 0.2, color: active ? "#1155cc" : "#64748b" }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 900, lineHeight: 1.2 }}>{item.label}</Typography>
+                    <Typography sx={{ mt: 0.25, whiteSpace: "normal", fontSize: 11.5, fontWeight: 650, color: active ? "#385d9f" : "#64748b", lineHeight: 1.25 }}>
+                      {item.description}
+                    </Typography>
+                  </Box>
+                </ListItemButton>
+              );
+            })}
+          </MuiList>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+function AdminLayout(props: any) {
+  return <Layout {...props} menu={AdminMenu} />;
+}
+
 export function ReactAdminDashboard() {
   return (
     <div className="mx-auto w-full max-w-[1600px] bg-[#f3f6fb] text-[#0a1020]">
-    <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme}>
+    <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme} layout={AdminLayout}>
       <CustomRoutes>
         <Route path="/tools/maintenance" element={<MaintenanceToolPage />} />
         <Route path="/tools/online-shop" element={<OnlineShopToolPage />} />
