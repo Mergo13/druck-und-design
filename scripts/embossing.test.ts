@@ -8,6 +8,7 @@ import { findOwnedEmbossingDesign } from "@/lib/embossing/server";
 import { defaultCoverGeometry, defaultEmbossingProductionRules, type EmbossingSourceContent } from "@/lib/embossing/types";
 import { elementBounds, safeRect } from "@/lib/embossing/geometry";
 import { validateEmbossingLayout } from "@/lib/embossing/validation";
+import { textWidthMm } from "@/lib/embossing/typography";
 import { prisma } from "@/lib/prisma";
 
 const source: EmbossingSourceContent = {
@@ -64,6 +65,34 @@ assert.deepEqual(layoutAgain.elements.map(({ xMm, yMm, widthMm, heightMm }) => (
 
 const preflight = validateEmbossingLayout(layout, defaultEmbossingProductionRules);
 assert.equal(preflight.valid, true, "generated layout must pass preflight");
+
+const workType = layout.elements.find((element) => element.type === "text" && element.role === "workType");
+assert.ok(workType?.type === "text", "work type element exists");
+const safeTextWidth = safe.width * 0.92;
+for (const line of workType.lines) {
+  assert.ok(textWidthMm(line, workType.fontSizePt, workType.fontStyle, workType.weight, workType.letterSpacingMm) <= safe.width * 0.85 * 0.92 + 0.01, "work type must not dominate cover width");
+}
+for (const element of layout.elements) {
+  if (element.type !== "text") continue;
+  for (const line of element.lines) {
+    assert.ok(textWidthMm(line, element.fontSizePt, element.fontStyle, element.weight, element.letterSpacingMm) <= safeTextWidth + 0.01, "rendered text line must fit measured safe width");
+  }
+}
+
+const longTitleLayout = generateEmbossingLayout({
+  coverGeometry: defaultCoverGeometry,
+  sourceContent: {
+    ...source,
+    title: "Digitale Transformation in österreichischen Unternehmen und ihre Auswirkungen auf moderne Druckprozesse"
+  },
+  template: "classic",
+  fontStyle: "modern",
+  productionRules: defaultEmbossingProductionRules
+});
+const longTitle = longTitleLayout.elements.find((element) => element.type === "text" && element.role === "title");
+assert.ok(longTitle?.type === "text", "long title element exists");
+assert.ok(longTitle.lines.length > 1 && longTitle.lines.length <= 3, "long title wraps into balanced allowed lines");
+assert.equal(validateEmbossingLayout(longTitleLayout, defaultEmbossingProductionRules).valid, true, "long title layout must pass preflight");
 
 async function main() {
   const designId = `test-${randomUUID()}`;

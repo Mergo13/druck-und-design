@@ -16,6 +16,8 @@ const groupRoles: Record<"top" | "middle" | "bottom", EmbossingTextRole[]> = {
   bottom: ["author", "year"]
 };
 
+const SAFE_TEXT_WIDTH_RATIO = 0.92;
+
 function isUsed(input: GenerateEmbossingLayoutInput, role: EmbossingTextRole) {
   if (role === "custom") return true;
   return input.sourceContent.use?.[role] !== false;
@@ -42,24 +44,30 @@ function buildTextElement(params: {
   alignment: "left" | "center" | "right";
   fontStyle: "modern" | "classic";
   minFontSizePt: number;
+  preferredFontSizePt?: number;
   warnings: string[];
   corrections: string[];
 }): EmbossingTextElement | null {
   const normalized = normalizeRoleText(params.text, params.role);
   if (!normalized) return null;
+  const weight = params.role === "title" || params.role === "workType" ? 600 : 500;
+  const maxWidthMm = params.rect.width * SAFE_TEXT_WIDTH_RATIO * roleTypography[params.role].maxWidthRatio;
   const fit = fitTextBlock({
     text: normalized,
     role: params.role,
     minFontSizePt: params.minFontSizePt,
-    maxWidthMm: params.rect.width,
-    fontStyle: params.fontStyle
+    preferredFontSizePt: params.preferredFontSizePt,
+    maxWidthMm,
+    fontStyle: params.fontStyle,
+    fontWeight: weight
   });
   if (!fit.ok) params.warnings.push(fit.message);
-  if (fit.ok && fit.fontSizePt < roleTypography[params.role].preferredPt) {
-    params.corrections.push(`${labelForRole(params.role)} wurde von ${roleTypography[params.role].preferredPt} pt auf ${fit.fontSizePt} pt optimiert.`);
+  const preferred = params.preferredFontSizePt ?? roleTypography[params.role].preferredPt;
+  if (fit.ok && fit.fontSizePt < preferred) {
+    params.corrections.push(`${labelForRole(params.role)} wurde von ${preferred.toFixed(1)} pt auf ${fit.fontSizePt.toFixed(1)} pt optimiert.`);
   }
   const heightMm = fit.lines.length * fit.lineHeightMm;
-  const widthMm = Math.min(params.rect.width, fit.widthMm);
+  const widthMm = fit.widthMm;
   return {
     type: "text",
     role: params.role,
@@ -71,9 +79,10 @@ function buildTextElement(params: {
     heightMm,
     fontSizePt: fit.fontSizePt,
     lineHeightMm: fit.lineHeightMm,
+    letterSpacingMm: fit.letterSpacingMm,
     alignment: params.alignment,
     fontStyle: params.fontStyle,
-    weight: params.role === "title" || params.role === "workType" ? 600 : 500,
+    weight,
     zone: params.zone
   };
 }
@@ -97,29 +106,47 @@ function groupHeight(elements: EmbossingTextElement[]) {
   }, 0);
 }
 
+function buildStagedTextElements(params: {
+  input: GenerateEmbossingLayoutInput;
+  zone: "top" | "middle" | "bottom";
+  rect: { x: number; y: number; width: number; height: number };
+  alignment: "left" | "center" | "right";
+  fontStyle: "modern" | "classic";
+  minFontSizePt: number;
+  preferredScale: number;
+  warnings: string[];
+  corrections: string[];
+}) {
+  const rules = { ...defaultEmbossingProductionRules, ...params.input.productionRules };
+  const roles = params.input.template === "minimal"
+    ? groupRoles[params.zone].filter((role) => role !== "institution" && role !== "subtitle")
+    : groupRoles[params.zone];
+  const staged: EmbossingTextElement[] = [];
+
+  for (const role of roles) {
+    if (role === "custom") {
+      for (const customText of (params.input.sourceContent.customLines ?? []).slice(0, rules.maxCustomLines)) {
+        const preferredFontSizePt = roleTypography[role].preferredPt * params.preferredScale;
+        const element = buildTextElement({ role, text: customText, zone: params.zone, rect: params.rect, cursorY: 0, alignment: params.alignment, fontStyle: params.fontStyle, minFontSizePt: params.minFontSizePt, preferredFontSizePt, warnings: params.warnings, corrections: params.corrections });
+        if (element) staged.push(element);
+      }
+      continue;
+    }
+    const text = textForRole(params.input, role);
+    const preferredFontSizePt = roleTypography[role].preferredPt * params.preferredScale;
+    const element = buildTextElement({ role, text, zone: params.zone, rect: params.rect, cursorY: 0, alignment: params.alignment, fontStyle: params.fontStyle, minFontSizePt: params.minFontSizePt, preferredFontSizePt, warnings: params.warnings, corrections: params.corrections });
+    if (element) staged.push(element);
+  }
+
+  return staged;
+}
+
 function layoutGroup(input: GenerateEmbossingLayoutInput, zone: "top" | "middle" | "bottom", warnings: string[], corrections: string[]) {
   const rules = { ...defaultEmbossingProductionRules, ...input.productionRules };
   const zones = coverZones(input.coverGeometry);
   const rect = zones[zone];
   const alignment = input.advancedAdjustments?.[zone]?.alignment ?? "center";
   const fontStyle = input.fontStyle ?? "modern";
-  const roles = input.template === "minimal"
-    ? groupRoles[zone].filter((role) => role !== "institution" && role !== "subtitle")
-    : groupRoles[zone];
-  const staged: EmbossingTextElement[] = [];
-
-  for (const role of roles) {
-    if (role === "custom") {
-      for (const customText of (input.sourceContent.customLines ?? []).slice(0, rules.maxCustomLines)) {
-        const element = buildTextElement({ role, text: customText, zone, rect, cursorY: 0, alignment, fontStyle, minFontSizePt: rules.minFontSizePt, warnings, corrections });
-        if (element) staged.push(element);
-      }
-      continue;
-    }
-    const text = textForRole(input, role);
-    const element = buildTextElement({ role, text, zone, rect, cursorY: 0, alignment, fontStyle, minFontSizePt: rules.minFontSizePt, warnings, corrections });
-    if (element) staged.push(element);
-  }
 
   let logo: EmbossingLayoutElement | null = null;
   if (zone === "top" && input.sourceContent.logo?.url && (input.template === "logo" || input.template === "classic")) {
@@ -138,8 +165,27 @@ function layoutGroup(input: GenerateEmbossingLayoutInput, zone: "top" | "middle"
     };
   }
 
+  let staged: EmbossingTextElement[] = [];
+  for (let preferredScale = 1; preferredScale >= 0.72; preferredScale -= 0.04) {
+    const attemptWarnings: string[] = [];
+    const attemptCorrections: string[] = [];
+    const attempt = buildStagedTextElements({ input, zone, rect, alignment, fontStyle, minFontSizePt: rules.minFontSizePt, preferredScale, warnings: attemptWarnings, corrections: attemptCorrections });
+    const attemptHeight = groupHeight(attempt) + (logo ? logo.heightMm + 5 : 0);
+    if (attemptHeight <= rect.height) {
+      warnings.push(...attemptWarnings);
+      corrections.push(...attemptCorrections);
+      staged = attempt;
+      break;
+    }
+    staged = attempt;
+  }
+
   const totalHeight = groupHeight(staged) + (logo ? logo.heightMm + 5 : 0);
+  if (totalHeight > rect.height) {
+    warnings.push(`${zone === "top" ? "Oberer" : zone === "middle" ? "Mittlerer" : "Unterer"} Prägebereich ist zu hoch für die gewählten Texte.`);
+  }
   let cursorY = rect.y + rect.height / 2 - totalHeight / 2 + (input.advancedAdjustments?.[zone]?.offsetYMm ?? 0);
+  cursorY = Math.max(rect.y, Math.min(cursorY, rect.y + rect.height - totalHeight));
   const elements: EmbossingLayoutElement[] = [];
   if (logo) {
     logo = { ...logo, yMm: cursorY };
@@ -148,7 +194,7 @@ function layoutGroup(input: GenerateEmbossingLayoutInput, zone: "top" | "middle"
   }
   for (const [index, element] of staged.entries()) {
     const positioned = { ...element, yMm: cursorY, xMm: alignmentX(alignment, rect, element.widthMm) };
-    elements.push(clampElementToRect(positioned, rect));
+    elements.push(positioned);
     cursorY += element.heightMm + (index < staged.length - 1 ? roleTypography[element.role].spacingAfterMm : 0);
   }
   return elements;

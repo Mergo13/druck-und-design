@@ -15,7 +15,7 @@ export function EmbossingCoverPreview({ layout, color, showGuides = true }: { la
   const safeWidth = coverGeometry.widthMm - safe.leftMm - safe.rightMm;
   const safeHeight = coverGeometry.heightMm - safe.topMm - safe.bottomMm;
   return (
-    <svg viewBox={`0 0 ${coverGeometry.widthMm} ${coverGeometry.heightMm}`} className="h-full w-full rounded-md bg-[#151515] shadow-inner" role="img" aria-label="Prägecover Vorschau">
+    <svg viewBox={`0 0 ${coverGeometry.widthMm} ${coverGeometry.heightMm}`} preserveAspectRatio="xMidYMid meet" className="h-full w-full rounded-md bg-[#151515] shadow-inner" role="img" aria-label="Prägecover Vorschau">
       <rect x="0" y="0" width={coverGeometry.widthMm} height={coverGeometry.heightMm} fill="#101010" />
       {showGuides ? (
         <>
@@ -38,6 +38,7 @@ export function EmbossingCoverPreview({ layout, color, showGuides = true }: { la
             fontFamily={element.fontStyle === "classic" ? "Times New Roman, Times, serif" : "Helvetica, Arial, sans-serif"}
             fontSize={`${element.fontSizePt}pt`}
             fontWeight={element.weight}
+            letterSpacing={`${element.letterSpacingMm}mm`}
             fill={fill}
           >
             {line}

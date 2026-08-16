@@ -1,6 +1,10 @@
+import { Encodings, Font, FontNames } from "@pdf-lib/standard-fonts";
 import type { EmbossingTextRole } from "./types";
 
 const PT_TO_MM = 25.4 / 72;
+const MM_TO_PT = 72 / 25.4;
+
+type FontStyle = "modern" | "classic";
 
 export const embossingFontStyles = {
   modern: {
@@ -27,28 +31,56 @@ export const roleTypography: Record<EmbossingTextRole, {
   uppercase: boolean;
   maxLines: number;
   spacingAfterMm: number;
+  maxWidthRatio: number;
 }> = {
-  institution: { preferredPt: 12, minPt: 10, maxPt: 13, lineHeight: 1.24, uppercase: true, maxLines: 2, spacingAfterMm: 7 },
-  workType: { preferredPt: 18, minPt: 12, maxPt: 20, lineHeight: 1.18, uppercase: true, maxLines: 1, spacingAfterMm: 8 },
-  title: { preferredPt: 17, minPt: 10, maxPt: 22, lineHeight: 1.22, uppercase: true, maxLines: 4, spacingAfterMm: 6 },
-  subtitle: { preferredPt: 13, minPt: 10, maxPt: 14, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 5 },
-  author: { preferredPt: 13, minPt: 10, maxPt: 15, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 5 },
-  year: { preferredPt: 12, minPt: 10, maxPt: 13, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 0 },
-  custom: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 4 }
+  institution: { preferredPt: 6 * MM_TO_PT, minPt: 3.5 * MM_TO_PT, maxPt: 6.4 * MM_TO_PT, lineHeight: 1.24, uppercase: true, maxLines: 2, spacingAfterMm: 10, maxWidthRatio: 0.82 },
+  workType: { preferredPt: 8 * MM_TO_PT, minPt: 4 * MM_TO_PT, maxPt: 8.2 * MM_TO_PT, lineHeight: 1.18, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.85 },
+  title: { preferredPt: 6.5 * MM_TO_PT, minPt: 3.5 * MM_TO_PT, maxPt: 7 * MM_TO_PT, lineHeight: 1.22, uppercase: true, maxLines: 3, spacingAfterMm: 7, maxWidthRatio: 0.8 },
+  subtitle: { preferredPt: 5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5.4 * MM_TO_PT, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.78 },
+  author: { preferredPt: 5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5.4 * MM_TO_PT, lineHeight: 1.2, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.72 },
+  year: { preferredPt: 5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5.2 * MM_TO_PT, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.45 },
+  custom: { preferredPt: 4.5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5 * MM_TO_PT, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.75 }
 };
 
-function charWidthFactor(char: string, fontStyle: "modern" | "classic") {
-  if (char === " ") return 0.28;
-  if ("ilI.,:;|'!".includes(char)) return fontStyle === "classic" ? 0.24 : 0.22;
-  if ("mwMWÄÖÜ".includes(char)) return fontStyle === "classic" ? 0.86 : 0.82;
-  if ("ABCDEFGHKNOPQRSTUVWXYZ".includes(char)) return fontStyle === "classic" ? 0.66 : 0.62;
-  if ("0123456789".includes(char)) return 0.56;
-  return fontStyle === "classic" ? 0.5 : 0.48;
+const standardFonts = {
+  modern: {
+    regular: Font.load(FontNames.Helvetica),
+    bold: Font.load(FontNames.HelveticaBold)
+  },
+  classic: {
+    regular: Font.load(FontNames.TimesRoman),
+    bold: Font.load(FontNames.TimesRomanBold)
+  }
+} as const;
+
+function glyphName(char: string) {
+  const codePoint = char.codePointAt(0);
+  if (codePoint === undefined) return undefined;
+  if (!Encodings.WinAnsi.canEncodeUnicodeCodePoint(codePoint)) return undefined;
+  return Encodings.WinAnsi.encodeUnicodeCodePoint(codePoint).name;
 }
 
-export function textWidthMm(text: string, fontSizePt: number, fontStyle: "modern" | "classic") {
-  const sum = Array.from(text).reduce((width, char) => width + charWidthFactor(char, fontStyle), 0);
-  return sum * fontSizePt * PT_TO_MM;
+function fontFor(fontStyle: FontStyle, fontWeight: number) {
+  return fontWeight >= 600 ? standardFonts[fontStyle].bold : standardFonts[fontStyle].regular;
+}
+
+export function textWidthMm(text: string, fontSizePt: number, fontStyle: FontStyle, fontWeight = 500, letterSpacingMm = 0) {
+  const font = fontFor(fontStyle, fontWeight);
+  let units = 0;
+  let previousGlyph: string | undefined;
+  const chars = Array.from(text);
+
+  for (const char of chars) {
+    const currentGlyph = glyphName(char);
+    if (previousGlyph && currentGlyph) {
+      units += font.getXAxisKerningForPair(previousGlyph, currentGlyph) ?? 0;
+    }
+    units += currentGlyph ? font.getWidthOfGlyph(currentGlyph) ?? 0 : 600;
+    previousGlyph = currentGlyph;
+  }
+
+  const tracking = Math.max(0, chars.length - 1) * letterSpacingMm;
+  return (units / 1000) * fontSizePt * PT_TO_MM + tracking;
 }
 
 export function lineHeightMm(fontSizePt: number, role: EmbossingTextRole) {
@@ -60,24 +92,50 @@ export function normalizeRoleText(text: string, role: EmbossingTextRole) {
   return roleTypography[role].uppercase ? normalized.toLocaleUpperCase("de-AT") : normalized;
 }
 
+function splitLongWord(word: string, params: { fontSizePt: number; maxWidthMm: number; fontStyle: FontStyle; fontWeight: number; letterSpacingMm: number }) {
+  const parts: string[] = [];
+  let current = "";
+  for (const char of Array.from(word)) {
+    const candidate = `${current}${char}`;
+    if (!current || textWidthMm(candidate, params.fontSizePt, params.fontStyle, params.fontWeight, params.letterSpacingMm) <= params.maxWidthMm) {
+      current = candidate;
+      continue;
+    }
+    parts.push(current);
+    current = char;
+  }
+  if (current) parts.push(current);
+  return parts;
+}
+
 export function wrapTextToWidth(params: {
   text: string;
   fontSizePt: number;
   maxWidthMm: number;
-  fontStyle: "modern" | "classic";
+  fontStyle: FontStyle;
+  fontWeight: number;
+  letterSpacingMm: number;
 }) {
   const words = params.text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (!current || textWidthMm(candidate, params.fontSizePt, params.fontStyle) <= params.maxWidthMm) {
-      current = candidate;
-      continue;
+
+  for (const rawWord of words) {
+    const wordParts = textWidthMm(rawWord, params.fontSizePt, params.fontStyle, params.fontWeight, params.letterSpacingMm) > params.maxWidthMm
+      ? splitLongWord(rawWord, params)
+      : [rawWord];
+
+    for (const word of wordParts) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (!current || textWidthMm(candidate, params.fontSizePt, params.fontStyle, params.fontWeight, params.letterSpacingMm) <= params.maxWidthMm) {
+        current = candidate;
+        continue;
+      }
+      lines.push(current);
+      current = word;
     }
-    lines.push(current);
-    current = word;
   }
+
   if (current) lines.push(current);
   return lines;
 }
@@ -90,29 +148,37 @@ export function fitTextBlock(params: {
   maxFontSizePt?: number;
   maxWidthMm: number;
   maxLines?: number;
-  fontStyle: "modern" | "classic";
+  fontStyle: FontStyle;
+  fontWeight: number;
 }) {
   const roleStyle = roleTypography[params.role];
   const minPt = Math.max(params.minFontSizePt, roleStyle.minPt);
   const maxPt = Math.max(minPt, params.maxFontSizePt ?? roleStyle.maxPt);
   const preferred = Math.min(maxPt, Math.max(minPt, params.preferredFontSizePt ?? roleStyle.preferredPt));
   const maxLines = params.maxLines ?? roleStyle.maxLines;
+  const trackingStepsMm = [0.28, 0.18, 0.1, 0];
 
-  for (let fontSizePt = preferred; fontSizePt >= minPt; fontSizePt -= 0.5) {
-    const lines = wrapTextToWidth({
-      text: params.text,
-      fontSizePt,
-      maxWidthMm: params.maxWidthMm,
-      fontStyle: params.fontStyle
-    });
-    if (lines.length <= maxLines && lines.every((line) => textWidthMm(line, fontSizePt, params.fontStyle) <= params.maxWidthMm)) {
-      return {
-        ok: true as const,
-        lines,
+  for (let fontSizePt = preferred; fontSizePt >= minPt; fontSizePt -= 0.25) {
+    for (const letterSpacingMm of trackingStepsMm) {
+      const lines = wrapTextToWidth({
+        text: params.text,
         fontSizePt,
-        widthMm: Math.max(...lines.map((line) => textWidthMm(line, fontSizePt, params.fontStyle)), 0),
-        lineHeightMm: lineHeightMm(fontSizePt, params.role)
-      };
+        maxWidthMm: params.maxWidthMm,
+        fontStyle: params.fontStyle,
+        fontWeight: params.fontWeight,
+        letterSpacingMm
+      });
+      const widths = lines.map((line) => textWidthMm(line, fontSizePt, params.fontStyle, params.fontWeight, letterSpacingMm));
+      if (lines.length <= maxLines && widths.every((width) => width <= params.maxWidthMm)) {
+        return {
+          ok: true as const,
+          lines,
+          fontSizePt,
+          letterSpacingMm,
+          widthMm: Math.max(...widths, 0),
+          lineHeightMm: lineHeightMm(fontSizePt, params.role)
+        };
+      }
     }
   }
 
@@ -120,13 +186,16 @@ export function fitTextBlock(params: {
     text: params.text,
     fontSizePt: minPt,
     maxWidthMm: params.maxWidthMm,
-    fontStyle: params.fontStyle
+    fontStyle: params.fontStyle,
+    fontWeight: params.fontWeight,
+    letterSpacingMm: 0
   });
   return {
     ok: false as const,
     lines,
     fontSizePt: minPt,
-    widthMm: Math.max(...lines.map((line) => textWidthMm(line, minPt, params.fontStyle)), 0),
+    letterSpacingMm: 0,
+    widthMm: Math.max(...lines.map((line) => textWidthMm(line, minPt, params.fontStyle, params.fontWeight, 0)), 0),
     lineHeightMm: lineHeightMm(minPt, params.role),
     message: "Dieser Text ist zu lang für eine sichere Prägung. Bitte kürze den Text oder verwende eine zusätzliche Zeile."
   };

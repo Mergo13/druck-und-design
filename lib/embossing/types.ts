@@ -56,6 +56,7 @@ export type EmbossingTextElement = {
   heightMm: number;
   fontSizePt: number;
   lineHeightMm: number;
+  letterSpacingMm: number;
   alignment: EmbossingAlignment;
   fontStyle: "modern" | "classic";
   weight: number;

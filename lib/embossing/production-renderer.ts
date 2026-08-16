@@ -25,7 +25,7 @@ function productionSvg(layout: EmbossingResolvedLayout, color: "preview" | "mask
       const textAnchor = element.alignment === "left" ? "start" : element.alignment === "right" ? "end" : "middle";
       const x = element.alignment === "left" ? element.xMm : element.alignment === "right" ? element.xMm + element.widthMm : element.xMm + element.widthMm / 2;
       const y = element.yMm + (index + 0.82) * element.lineHeightMm;
-      return `<text x="${x.toFixed(3)}" y="${y.toFixed(3)}" text-anchor="${textAnchor}" font-family="${font}" font-size="${element.fontSizePt.toFixed(2)}pt" font-weight="${element.weight}" fill="${fill}">${escapeXml(line)}</text>`;
+      return `<text x="${x.toFixed(3)}" y="${y.toFixed(3)}" text-anchor="${textAnchor}" font-family="${font}" font-size="${element.fontSizePt.toFixed(2)}pt" font-weight="${element.weight}" letter-spacing="${element.letterSpacingMm.toFixed(3)}mm" fill="${fill}">${escapeXml(line)}</text>`;
     }).join("");
   }).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.coverGeometry.widthMm}mm" height="${layout.coverGeometry.heightMm}mm" viewBox="0 0 ${layout.coverGeometry.widthMm} ${layout.coverGeometry.heightMm}">${body}</svg>`;
@@ -41,21 +41,29 @@ function escapeXml(value: string) {
 
 async function drawTextElement(page: any, element: Extract<EmbossingLayoutElement, { type: "text" }>, font: any, pageHeightPt: number) {
   for (const [index, line] of element.lines.entries()) {
-    const width = font.widthOfTextAtSize(line, element.fontSizePt);
+    const width = font.widthOfTextAtSize(line, element.fontSizePt) + Math.max(0, Array.from(line).length - 1) * mm(element.letterSpacingMm);
     const xCenterPt = mm(element.xMm + element.widthMm / 2);
-    const x = element.alignment === "left"
+    let x = element.alignment === "left"
       ? mm(element.xMm)
       : element.alignment === "right"
         ? mm(element.xMm + element.widthMm) - width
         : xCenterPt - width / 2;
     const yFromTopMm = element.yMm + (index + 0.82) * element.lineHeightMm;
-    page.drawText(line, {
-      x,
-      y: pageHeightPt - mm(yFromTopMm),
-      size: element.fontSizePt,
-      font,
-      color: rgb(0, 0, 0)
-    });
+    const y = pageHeightPt - mm(yFromTopMm);
+    if (element.letterSpacingMm > 0) {
+      for (const char of Array.from(line)) {
+        page.drawText(char, { x, y, size: element.fontSizePt, font, color: rgb(0, 0, 0) });
+        x += font.widthOfTextAtSize(char, element.fontSizePt) + mm(element.letterSpacingMm);
+      }
+    } else {
+      page.drawText(line, {
+        x,
+        y,
+        size: element.fontSizePt,
+        font,
+        color: rgb(0, 0, 0)
+      });
+    }
   }
 }
 

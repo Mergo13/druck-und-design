@@ -1,5 +1,5 @@
 import { elementBounds, elementsOverlap, safeRect } from "./geometry";
-import { embossingFontStyles } from "./typography";
+import { embossingFontStyles, textWidthMm } from "./typography";
 import { defaultEmbossingProductionRules, type EmbossingProductionRules, type EmbossingResolvedLayout } from "./types";
 
 export type EmbossingPreflightCheck = {
@@ -39,11 +39,17 @@ export function validateEmbossingLayout(layout: EmbossingResolvedLayout, product
   });
 
   const textWidthsValid = !layout.warnings.some((warning) => /zu lang|sichere Prägung/i.test(warning));
+  const measuredTextInside = layout.elements
+    .filter((element) => element.type === "text")
+    .every((element) => element.lines.every((line) => {
+      const lineWidth = textWidthMm(line, element.fontSizePt, element.fontStyle, element.weight, element.letterSpacingMm);
+      return lineWidth <= element.widthMm + 0.01 && lineWidth <= safe.width * 0.92 + 0.01;
+    }));
   checks.push({
     code: "text-width",
     label: "Textbreiten gültig",
-    passed: textWidthsValid,
-    message: textWidthsValid ? undefined : "Ein Text ist zu lang für eine sichere Prägung."
+    passed: textWidthsValid && measuredTextInside,
+    message: textWidthsValid && measuredTextInside ? undefined : "Ein Text ist zu lang für eine sichere Prägung."
   });
 
   const noOverlap = layout.elements.every((element, index) => {
