@@ -4748,7 +4748,7 @@ function AdminMenu() {
   }, []);
 
   return (
-    <Box sx={{ width: 292, px: 1.25, py: 1.5, bgcolor: "#f8fafc", minHeight: "100%" }}>
+    <Box sx={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", overflowX: "hidden", px: 1, py: 1.5, bgcolor: "#f8fafc", minHeight: "100%" }}>
       <Box sx={{ px: 1.25, pb: 1.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 950, color: "#0f172a", lineHeight: 1.1 }}>DUD Studio</Typography>
         <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>Admin Navigation</Typography>
@@ -4801,7 +4801,17 @@ function AdminMenu() {
 }
 
 function AdminLayout(props: any) {
-  return <Layout {...props} menu={AdminMenu} />;
+  return (
+    <Layout
+      {...props}
+      menu={AdminMenu}
+      sx={{
+        "& .RaLayout-content": { minWidth: 0, overflowX: "auto" },
+        "& .RaLayout-contentWithSidebar": { minWidth: 0 },
+        "& .RaSidebar-drawerPaper": { overflowX: "hidden" }
+      }}
+    />
+  );
 }
 
 export function ReactAdminDashboard() {
