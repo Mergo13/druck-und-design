@@ -11,6 +11,7 @@
     "db:demo-catalog": "tsx scripts/reset-demo-catalog.ts",
     "catalog:export": "tsx scripts/catalog-transfer.ts export",
     "catalog:import": "tsx scripts/catalog-transfer.ts import",
+    "student-print-config:test": "tsx scripts/student-print-config.test.ts",
     "student-discount:test": "tsx scripts/student-discount.test.ts",
     "global-property-pricing:test": "tsx scripts/global-property-pricing.test.ts",
     "embossing:test": "tsx scripts/embossing.test.ts",

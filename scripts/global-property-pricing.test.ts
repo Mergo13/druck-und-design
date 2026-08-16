@@ -44,6 +44,7 @@ const product = {
 
 const resolved = resolveGlobalPropertyPricing(product, [paper]);
 assert.equal(calculateConfiguredProductPrice(resolved, 1, { "eigenschaft:Papier": "120g" }).total, 125);
+assert.equal(calculateConfiguredProductPrice(resolved, 3, { "eigenschaft:Papier": "120g" }).total, 375);
 
 const override = {
   ...product,
@@ -89,5 +90,40 @@ assert.equal(calculateConfiguredProductPrice(tieredResolved, 100, {
   "eigenschaft:Papier": "250g",
   "eigenschaft:Druckseiten": "Beidseitig"
 }).total, 126);
+
+const completeCopyProduct = {
+  ...product,
+  basePrice: 6.5,
+  pricingProperties: [
+    {
+      name: "Papier",
+      values: [{ value: "Standard", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 1.3 }]
+    },
+    {
+      name: "Bindung",
+      values: [{ value: "Hardcover", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 4 }]
+    },
+    {
+      name: "Prägung",
+      values: [{ value: "Gold", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 7 }]
+    }
+  ]
+} as ProductCatalogItem;
+const completeCopyPrice = calculateConfiguredProductPrice(completeCopyProduct, 3, {
+  "eigenschaft:Papier": "Standard",
+  "eigenschaft:Bindung": "Hardcover",
+  "eigenschaft:Prägung": "Gold"
+});
+assert.equal(completeCopyPrice.total, 56.4);
+
+const oneTimeFeeProduct = {
+  ...product,
+  basePrice: 10,
+  pricingProperties: [{
+    name: "Datenaufbereitung",
+    values: [{ value: "Einmalig", enabled: true, defaultSelected: true, pricingMode: "flat" as const, fixedPrice: 5 }]
+  }]
+} as ProductCatalogItem;
+assert.equal(calculateConfiguredProductPrice(oneTimeFeeProduct, 3, { "eigenschaft:Datenaufbereitung": "Einmalig" }).total, 35);
 
 console.log("global-property-pricing tests passed");

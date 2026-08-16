@@ -38,16 +38,28 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!rawProduct) notFound();
   const session = await getSessionUser();
   const authenticated = Boolean(session);
-  const [accountProfile, storeControl, globalProperties] = await Promise.all([
+  const [accountProfile, storeControl, globalProperties, approvedReviews] = await Promise.all([
     session?.email ? getUserByEmail(session.email).catch(() => null) : null,
     prisma.storeControlSetting.findUnique({ where: { id: "store-control" } }).catch(() => null),
-    getGlobalProperties().catch(() => [])
+    getGlobalProperties().catch(() => []),
+    prisma.review.findMany({
+      where: {
+        published: true,
+        productSlug: slug,
+        rating: { gt: 0 }
+      },
+      select: { rating: true }
+    }).catch(() => [])
   ]);
   const studentVerified = isVerifiedStudent(accountProfile);
   const studentDiscountPercent = getStudentDiscountPercent(storeControl?.studentDiscountPercent);
   const studentDiscountEligible = isStudentDiscountEligibleProduct(rawProduct);
   const pricedProduct = resolveGlobalPropertyPricing(rawProduct, globalProperties);
   const product = authenticated ? pricedProduct : withoutPrices(pricedProduct);
+  const reviewCount = approvedReviews.length;
+  const averageRating = reviewCount
+    ? approvedReviews.reduce((sum, review) => sum + Number(review.rating), 0) / reviewCount
+    : 0;
 
   const schema = {
     "@context": "https://schema.org",
@@ -56,6 +68,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     description: product.seo,
     image: product.heroImage,
     brand: { "@type": "Brand", name: "druck&design studio" },
+    ...(reviewCount > 0 ? {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: averageRating.toFixed(1),
+        reviewCount
+      }
+    } : {}),
     ...(authenticated ? { offers: { "@type": "Offer", priceCurrency: "EUR", price: product.basePrice, availability: "https://schema.org/InStock" } } : {})
   };
 
@@ -68,8 +87,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         <div className="grid gap-6">
           <div className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-7">
             <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-amber-600">
-              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-              {product.rating} Kundenbewertung
+              {reviewCount > 0 ? (
+                <>
+                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                  {averageRating.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} · {reviewCount} {reviewCount === 1 ? "Kundenbewertung" : "Kundenbewertungen"}
+                </>
+              ) : null}
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{formatProductDeliveryText(product.deliveryText)}</span>
               {authenticated && studentVerified && studentDiscountEligible ? (
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">✓ Studentenstatus verifiziert · {studentDiscountPercent} % Studentenrabatt</span>

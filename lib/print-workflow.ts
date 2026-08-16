@@ -53,7 +53,7 @@ export function calculateConfiguredProductPrice(
     ? money(area * Math.max(0, Number(product.basePrice) || 0) * qty)
     : product.pricingType === "tiered"
       ? money(baseUnitPrice * qty)
-      : product.basePrice;
+      : money(Math.max(0, Number(product.basePrice) || 0) * qty);
   if (product.pricingType === "area") {
     lines.push({ label: "Format", value: `${selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100} x ${selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100} cm (${area.toLocaleString("de-DE")} m²)`, price: 0 });
   }

@@ -12,6 +12,7 @@ import {
   STUDENT_PRINT_PRESETS,
   bindingLabel,
   calculateSheets,
+  deriveStudentProductionQuantities,
   estimateBlockThicknessMm,
   getAvailableBindings,
   parsePageRange,
@@ -34,6 +35,7 @@ type PricePayload = {
   unitPrice: number;
   total: number;
   config: Record<string, string>;
+  production: ReturnType<typeof deriveStudentProductionQuantities>;
   price: { total: number; lines: Array<{ label: string; value: string; price: number }> };
 };
 
@@ -91,6 +93,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
   const pageCount = analysis?.pages ?? 0;
   const sheets = calculateSheets(pageCount, selection.printSides);
   const color = resolveColorCounts(selection, analysis ?? undefined);
+  const production = deriveStudentProductionQuantities(selection, analysis ?? undefined);
   const bindings = getAvailableBindings({ pages: pageCount, sheets, format: selection.format, presetKey: selection.presetKey });
   const availableBindings = bindings.filter((binding) => binding.available);
   const blockThickness = estimateBlockThicknessMm(sheets, selection.paper);
@@ -334,12 +337,12 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                   <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">PDF OK</Badge>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <Metric label="Seiten" value={`${analysis.pages}`} />
+                  <Metric label="Seiten" value={`${analysis.pages}`} sub="pro Exemplar" />
                   <Metric label="Format" value={analysis.dominantFormat ?? "Sonderformat"} sub={analysis.widthMm && analysis.heightMm ? `${analysis.widthMm} x ${analysis.heightMm} mm` : undefined} />
                   <Metric label="Ausrichtung" value={analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : "Quadratisch"} />
-                  <Metric label="Farbseiten" value={`${analysis.colorPages.length}`} />
-                  <Metric label="SW-Seiten" value={`${analysis.bwPages.length}`} />
-                  <Metric label="Blätter" value={`${sheets}`} sub={selection.printSides === "duplex" ? "bei beidseitigem Druck" : "bei einseitigem Druck"} />
+                  <Metric label="Farbseiten" value={`${production.colorPagesPerCopy}`} sub={`${production.totalColorPages} gesamt`} />
+                  <Metric label="SW-Seiten" value={`${production.bwPagesPerCopy}`} sub={`${production.totalBwPages} gesamt`} />
+                  <Metric label="Blätter" value={`${production.sheetsPerCopy}`} sub={`${production.totalSheets} gesamt`} />
                 </div>
                 {analysis.warnings.length ? (
                   <div className="mt-4 space-y-2">
@@ -460,14 +463,16 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
               <div className="mt-4 space-y-2 text-sm text-slate-700">
                 <SummaryLine label="Produkt" value={activeProduct.name} />
                 <SummaryLine label="Format" value={selection.format} />
-                <SummaryLine label="PDF-Seiten" value={pageCount ? String(pageCount) : "-"} />
-                <SummaryLine label="Blätter" value={pageCount ? `${sheets} pro Exemplar` : "-"} />
-                <SummaryLine label="Farbe" value={`${color.colorCount} Farbe · ${color.bwCount} SW`} />
+                <SummaryLine label="Auflage" value={`${production.quantity} ${production.quantity === 1 ? "Exemplar" : "Exemplare"}`} />
+                <SummaryLine label="PDF-Seiten" value={pageCount ? `${production.pageCount} pro Exemplar` : "-"} />
+                <SummaryLine label="Druckseiten gesamt" value={pageCount ? String(production.totalPrintedPages) : "-"} />
+                <SummaryLine label="Blätter" value={pageCount ? `${production.sheetsPerCopy} pro Exemplar · ${production.totalSheets} gesamt` : "-"} />
+                <SummaryLine label="Farbe" value={`${production.colorPagesPerCopy} Farbe · ${production.bwPagesPerCopy} SW je Exemplar`} />
+                <SummaryLine label="Farbe gesamt" value={`${production.totalColorPages} Farbe · ${production.totalBwPages} SW`} />
                 <SummaryLine label="Druckseiten" value={selection.printSides === "duplex" ? "Beidseitig" : "Einseitig"} />
                 <SummaryLine label="Papier" value={paperLabel(selection.paper)} />
                 <SummaryLine label="Bindung" value={bindingLabel(selection.binding)} />
                 <SummaryLine label="Blockstärke" value={pageCount ? `ca. ${blockThickness} mm` : "-"} />
-                <SummaryLine label="Menge" value={`${selection.quantity} Exemplar(e)`} />
                 <SummaryLine label="Produktion" value={productionLabel(selection.production)} />
               </div>
               <div className="my-4 h-px bg-slate-200" />

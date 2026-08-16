@@ -5,6 +5,7 @@ import { calculateConfiguredProductPrice } from "@/lib/print-workflow";
 import {
   STUDENT_PRINT_PRESETS,
   calculateSheets,
+  deriveStudentProductionQuantities,
   productPriceConfig,
   resolveColorCounts,
   studentProductConfig,
@@ -76,6 +77,7 @@ export async function POST(request: Request) {
   const price = calculateConfiguredProductPrice(product, selection.quantity, productConfig);
   const color = resolveColorCounts(selection, analysis);
   const sheets = calculateSheets(analysis?.pages ?? 0, selection.printSides);
+  const production = deriveStudentProductionQuantities(selection, analysis);
   const productionConfig = studentProductConfig(selection, analysis);
 
   return NextResponse.json({
@@ -87,12 +89,13 @@ export async function POST(request: Request) {
     price,
     unitPrice: price.total,
     quantity: selection.quantity,
-    total: price.total * selection.quantity,
+    total: price.total,
     sheets,
+    production,
     color,
     config: {
       ...productionConfig,
-      "Server-Preis": `${price.quantity} x ${price.total.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}`,
+      "Server-Preis": `${production.quantity} ${production.quantity === 1 ? "Exemplar" : "Exemplare"}: ${price.total.toLocaleString("de-DE", { style: "currency", currency: "EUR" })}`,
       "Preis-Hinweis": "Preis wurde serverseitig aus dem bestehenden Produkt berechnet."
     }
   });

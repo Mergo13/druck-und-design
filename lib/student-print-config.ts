@@ -109,6 +109,29 @@ export function calculateSheets(pageCount: number, printSides: PrintSideMode) {
   return printSides === "duplex" ? Math.ceil(pages / 2) : pages;
 }
 
+function safeCopyQuantity(quantity: number) {
+  return Number.isFinite(quantity) ? Math.max(1, Math.round(quantity)) : 1;
+}
+
+export function deriveStudentProductionQuantities(selection: Pick<StudentPrintSelection, "quantity" | "printSides" | "colorMode" | "manualColorPages">, analysis?: PdfAnalysis) {
+  const pageCount = Math.max(0, Math.floor(analysis?.pages ?? 0));
+  const quantity = safeCopyQuantity(selection.quantity);
+  const sheetsPerCopy = calculateSheets(pageCount, selection.printSides);
+  const color = resolveColorCounts(selection as StudentPrintSelection, analysis);
+  return {
+    pageCount,
+    quantity,
+    printSides: selection.printSides,
+    sheetsPerCopy,
+    totalPrintedPages: pageCount * quantity,
+    totalSheets: sheetsPerCopy * quantity,
+    colorPagesPerCopy: color.colorCount,
+    bwPagesPerCopy: color.bwCount,
+    totalColorPages: color.colorCount * quantity,
+    totalBwPages: color.bwCount * quantity
+  };
+}
+
 export function orientationForSize(widthMm: number, heightMm: number): PdfOrientation {
   if (Math.abs(widthMm - heightMm) <= 1) return "square";
   return widthMm > heightMm ? "landscape" : "portrait";
@@ -211,18 +234,27 @@ export function estimateBlockThicknessMm(sheets: number, paper: StudentPaper) {
 }
 
 export function studentProductConfig(selection: StudentPrintSelection, analysis?: PdfAnalysis) {
-  const pages = analysis?.pages ?? 0;
+  const production = deriveStudentProductionQuantities(selection, analysis);
+  const pages = production.pageCount;
   const color = resolveColorCounts(selection, analysis);
-  const sheets = calculateSheets(pages, selection.printSides);
+  const sheets = production.sheetsPerCopy;
   return {
-    Menge: String(selection.quantity),
+    Menge: String(production.quantity),
+    Auflage: `${production.quantity} ${production.quantity === 1 ? "Exemplar" : "Exemplare"}`,
     Format: selection.format,
     "PDF-Seiten": pages ? String(pages) : "-",
+    "Seiten pro Exemplar": pages ? String(pages) : "-",
+    "Druckseiten gesamt": pages ? String(production.totalPrintedPages) : "-",
     "Blätter pro Exemplar": pages ? String(sheets) : "-",
+    "Blätter gesamt": pages ? String(production.totalSheets) : "-",
     Druckseiten: selection.printSides === "duplex" ? "Beidseitig" : "Einseitig",
     Druckfarbe: color.label,
-    Farbseiten: String(color.colorCount),
-    "SW-Seiten": String(color.bwCount),
+    "Farbseiten pro Exemplar": String(production.colorPagesPerCopy),
+    Farbseiten: String(production.colorPagesPerCopy),
+    "Farbseiten gesamt": String(production.totalColorPages),
+    "SW-Seiten pro Exemplar": String(production.bwPagesPerCopy),
+    "SW-Seiten": String(production.bwPagesPerCopy),
+    "SW-Seiten gesamt": String(production.totalBwPages),
     Papier: paperLabel(selection.paper),
     Bindung: bindingLabel(selection.binding),
     Produktion: productionLabel(selection.production),
