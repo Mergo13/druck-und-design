@@ -139,9 +139,9 @@ export default async function StudentenPage() {
       <section className="bg-slate-50 py-16">
         <div className="container-page grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
           <div>
-            <SectionHeading eyebrow="Konfigurator" title="Abschlussarbeit konfigurieren" description="Der Ablauf führt direkt in den bestehenden Produkt-Konfigurator mit Upload, Preisberechnung, Warenkorb und Checkout." />
+            <SectionHeading eyebrow="Konfigurator" title="Abschlussarbeit konfigurieren" description="PDF hochladen, Ausstattung wählen und den Preis direkt berechnen." />
             <div className="mt-7 grid gap-3 text-sm font-bold text-slate-700 sm:grid-cols-2">
-              {["PDF upload", "format", "pages", "color / black-white", "single/double-sided", "paper", "binding", "cover color", "optional gold/silver finishing", "copies", "production time", "pickup/shipping", "calculated price", "add to cart"].map((item) => (
+              {["PDF hochladen", "Format und Seiten prüfen", "Farbe oder Schwarz-Weiß", "Papier und Bindung wählen", "Cover und Prägung festlegen", "Preis berechnen und bestellen"].map((item) => (
                 <div key={item} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
                   <CheckCircle2 className="h-4 w-4 text-brand-blue" />
                   {item}
