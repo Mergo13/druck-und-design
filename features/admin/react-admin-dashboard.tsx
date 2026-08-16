@@ -47,6 +47,7 @@ import {
   useRedirect,
   useGetList,
   useNotify,
+  useRefresh,
   useRecordContext
 } from "react-admin";
 import { Route } from "react-router-dom";
@@ -75,6 +76,10 @@ const adminColors = {
 };
 
 const adminTheme = createTheme({
+  sidebar: {
+    width: 292,
+    closedWidth: 64
+  },
   palette: {
     mode: "light",
     primary: { main: adminColors.blue, dark: adminColors.blueDark, contrastText: "#ffffff" },
@@ -2497,9 +2502,121 @@ function IndustryCreate() {
   );
 }
 
+function PropertyCsvPanel() {
+  const notify = useNotify();
+  const refresh = useRefresh();
+  const [csvText, setCsvText] = useState(csvExamples.properties);
+  const [importing, setImporting] = useState(false);
+  const [result, setResult] = useState("");
+
+  function readCsvFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setCsvText(String(reader.result ?? ""));
+    reader.readAsText(file);
+    event.target.value = "";
+  }
+
+  async function exportPropertiesCsv() {
+    try {
+      const properties = await fetchJson<GlobalProperty[]>("/api/catalog/properties?scope=admin");
+      const blob = new Blob([globalPropertiesToCsv(properties)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "eigenschaften-staffelpreise.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "CSV Export fehlgeschlagen.", { type: "error" });
+    }
+  }
+
+  async function importPropertiesCsv() {
+    setImporting(true);
+    setResult("");
+    try {
+      const rows = parseCsvRows(csvText);
+      if (!rows.length) throw new Error("CSV enthält keine Datenzeilen.");
+      const payloads = csvPropertyPayloads(rows);
+      let imported = 0;
+      const skipped: string[] = [];
+
+      for (const [index, payload] of payloads.entries()) {
+        if (!payload.name?.trim()) {
+          skipped.push(`Datensatz ${index + 1}: Name fehlt`);
+          continue;
+        }
+        if (!payload.slug?.trim()) {
+          skipped.push(`Datensatz ${index + 1}: Slug fehlt`);
+          continue;
+        }
+        const response = await fetch("/api/catalog/properties", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({} as { message?: string }));
+          throw new Error(error.message || `Import fehlgeschlagen bei ${payload.slug}.`);
+        }
+        imported += 1;
+      }
+
+      const summary = `${imported} Eigenschaften importiert.${skipped.length ? ` Übersprungen: ${skipped.join("; ")}` : ""}`;
+      setResult(summary);
+      notify(summary, { type: skipped.length ? "warning" : "success" });
+      refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "CSV Import fehlgeschlagen.";
+      setResult(message);
+      notify(message, { type: "error" });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <Card variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
+      <CardContent sx={{ display: "grid", gap: 1.5 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>CSV Import fuer Eigenschaften</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Importiert komplette Eigenschaftswerte inklusive globaler Staffelpreise. Bestehende Slugs werden aktualisiert.
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button variant="outlined" component="label">
+              CSV Datei
+              <input hidden type="file" accept=".csv,text/csv" onChange={readCsvFile} />
+            </Button>
+            <Button variant="outlined" onClick={() => void exportPropertiesCsv()}>Export</Button>
+            <Button variant="contained" onClick={() => void importPropertiesCsv()} disabled={importing || !csvText.trim()}>
+              {importing ? "Importiert..." : "Import"}
+            </Button>
+          </Box>
+        </Box>
+        <MuiTextField
+          multiline
+          minRows={5}
+          label="CSV Inhalt"
+          value={csvText}
+          onChange={(event) => setCsvText(event.target.value)}
+          helperText="Spalten: slug,name,value,label,pricingMode,fixedPrice,from_quantity,to_quantity,unit_price,active,sortOrder"
+          fullWidth
+        />
+        {result ? <Alert severity={result.includes("fehlgeschlagen") ? "error" : "success"}>{result}</Alert> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function PropertyList() {
   return (
     <List sort={{ field: "sortOrder", order: "ASC" }}>
+      <PropertyCsvPanel />
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="slug" label="Slug" />
         <TextField source="name" label="Eigenschaft" />
@@ -4806,9 +4923,13 @@ function AdminLayout(props: any) {
       {...props}
       menu={AdminMenu}
       sx={{
-        "& .RaLayout-content": { minWidth: 0, overflowX: "auto" },
-        "& .RaLayout-contentWithSidebar": { minWidth: 0 },
-        "& .RaSidebar-drawerPaper": { overflowX: "hidden" }
+        minWidth: 0,
+        width: "100%",
+        "& .RaLayout-appFrame": { minWidth: 0 },
+        "& .RaLayout-contentWithSidebar": { minWidth: 0, width: "100%" },
+        "& .RaLayout-content": { minWidth: 0, maxWidth: "100%", overflowX: "auto" },
+        "& .RaSidebar-paper": { width: "292px !important", overflowX: "hidden" },
+        "& .RaSidebar-fixed": { width: "292px", overflowX: "hidden" }
       }}
     />
   );
@@ -4816,7 +4937,7 @@ function AdminLayout(props: any) {
 
 export function ReactAdminDashboard() {
   return (
-    <div className="mx-auto w-full max-w-[1600px] bg-[#f3f6fb] text-[#0a1020]">
+    <div className="w-full min-w-0 bg-[#f3f6fb] text-[#0a1020]">
     <Admin dataProvider={dataProvider} dashboard={AdminDashboardHome} title="DUD Studio Admin" theme={adminTheme} layout={AdminLayout}>
       <CustomRoutes>
         <Route path="/tools/maintenance" element={<MaintenanceToolPage />} />
