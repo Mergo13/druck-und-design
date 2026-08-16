@@ -250,6 +250,7 @@ function normalizeCatalogRecordForAdmin(record: AdminRecord): AdminRecord {
 
 const catalogApiUrl = "/api/catalog";
 const catalogResources = new Set(["products", "categories", "properties", "industries"]);
+const searchFilters = [<TextInput key="q" source="q" label="Suche" alwaysOn />];
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -778,7 +779,7 @@ function AdminDashboardHome() {
 
 function ProductList() {
   return (
-    <List sort={{ field: "category", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "category", order: "ASC" }}>
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="category" label="Gruppe" />
         <TextField source="slug" />
@@ -796,7 +797,7 @@ function ProductList() {
 
 function OrdersList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="id" label="Bestellung" />
         <TextField source="customer" label="Kunde" />
@@ -881,7 +882,7 @@ function OrderEmbossingDetails() {
 
 function InvoicesList() {
   return (
-    <List sort={{ field: "issuedAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "issuedAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="id" label="Rechnung" />
         <TextField source="customer" label="Kunde" />
@@ -923,7 +924,7 @@ function InvoiceCreate() {
 
 function QuotesList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="customer" label="Kunde" />
         <TextField source="email" label="E-Mail" />
@@ -964,7 +965,7 @@ function QuoteCreate() {
 
 function FileUploadsList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="name" label="Name" />
         <TextField source="email" label="E-Mail" />
@@ -1018,7 +1019,7 @@ function FileUploadEdit() {
 
 function CouponsList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="code" label="Code" />
         <TextField source="discountType" label="Art" />
@@ -1065,7 +1066,7 @@ function CouponCreate() {
 
 function ReviewsList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="customer" label="Kunde" />
         <NumberField source="rating" label="Bewertung" />
@@ -1097,7 +1098,7 @@ function ReviewEdit() {
 
 function NewsletterList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="email" label="E-Mail" />
         <BooleanField source="active" label="Aktiv" />
@@ -1128,7 +1129,7 @@ function NewsletterEdit() {
 
 function NewsletterCampaignList() {
   return (
-    <List sort={{ field: "createdAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
       <Datagrid rowClick="edit">
         <TextField source="subject" label="Betreff" />
         <TextField source="status" label="Status" />
@@ -1171,7 +1172,7 @@ function NewsletterCampaignCreate() {
 
 function StudentArticleList() {
   return (
-    <List sort={{ field: "sortOrder", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "sortOrder", order: "ASC" }}>
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="slug" label="Slug" />
         <TextField source="title" label="Titel" />
@@ -1256,7 +1257,7 @@ function StudentArticleCreate() {
 
 function StudentVerificationList() {
   return (
-    <List sort={{ field: "submittedAt", order: "DESC" }}>
+    <List filters={searchFilters} sort={{ field: "submittedAt", order: "DESC" }}>
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="email" label="E-Mail" />
         <TextField source="fullName" label="Name" />
@@ -1293,7 +1294,7 @@ function StudentVerificationEdit() {
 
 function ShippingList() {
   return (
-    <List sort={{ field: "price", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "price", order: "ASC" }}>
       <Datagrid rowClick="edit">
         <TextField source="name" label="Versandart" />
         <NumberField source="price" label="Preis" options={{ style: "currency", currency: "EUR" }} />
@@ -2266,7 +2267,7 @@ function ProductCreate() {
 
 function IndustryList() {
   return (
-    <List sort={{ field: "sortOrder", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "sortOrder", order: "ASC" }}>
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="slug" label="Slug" />
         <TextField source="name" label="Branche" />
@@ -2660,7 +2661,7 @@ function PropertyCsvPanel() {
 
 function PropertyList() {
   return (
-    <List sort={{ field: "sortOrder", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "sortOrder", order: "ASC" }}>
       <PropertyCsvPanel />
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="slug" label="Slug" />
@@ -2861,7 +2862,7 @@ function ProductCategoryPropertiesControl() {
 
 function CategoryList() {
   return (
-    <List sort={{ field: "name", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "name", order: "ASC" }}>
       <Datagrid rowClick="edit" bulkActionButtons={false}>
         <TextField source="slug" />
         <TextField source="name" />

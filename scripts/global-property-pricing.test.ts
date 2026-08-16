@@ -126,4 +126,28 @@ const oneTimeFeeProduct = {
 } as ProductCatalogItem;
 assert.equal(calculateConfiguredProductPrice(oneTimeFeeProduct, 3, { "eigenschaft:Datenaufbereitung": "Einmalig" }).total, 35);
 
+const pagePricedStudentProduct = {
+  ...product,
+  basePrice: 0.25,
+  pricingProperties: [
+    {
+      name: "Bindung",
+      values: [{ value: "Hardcover", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 4 }]
+    },
+    {
+      name: "Prägung",
+      values: [{ value: "Gold", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 19 }]
+    }
+  ]
+} as ProductCatalogItem;
+const pagePricedStudentPrice = calculateConfiguredProductPrice(pagePricedStudentProduct, 3, {
+  "eigenschaft:Bindung": "Hardcover",
+  "eigenschaft:Prägung": "Gold"
+}, {
+  baseQuantity: 78,
+  propertyQuantity: 3
+});
+assert.equal(pagePricedStudentPrice.basePrice, 19.5);
+assert.equal(pagePricedStudentPrice.total, 88.5);
+
 console.log("global-property-pricing tests passed");

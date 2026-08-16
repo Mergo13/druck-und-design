@@ -41,19 +41,25 @@ function areaM2(product: ProductCatalogItem, selectedOptions: Record<string, str
 export function calculateConfiguredProductPrice(
   product: ProductCatalogItem,
   quantity: number,
-  selectedOptions: Record<string, string>
+  selectedOptions: Record<string, string>,
+  pricingQuantities?: {
+    baseQuantity?: number;
+    propertyQuantity?: number;
+  }
 ) {
   const qty = safeQuantity(quantity);
+  const baseQty = safeQuantity(pricingQuantities?.baseQuantity ?? qty);
+  const propertyQty = safeQuantity(pricingQuantities?.propertyQuantity ?? qty);
   const lines: Array<{ label: string; value: string; price: number }> = [];
   const area = product.pricingType === "area" ? areaM2(product, selectedOptions) : 0;
   const baseUnitPrice = product.pricingType === "tiered"
-    ? calculateTierPrice(qty, product.priceTiers).unitPrice
+    ? calculateTierPrice(baseQty, product.priceTiers).unitPrice
     : 0;
   const base = product.pricingType === "area"
-    ? money(area * Math.max(0, Number(product.basePrice) || 0) * qty)
+    ? money(area * Math.max(0, Number(product.basePrice) || 0) * baseQty)
     : product.pricingType === "tiered"
-      ? money(baseUnitPrice * qty)
-      : money(Math.max(0, Number(product.basePrice) || 0) * qty);
+      ? money(baseUnitPrice * baseQty)
+      : money(Math.max(0, Number(product.basePrice) || 0) * baseQty);
   if (product.pricingType === "area") {
     lines.push({ label: "Format", value: `${selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100} x ${selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100} cm (${area.toLocaleString("de-DE")} m²)`, price: 0 });
   }
@@ -66,18 +72,18 @@ export function calculateConfiguredProductPrice(
     if (!match) return sum;
     const propertyStepUnitPrice = Math.max(0, Number(property.stepPrice) || 0);
     const valueUnitPrice = match.pricingMode === "tiered"
-      ? calculateTierPrice(qty, match.tierPrices).unitPrice
+      ? calculateTierPrice(propertyQty, match.tierPrices).unitPrice
       : 0;
     const valuePrice = match.pricingMode === "fixed"
-      ? money(Math.max(0, Number(match.fixedPrice) || 0) * qty)
+      ? money(Math.max(0, Number(match.fixedPrice) || 0) * propertyQty)
       : match.pricingMode === "flat"
         ? Math.max(0, Number(match.fixedPrice) || 0)
       : match.pricingMode === "multiplier"
         ? money(base * Math.max(0, Number(match.multiplier ?? 1) || 1) - base)
       : match.pricingMode === "tiered"
-        ? money(valueUnitPrice * qty)
+        ? money(valueUnitPrice * propertyQty)
         : 0;
-    const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * qty;
+    const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * propertyQty;
     const price = money(propertyStepPrice + valuePrice);
     lines.push({ label: property.name, value: match.labelOverride || match.label || match.value, price });
     return sum + price;
@@ -85,6 +91,8 @@ export function calculateConfiguredProductPrice(
 
   return {
     quantity: qty,
+    baseQuantity: baseQty,
+    propertyQuantity: propertyQty,
     basePrice: money(base),
     lines,
     total: money(base + surcharge)

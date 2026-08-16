@@ -61,7 +61,22 @@ assert.equal(deriveStudentProductionQuantities({
   quantity: 3,
   printSides: "duplex",
   colorMode: "bw",
-  manualColorPages: []
+  manualColorPages: [],
+  manualPageCount: 26
+}).totalPrintedPages, 78);
+assert.equal(deriveStudentProductionQuantities({
+  quantity: 3,
+  printSides: "duplex",
+  colorMode: "bw",
+  manualColorPages: [],
+  manualPageCount: 26
+}).totalSheets, 39);
+assert.equal(deriveStudentProductionQuantities({
+  quantity: 3,
+  printSides: "duplex",
+  colorMode: "bw",
+  manualColorPages: [],
+  manualPageCount: 26
 }, { ...baseAnalysis, pages: 27, colorPages: [], bwPages: Array.from({ length: 27 }, (_, index) => index + 1) }).sheetsPerCopy, 14);
 assert.equal(deriveStudentProductionQuantities({
   quantity: 3,

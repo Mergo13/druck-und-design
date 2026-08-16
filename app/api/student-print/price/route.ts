@@ -17,6 +17,7 @@ const selectionSchema = z.object({
   presetKey: z.string().min(1),
   productSlug: z.string().min(1),
   format: z.string().min(1),
+  manualPageCount: z.number().int().min(1).max(10000).optional(),
   colorMode: z.enum(["auto", "bw", "color", "manual"]),
   manualColorPages: z.array(z.number().int().min(1)).default([]),
   printSides: z.enum(["simplex", "duplex"]),
@@ -73,11 +74,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "Produkt ist aktuell nicht online bestellbar." }, { status: 400 });
   }
 
-  const productConfig = productPriceConfig(product, selection);
-  const price = calculateConfiguredProductPrice(product, selection.quantity, productConfig);
-  const color = resolveColorCounts(selection, analysis);
-  const sheets = calculateSheets(analysis?.pages ?? 0, selection.printSides);
   const production = deriveStudentProductionQuantities(selection, analysis);
+  if (production.pageCount <= 0) {
+    return NextResponse.json({ message: "Bitte Seitenanzahl eingeben oder PDF hochladen." }, { status: 400 });
+  }
+
+  const productConfig = productPriceConfig(product, selection);
+  const price = calculateConfiguredProductPrice(product, selection.quantity, productConfig, {
+    baseQuantity: production.totalPrintedPages,
+    propertyQuantity: production.quantity
+  });
+  const color = resolveColorCounts(selection, analysis);
+  const sheets = calculateSheets(production.pageCount, selection.printSides);
   const productionConfig = studentProductConfig(selection, analysis);
 
   return NextResponse.json({

@@ -52,6 +52,7 @@ function selectionForPreset(preset: StudentPrintPreset): StudentPrintSelection {
     presetKey: preset.key,
     productSlug: preset.productSlug,
     format: preset.defaults.format,
+    manualPageCount: undefined,
     colorMode: preset.defaults.colorMode,
     manualColorPages: [],
     printSides: preset.defaults.printSides,
@@ -90,10 +91,10 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
   const [dragging, setDragging] = useState(false);
   const [price, setPrice] = useState<PricePayload | null>(null);
   const [pricing, setPricing] = useState(false);
-  const pageCount = analysis?.pages ?? 0;
-  const sheets = calculateSheets(pageCount, selection.printSides);
-  const color = resolveColorCounts(selection, analysis ?? undefined);
   const production = deriveStudentProductionQuantities(selection, analysis ?? undefined);
+  const pageCount = production.pageCount;
+  const sheets = production.sheetsPerCopy;
+  const color = resolveColorCounts(selection, analysis ?? undefined);
   const bindings = getAvailableBindings({ pages: pageCount, sheets, format: selection.format, presetKey: selection.presetKey });
   const availableBindings = bindings.filter((binding) => binding.available);
   const blockThickness = estimateBlockThicknessMm(sheets, selection.paper);
@@ -108,7 +109,8 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
     if (!activePreset) return;
     setSelection((current) => ({
       ...selectionForPreset(activePreset),
-      quantity: current.quantity || 1
+      quantity: current.quantity || 1,
+      manualPageCount: current.manualPageCount
     }));
   }, [activePresetId]);
 
@@ -126,12 +128,17 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
       paper,
       binding,
       colorMode: activePreset.defaults.colorMode,
-      printSides: activePreset.defaults.printSides
+      printSides: activePreset.defaults.printSides,
+      manualPageCount: undefined
     }));
   }, [analysis, activePresetId]);
 
   useEffect(() => {
-    if (!analysis || !activeProduct) return;
+    if (!activeProduct || pageCount <= 0) {
+      setPrice(null);
+      setPricing(false);
+      return;
+    }
     let cancelled = false;
     setPricing(true);
     void fetch("/api/student-print/price", {
@@ -156,7 +163,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
     return () => {
       cancelled = true;
     };
-  }, [analysis, activeProduct, selection]);
+  }, [analysis, activeProduct, pageCount, selection]);
 
   function choosePreset(preset: StudentPrintPreset) {
     setAudience(preset.audience);
@@ -185,6 +192,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
       setUploadState("analyzing");
       const browser = await analyzePdfInBrowser(file, serverAnalysis);
       setAnalysis(browser.analysis);
+      setSelection((current) => ({ ...current, manualPageCount: undefined }));
       setThumbnails(browser.thumbnails);
       setUploadState("done");
     } catch (error) {
@@ -220,13 +228,19 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
     setSelection((current) => ({ ...current, manualColorPages: parsed.error ? current.manualColorPages : parsed.pages }));
   }
 
+  function updateManualPageCount(value: string) {
+    const pageValue = value === "" ? undefined : Math.max(1, Math.floor(Number(value) || 0));
+    setSelection((current) => ({ ...current, manualPageCount: pageValue }));
+    if (value !== "") setMessage("");
+  }
+
   function addToCart() {
-    if (!analysis || !activeProduct || !price) {
-      setMessage("Bitte lade zuerst eine PDF hoch und warte auf die Preisberechnung.");
+    if (!activeProduct || !price || pageCount <= 0) {
+      setMessage("Bitte gib eine Seitenanzahl ein oder lade eine PDF hoch und warte auf die Preisberechnung.");
       return;
     }
     const config = {
-      ...studentProductConfig(selection, analysis),
+      ...studentProductConfig(selection, analysis ?? undefined),
       ...price.config,
       Produktpfad: `/produkt/${activeProduct.slug}`
     };
@@ -242,8 +256,8 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
       unitPrice: price.unitPrice,
       printCheckRequested: false,
       printCheckFee: 0,
-      printCheckFileName: analysis.fileName,
-      printCheckFileUrl: analysis.fileUrl,
+      printCheckFileName: analysis?.fileName,
+      printCheckFileUrl: analysis?.fileUrl,
       studentPrint: { selection, analysis },
       config
     });
@@ -327,6 +341,27 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
               </div>
             ) : null}
 
+            {!analysis ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">Ohne PDF starten</p>
+                <h3 className="mt-1 text-xl font-black text-brand-ink">Seitenanzahl manuell eingeben</h3>
+                <p className="mt-2 text-sm text-slate-600">Für eine schnelle Preisberechnung kannst du die Seiten pro Exemplar selbst eintragen. Nach einem PDF-Upload wird die Seitenanzahl automatisch aus der Datei übernommen.</p>
+                <div className="mt-4 max-w-xs">
+                  <Control label="Seiten pro Exemplar">
+                    <input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      value={selection.manualPageCount ?? ""}
+                      onChange={(event) => updateManualPageCount(event.target.value)}
+                      placeholder="z.B. 26"
+                      className="h-11 rounded-md border bg-white px-3 text-sm font-semibold"
+                    />
+                  </Control>
+                </div>
+              </div>
+            ) : null}
+
             {analysis ? (
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -380,16 +415,28 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
               </div>
             ) : null}
 
-            {analysis ? (
+            {pageCount > 0 ? (
               <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">Druck konfigurieren</p>
-                    <h3 className="text-2xl font-black text-brand-ink">Automatische Empfehlung</h3>
+                    <h3 className="text-2xl font-black text-brand-ink">{analysis ? "Automatische Empfehlung" : "Konfiguration"}</h3>
                   </div>
-                  <Button type="button" onClick={applyAutomaticConfiguration}>Druck automatisch konfigurieren</Button>
+                  {analysis ? <Button type="button" onClick={applyAutomaticConfiguration}>Druck automatisch konfigurieren</Button> : null}
                 </div>
                 <div className="mt-5 grid gap-5 md:grid-cols-2">
+                  <Control label="Seiten pro Exemplar">
+                    <input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      value={pageCount}
+                      disabled={Boolean(analysis)}
+                      onChange={(event) => updateManualPageCount(event.target.value)}
+                      className="h-11 rounded-md border bg-white px-3 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">{analysis ? "Wird automatisch aus der PDF gelesen." : "Diese Zahl wird für Druckseiten, Papier und Preisstaffeln verwendet."}</p>
+                  </Control>
                   <Control label="Format">
                     <select value={selection.format} onChange={(event) => setSelection({ ...selection, format: event.target.value })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
                       {activePreset.supportedFormats.map((format) => <option key={format} value={format}>{format}</option>)}
@@ -405,7 +452,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                     <select value={selection.paper} onChange={(event) => setSelection({ ...selection, paper: event.target.value as any })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
                       {(["80g-weiss", "100g-weiss", "120g-weiss", "170g-bilderdruck"] as const).map((paper) => <option key={paper} value={paper}>{paperLabel(paper)}</option>)}
                     </select>
-                    <p className="mt-1 text-xs text-slate-500">Empfohlen: {paperLabel(recommendPaper(selection.presetKey, analysis.pages))}</p>
+                    <p className="mt-1 text-xs text-slate-500">Empfohlen: {paperLabel(recommendPaper(selection.presetKey, pageCount))}</p>
                   </Control>
                   <Control label="Menge">
                     <input type="number" min={1} value={selection.quantity} onChange={(event) => setSelection({ ...selection, quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold" />
@@ -421,7 +468,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                     <select value={selection.binding} onChange={(event) => setSelection({ ...selection, binding: event.target.value as any })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
                       {bindings.map((binding) => <option key={binding.value} value={binding.value} disabled={!binding.available}>{binding.label}{binding.available ? "" : ` - ${binding.reason}`}</option>)}
                     </select>
-                    <p className="mt-1 text-xs text-slate-500">Empfohlen: {bindingLabel(recommendBinding({ presetKey: selection.presetKey, pages: analysis.pages, sheets, format: selection.format }))}</p>
+                    <p className="mt-1 text-xs text-slate-500">Empfohlen: {bindingLabel(recommendBinding({ presetKey: selection.presetKey, pages: pageCount, sheets, format: selection.format }))}</p>
                   </Control>
                 </div>
 
@@ -432,7 +479,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                       <label key={mode} className={selection.colorMode === mode ? "rounded-md border border-brand-blue bg-white p-3 ring-2 ring-brand-blue/10" : "rounded-md border border-slate-200 bg-white p-3"}>
                         <input type="radio" className="mr-2 accent-brand-blue" checked={selection.colorMode === mode} onChange={() => setSelection({ ...selection, colorMode: mode })} />
                         <span className="text-sm font-bold">{colorModeLabel(mode)}</span>
-                        {mode === "auto" ? <span className="ml-2 text-xs text-slate-500">{analysis.colorPages.length} Farbseiten · {analysis.bwPages.length} SW-Seiten</span> : null}
+                        {mode === "auto" ? <span className="ml-2 text-xs text-slate-500">{production.colorPagesPerCopy} Farbseiten · {production.bwPagesPerCopy} SW-Seiten</span> : null}
                       </label>
                     ))}
                   </div>
@@ -481,7 +528,7 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                 <span className="text-2xl font-black text-brand-ink">{pricing ? "..." : price ? formatEuro(price.unitPrice) : "-"}</span>
               </div>
               <p className="mt-2 text-xs leading-5 text-slate-500">Der Preis wird serverseitig aus dem bestehenden Produkt berechnet. Versand, Gutschein und Zahlungsdetails kommen im bestehenden Checkout dazu.</p>
-              <Button type="button" className="mt-5 w-full" disabled={!analysis || !price || Boolean(manualError)} onClick={addToCart}>
+              <Button type="button" className="mt-5 w-full" disabled={pageCount <= 0 || !price || Boolean(manualError)} onClick={addToCart}>
                 In den Warenkorb <ArrowRight className="h-4 w-4" />
               </Button>
               <Button asChild variant="outline" className="mt-2 w-full">

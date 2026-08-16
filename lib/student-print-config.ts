@@ -57,6 +57,7 @@ export type StudentPrintSelection = {
   presetKey: StudentPrintPresetKey;
   productSlug: string;
   format: string;
+  manualPageCount?: number;
   colorMode: StudentColorMode;
   manualColorPages: number[];
   printSides: PrintSideMode;
@@ -113,8 +114,13 @@ function safeCopyQuantity(quantity: number) {
   return Number.isFinite(quantity) ? Math.max(1, Math.round(quantity)) : 1;
 }
 
-export function deriveStudentProductionQuantities(selection: Pick<StudentPrintSelection, "quantity" | "printSides" | "colorMode" | "manualColorPages">, analysis?: PdfAnalysis) {
-  const pageCount = Math.max(0, Math.floor(analysis?.pages ?? 0));
+export function resolveStudentPageCount(selection: Pick<StudentPrintSelection, "manualPageCount">, analysis?: PdfAnalysis) {
+  const source = analysis?.pages ?? selection.manualPageCount ?? 0;
+  return Number.isFinite(source) ? Math.max(0, Math.floor(source)) : 0;
+}
+
+export function deriveStudentProductionQuantities(selection: Pick<StudentPrintSelection, "quantity" | "printSides" | "colorMode" | "manualColorPages" | "manualPageCount">, analysis?: PdfAnalysis) {
+  const pageCount = resolveStudentPageCount(selection, analysis);
   const quantity = safeCopyQuantity(selection.quantity);
   const sheetsPerCopy = calculateSheets(pageCount, selection.printSides);
   const color = resolveColorCounts(selection as StudentPrintSelection, analysis);
@@ -264,7 +270,7 @@ export function studentProductConfig(selection: StudentPrintSelection, analysis?
 }
 
 export function resolveColorCounts(selection: StudentPrintSelection, analysis?: PdfAnalysis) {
-  const pages = analysis?.pages ?? 0;
+  const pages = resolveStudentPageCount(selection, analysis);
   if (selection.colorMode === "bw") return { colorCount: 0, bwCount: pages, colorPages: [], label: "Alles Schwarz-Weiß" };
   if (selection.colorMode === "color") return { colorCount: pages, bwCount: 0, colorPages: Array.from({ length: pages }, (_, index) => index + 1), label: "Alles Farbe" };
   if (selection.colorMode === "manual") {

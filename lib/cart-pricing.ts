@@ -70,6 +70,24 @@ function configuredQuantity(selectedOptions: Record<string, string>) {
   return safeLineQuantity(selectedOptions.auflage ?? 1);
 }
 
+function numericConfigValue(selectedOptions: Record<string, string>, keys: string[]) {
+  for (const key of keys) {
+    const raw = selectedOptions[key];
+    if (!raw) continue;
+    const value = Number(String(raw).replace(",", ".").match(/\d+(\.\d+)?/)?.[0] ?? NaN);
+    if (Number.isFinite(value) && value > 0) return Math.floor(value);
+  }
+  return 0;
+}
+
+function configuredPricingQuantities(selectedOptions: Record<string, string>) {
+  const propertyQuantity = configuredQuantity(selectedOptions);
+  const pageCount = numericConfigValue(selectedOptions, ["Seiten pro Exemplar", "PDF-Seiten", "Seitenanzahl", "manualPageCount"]);
+  return pageCount > 0
+    ? { baseQuantity: pageCount * propertyQuantity, propertyQuantity }
+    : undefined;
+}
+
 function enabledCategoryProperties(product: ProductCatalogItem, categoryProperties: ProductCategoryProperty[]) {
   if (product.pricingProperties?.length) return [];
   const enabled = new Set(product.enabledCategoryProperties ?? []);
@@ -79,7 +97,7 @@ function enabledCategoryProperties(product: ProductCatalogItem, categoryProperti
 
 function calculateProductUnitPrice(product: ProductCatalogItem, quantity: number, selectedOptions: Record<string, string>, categoryProperties: ProductCategoryProperty[]) {
   if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-    return calculateConfiguredProductPrice(product, quantity, selectedOptions).total;
+    return calculateConfiguredProductPrice(product, quantity, selectedOptions, configuredPricingQuantities(selectedOptions)).total;
   }
   const firstVariant = product.variants[0];
   const productPrice = firstVariant
