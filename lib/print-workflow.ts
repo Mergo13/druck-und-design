@@ -46,10 +46,13 @@ export function calculateConfiguredProductPrice(
   const qty = safeQuantity(quantity);
   const lines: Array<{ label: string; value: string; price: number }> = [];
   const area = product.pricingType === "area" ? areaM2(product, selectedOptions) : 0;
+  const baseUnitPrice = product.pricingType === "tiered"
+    ? calculateTierPrice(qty, product.priceTiers).unitPrice
+    : 0;
   const base = product.pricingType === "area"
     ? money(area * Math.max(0, Number(product.basePrice) || 0) * qty)
     : product.pricingType === "tiered"
-      ? calculateTierPrice(qty, product.priceTiers).totalPrice
+      ? money(baseUnitPrice * qty)
       : product.basePrice;
   if (product.pricingType === "area") {
     lines.push({ label: "Format", value: `${selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100} x ${selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100} cm (${area.toLocaleString("de-DE")} m²)`, price: 0 });
@@ -61,12 +64,20 @@ export function calculateConfiguredProductPrice(
     const selectedValue = selected || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
     const match = enabledValues.find((value) => value.value === selectedValue);
     if (!match) return sum;
-    const propertyStepPrice = Math.max(0, Number(property.stepPrice) || 0) * qty;
+    const propertyStepUnitPrice = Math.max(0, Number(property.stepPrice) || 0);
+    const valueUnitPrice = match.pricingMode === "tiered"
+      ? calculateTierPrice(qty, match.tierPrices).unitPrice
+      : 0;
     const valuePrice = match.pricingMode === "fixed"
-      ? Math.max(0, Number(match.fixedPrice) || 0)
+      ? money(Math.max(0, Number(match.fixedPrice) || 0) * qty)
+      : match.pricingMode === "flat"
+        ? Math.max(0, Number(match.fixedPrice) || 0)
+      : match.pricingMode === "multiplier"
+        ? money(base * Math.max(0, Number(match.multiplier ?? 1) || 1) - base)
       : match.pricingMode === "tiered"
-        ? calculateTierPrice(qty, match.tierPrices).totalPrice
+        ? money(valueUnitPrice * qty)
         : 0;
+    const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * qty;
     const price = money(propertyStepPrice + valuePrice);
     lines.push({ label: property.name, value: match.labelOverride || match.label || match.value, price });
     return sum + price;
@@ -153,7 +164,8 @@ export function validateProductPricing(product: ProductCatalogItem) {
       if (!valueName) errors.push(`Ein Wert in ${propertyName || "Eigenschaft"} ist leer.`);
       if (values.has(valueName.toLowerCase())) errors.push(`Der Wert ${valueName} ist in ${propertyName} doppelt.`);
       values.add(valueName.toLowerCase());
-      if (value.pricingMode === "fixed" && Number(value.fixedPrice ?? 0) < 0) errors.push(`Der fixe Aufpreis für ${valueName} darf nicht negativ sein.`);
+      if ((value.pricingMode === "fixed" || value.pricingMode === "flat") && Number(value.fixedPrice ?? 0) < 0) errors.push(`Der Aufpreis für ${valueName} darf nicht negativ sein.`);
+      if (value.pricingMode === "multiplier" && Number(value.multiplier ?? 1) < 0) errors.push(`Der Multiplikator für ${valueName} darf nicht negativ sein.`);
       if (value.pricingMode === "tiered") {
         const surchargeQuantities = new Set((value.tierPrices ?? []).map((tier) => Number(tier.fromQuantity ?? tier.quantity)));
         for (const quantity of tierQuantities) {

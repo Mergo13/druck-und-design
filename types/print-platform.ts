@@ -68,7 +68,7 @@ export type ProductPriceTier = {
   unitPrice?: number;
 };
 
-export type ProductPropertyPriceMode = "included" | "fixed" | "tiered";
+export type ProductPropertyPriceMode = "global" | "included" | "fixed" | "tiered" | "flat" | "multiplier";
 
 export type ProductPropertyTierPrice = {
   quantity: number;
@@ -88,6 +88,7 @@ export type ProductPropertyValue = {
   sortOrder?: number;
   pricingMode: ProductPropertyPriceMode;
   fixedPrice?: number;
+  multiplier?: number;
   tierPrices?: ProductPropertyTierPrice[];
 };
 
@@ -106,6 +107,10 @@ export type GlobalPropertyValue = {
   label?: string;
   sortOrder: number;
   active: boolean;
+  pricingMode?: Exclude<ProductPropertyPriceMode, "global">;
+  fixedPrice?: number;
+  multiplier?: number;
+  tierPrices?: ProductPropertyTierPrice[];
 };
 
 export type GlobalProperty = {

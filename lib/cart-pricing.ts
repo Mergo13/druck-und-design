@@ -1,5 +1,6 @@
-import { getCategories, getPublicProductBySlug } from "@/lib/catalog-repository";
+import { getCategories, getGlobalProperties, getPublicProductBySlug } from "@/lib/catalog-repository";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { applyStudentDiscount, getStudentDiscountPercent, isVerifiedStudent } from "@/lib/student-discount";
 import type { UserAccount } from "@/types";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
@@ -83,15 +84,16 @@ export async function priceCartItems(params: {
   user?: Pick<UserAccount, "studentVerification"> | null;
   studentDiscountPercent?: number | null;
 }) {
-  const categories = await getCategories();
+  const [categories, globalProperties] = await Promise.all([getCategories(), getGlobalProperties()]);
   const categoriesBySlug = new Map(categories.map((category) => [category.slug, category]));
   const percent = getStudentDiscountPercent(params.studentDiscountPercent);
   const verified = isVerifiedStudent(params.user);
   const pricedItems: PricedCartItem[] = [];
 
   for (const item of params.items) {
-    const product = await getPublicProductBySlug(item.slug);
-    if (!product) throw new Error(`Produkt ${item.slug} ist nicht verfügbar.`);
+    const rawProduct = await getPublicProductBySlug(item.slug);
+    if (!rawProduct) throw new Error(`Produkt ${item.slug} ist nicht verfügbar.`);
+    const product = resolveGlobalPropertyPricing(rawProduct, globalProperties);
     const pricingConfig = selectedOptionsFromItem(item);
     const productQuantity = configuredQuantity(pricingConfig);
     const lineQuantity = safeLineQuantity(item.quantity);

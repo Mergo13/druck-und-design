@@ -38,6 +38,7 @@ import {
 import { Route } from "react-router-dom";
 import { useFormContext, useWatch } from "react-hook-form";
 import { calculateConfiguredProductPrice, calculateTierPrice, validateProductPricing } from "@/lib/print-workflow";
+import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import type { GlobalProperty, HomepageSettings, ProductCatalogItem, ProductIndustry, ProductPriceTier, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
 type AdminRecord = RaRecord & {
@@ -478,6 +479,100 @@ function csvPriceTiers(value: string | undefined, basePrice: number): ProductPri
     return { quantity: fromQuantity, fromQuantity, toQuantity, unitPrice, price: Math.round(unitPrice * fromQuantity * 100) / 100 };
   }).filter((tier) => tier.quantity > 0 && (tier.unitPrice ?? 0) >= 0);
   return rows.length ? rows : [{ quantity: 1, price: basePrice }];
+}
+
+function csvOptionalNumber(value: string | undefined) {
+  if (!value) return undefined;
+  const number = Number(String(value).replace(",", "."));
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function csvPropertyPayloads(rows: Record<string, string>[]) {
+  const grouped = new Map<string, GlobalProperty>();
+  rows.forEach((row, rowIndex) => {
+    const name = csvCell(row, "name", "Name", "Eigenschaft", "property") || csvCell(row, "slug");
+    const slug = csvCell(row, "slug") || csvSlug(name);
+    const property = grouped.get(slug) ?? { slug, name: name || `Eigenschaft ${rowIndex + 1}`, active: csvBool(csvCell(row, "active", "aktiv"), true), sortOrder: csvNumber(csvCell(row, "sortOrder", "reihenfolge"), 0), values: [] };
+    const explicitValue = csvCell(row, "value", "wert", "propertyValue", "property_value");
+    const values = explicitValue ? [explicitValue] : csvList(csvCell(row, "values", "werte"));
+    for (const value of values) {
+      const valueId = csvSlug(`${slug}-${value}`);
+      let entry = property.values.find((item) => item.id === valueId || item.value.toLowerCase() === value.toLowerCase());
+      if (!entry) {
+        entry = {
+          id: valueId,
+          value,
+          label: csvCell(row, "label", "Label") || undefined,
+          sortOrder: property.values.length,
+          active: csvBool(csvCell(row, "valueActive", "active", "aktiv"), true),
+          pricingMode: (csvCell(row, "pricingMode", "preisart") || "included") as GlobalProperty["values"][number]["pricingMode"],
+          fixedPrice: csvNumber(csvCell(row, "fixedPrice", "aufpreis", "festpreis"), 0),
+          multiplier: csvNumber(csvCell(row, "multiplier", "multiplikator"), 1),
+          tierPrices: []
+        };
+        property.values.push(entry);
+      }
+      const fromQuantity = csvOptionalNumber(csvCell(row, "from_quantity", "fromQuantity", "von"));
+      const unitPrice = csvOptionalNumber(csvCell(row, "unit_price", "unitPrice", "stkpreis"));
+      if (fromQuantity && unitPrice !== undefined) {
+        entry.pricingMode = "tiered";
+        entry.tierPrices = [
+          ...(entry.tierPrices ?? []),
+          {
+            quantity: fromQuantity,
+            fromQuantity,
+            toQuantity: csvOptionalNumber(csvCell(row, "to_quantity", "toQuantity", "bis")),
+            price: unitPrice,
+            unitPrice
+          }
+        ];
+      }
+    }
+    grouped.set(slug, property);
+  });
+  return Array.from(grouped.values());
+}
+
+function csvEscape(value: unknown) {
+  const text = String(value ?? "");
+  return /[",;\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function globalPropertiesToCsv(properties: GlobalProperty[]) {
+  const header = ["slug", "name", "value", "label", "pricingMode", "fixedPrice", "multiplier", "from_quantity", "to_quantity", "unit_price", "active", "sortOrder"];
+  const rows = properties.flatMap((property) => (property.values ?? []).flatMap((value) => {
+    if (value.pricingMode === "tiered" && value.tierPrices?.length) {
+      return value.tierPrices.map((tier) => [
+        property.slug,
+        property.name,
+        value.value,
+        value.label ?? "",
+        "tiered",
+        "",
+        "",
+        tier.fromQuantity ?? tier.quantity,
+        tier.toQuantity ?? "",
+        tier.unitPrice ?? tier.price,
+        value.active,
+        property.sortOrder
+      ]);
+    }
+    return [[
+      property.slug,
+      property.name,
+      value.value,
+      value.label ?? "",
+      value.pricingMode ?? "included",
+      value.fixedPrice ?? "",
+      value.multiplier ?? "",
+      "",
+      "",
+      "",
+      value.active,
+      property.sortOrder
+    ]];
+  }));
+  return [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
 }
 
 function AdminDashboardHome() {
@@ -1322,7 +1417,7 @@ function productPropertyFromGlobal(property: GlobalProperty, tiers: ProductPrice
         enabled: false,
         defaultSelected: index === 0,
         sortOrder: index,
-        pricingMode: "included" as const,
+        pricingMode: "global" as const,
         tierPrices: tiers.map((tier) => ({ quantity: Number(tier.fromQuantity ?? tier.quantity), fromQuantity: Number(tier.fromQuantity ?? tier.quantity), toQuantity: tier.toQuantity, price: 0 }))
       }))
   };
@@ -1435,7 +1530,7 @@ function ProductPricingManager() {
           enabled: false,
           defaultSelected: false,
           sortOrder: property.values.length,
-          pricingMode: "included",
+          pricingMode: "global",
           tierPrices: tierRows.map((tier) => {
             const quantity = Number(tier.fromQuantity ?? tier.quantity);
             return { quantity, fromQuantity: quantity, toQuantity: tier.toQuantity, price: 0 };
@@ -1455,8 +1550,19 @@ function ProductPricingManager() {
       pricingType,
       productStatus,
       priceTiers: tierRows,
-      pricingProperties
+      pricingProperties: resolveGlobalPropertyPricing({ ...values, pricingProperties } as ProductCatalogItem, globalProperties).pricingProperties ?? pricingProperties
     };
+  }
+
+  function inheritedValuePrice(property: ProductPricingProperty, value: ProductPropertyValue) {
+    const global = globalProperties.find((item) => item.slug === property.propertyId);
+    const globalValue = global?.values.find((item) => item.id === value.propertyValueId);
+    if (!globalValue) return "Kein globaler Preis";
+    if ((globalValue.pricingMode ?? "included") === "fixed") return `Global: +${Number(globalValue.fixedPrice ?? 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" })} / Stk.`;
+    if (globalValue.pricingMode === "flat") return `Global: ${Number(globalValue.fixedPrice ?? 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" })} fix`;
+    if (globalValue.pricingMode === "multiplier") return `Global: x ${Number(globalValue.multiplier ?? 1)}`;
+    if (globalValue.pricingMode === "tiered") return "Global: Staffelpreis";
+    return "Global: inklusive";
   }
 
   const preview = calculateConfiguredProductPrice(currentProduct(), previewQuantity || Number(tierRows[0]?.quantity ?? 1), previewConfig);
@@ -1782,15 +1888,25 @@ function ProductPricingManager() {
                             }
                             updateProperties(next);
                           }}>
+                            <MenuItem value="global">Globaler Preis</MenuItem>
                             <MenuItem value="included">Im Grundpreis enthalten</MenuItem>
-                            <MenuItem value="fixed">Fixer Aufpreis</MenuItem>
-                            <MenuItem value="tiered">Staffel-Aufpreis</MenuItem>
+                            <MenuItem value="fixed">Aufpreis / Stk.</MenuItem>
+                            <MenuItem value="tiered">Staffelpreis / Stk.</MenuItem>
+                            <MenuItem value="flat">Festpreis</MenuItem>
+                            <MenuItem value="multiplier">Multiplikator</MenuItem>
                           </MuiTextField>
-                          <MuiTextField size="small" label="Aufpreis (€)" type="number" disabled={value.pricingMode !== "fixed"} value={value.fixedPrice ?? 0} onChange={(event) => {
+                          <MuiTextField size="small" label={value.pricingMode === "global" ? inheritedValuePrice(property, value) : value.pricingMode === "flat" ? "Festpreis (€)" : "Aufpreis / Stk. (€)"} type="number" disabled={value.pricingMode !== "fixed" && value.pricingMode !== "flat"} value={value.fixedPrice ?? 0} onChange={(event) => {
                             const next = structuredClone(pricingProperties);
                             next[propertyIndex].values[valueIndex].fixedPrice = Number(event.target.value);
                             updateProperties(next);
                           }} />
+                          {value.pricingMode === "multiplier" ? (
+                            <MuiTextField size="small" label="Multiplikator" type="number" value={value.multiplier ?? 1} onChange={(event) => {
+                              const next = structuredClone(pricingProperties);
+                              next[propertyIndex].values[valueIndex].multiplier = Number(event.target.value);
+                              updateProperties(next);
+                            }} />
+                          ) : null}
                           <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
                             <Button size="small" variant="outlined" onClick={() => {
                               const next = structuredClone(pricingProperties);
@@ -1813,7 +1929,7 @@ function ProductPricingManager() {
                                 const rowIndex = (value.tierPrices ?? []).findIndex((row) => Number(row.quantity) === quantity || Number(row.fromQuantity) === quantity);
                                 const row = rowIndex >= 0 ? value.tierPrices?.[rowIndex] : { quantity, price: 0 };
                                 return (
-                                  <MuiTextField key={quantity} size="small" label={`${quantity} / Stück`} type="number" value={row?.unitPrice ?? row?.price ?? 0} onChange={(event) => {
+                                  <MuiTextField key={quantity} size="small" label={`${quantity} / Stk.`} type="number" value={row?.unitPrice ?? row?.price ?? 0} onChange={(event) => {
                                     const next = structuredClone(pricingProperties);
                                     const nextValue = next[propertyIndex].values[valueIndex];
                                     const prices = nextValue.tierPrices ?? [];
@@ -2333,9 +2449,25 @@ function PropertyList() {
 function PropertyValuesInput() {
   return (
     <ArrayInput source="values" label="Werte">
-      <SimpleFormIterator inline disableClear>
+      <SimpleFormIterator disableClear>
         <TextInput source="value" label="Wert" validate={[required()]} helperText={false} />
         <TextInput source="label" label="Label" helperText={false} />
+        <SelectInput source="pricingMode" label="Preisart" defaultValue="included" choices={[
+          { id: "included", name: "Inklusive" },
+          { id: "fixed", name: "Aufpreis / Stk." },
+          { id: "tiered", name: "Staffelpreis / Stk." },
+          { id: "flat", name: "Festpreis" },
+          { id: "multiplier", name: "Multiplikator" }
+        ]} helperText={false} />
+        <NumberInput source="fixedPrice" label="Aufpreis/Festpreis (€)" min={0} step={0.01} defaultValue={0} helperText={false} />
+        <NumberInput source="multiplier" label="Multiplikator" min={0} step={0.01} defaultValue={1} helperText={false} />
+        <ArrayInput source="tierPrices" label="Staffelpreise">
+          <SimpleFormIterator inline disableClear>
+            <NumberInput source="fromQuantity" label="Von" min={1} step={1} helperText={false} />
+            <NumberInput source="toQuantity" label="Bis" min={1} step={1} helperText={false} />
+            <NumberInput source="unitPrice" label="€/Stk." min={0} step={0.01} helperText={false} />
+          </SimpleFormIterator>
+        </ArrayInput>
         <BooleanInput source="active" label="Aktiv" defaultValue />
       </SimpleFormIterator>
     </ArrayInput>
@@ -3369,10 +3501,13 @@ function CatalogImageImportToolPage() {
 }
 
 const csvExamples = {
-  properties: `slug,name,active,sortOrder,values
-papier,Papier,true,10,80g|100g|120g|160g|200g|250g|300g|350g
-format,Format,true,20,A7|A6|A5|A4|A3|SRA3
-druckseiten,Druckseiten,true,30,Einseitig|Beidseitig`,
+  properties: `slug,name,value,label,pricingMode,fixedPrice,from_quantity,to_quantity,unit_price,active,sortOrder
+papier,Papier,250g,250 g Papier,tiered,,1,9,0.32,true,10
+papier,Papier,250g,250 g Papier,tiered,,10,24,0.30,true,10
+papier,Papier,250g,250 g Papier,tiered,,25,49,0.28,true,10
+papier,Papier,250g,250 g Papier,tiered,,100,499,0.24,true,10
+papier,Papier,250g,250 g Papier,tiered,,500,999999,0.22,true,10
+format,Format,A3,A3,fixed,0.36,,,,true,20`,
   categories: `slug,name,description,visible,published,logo
 druck,Druck,Druckprodukte online konfigurieren,true,true,/uploads/categories/druck.webp
 werbetechnik,Werbetechnik,Beschriftung Schilder Folien und Montage,true,true,/uploads/categories/werbetechnik.webp`,
@@ -3391,7 +3526,7 @@ function detectCatalogCsvTarget(rows: Record<string, string>[], fallback: Catalo
   if (["logo", "description", "beschreibung", "defaultpropertytemplate", "quantitysteps", "showroomimages"].some((key) => keys.has(key))) {
     return "categories";
   }
-  if (["values", "werte", "eigenschaft"].some((key) => keys.has(key))) {
+  if (["values", "werte", "eigenschaft", "fromquantity", "fromquantity", "unitprice", "unitprice"].some((key) => keys.has(key))) {
     return "properties";
   }
   return fallback;
@@ -3416,6 +3551,21 @@ function CatalogCsvImportToolPage() {
     const reader = new FileReader();
     reader.onload = () => setCsvText(String(reader.result ?? ""));
     reader.readAsText(file);
+  }
+
+  async function exportPropertiesCsv() {
+    try {
+      const properties = await fetchJson<GlobalProperty[]>("/api/catalog/properties?scope=admin");
+      const blob = new Blob([globalPropertiesToCsv(properties)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "eigenschaften-staffelpreise.csv";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "CSV Export fehlgeschlagen.", { type: "error" });
+    }
   }
 
   function mapRow(row: Record<string, string>, importTarget: CatalogCsvTarget) {
@@ -3494,10 +3644,12 @@ function CatalogCsvImportToolPage() {
       const rows = parseCsvRows(csvText);
       if (!rows.length) throw new Error("CSV enthält keine Datenzeilen.");
       const importTarget = detectCatalogCsvTarget(rows, target);
+      const payloads = importTarget === "properties"
+        ? csvPropertyPayloads(rows)
+        : rows.map((row) => mapRow(row, importTarget) as { slug?: string; name?: string });
       let imported = 0;
       const skipped: string[] = [];
-      for (const [index, row] of rows.entries()) {
-        const payload = mapRow(row, importTarget) as { slug?: string; name?: string };
+      for (const [index, payload] of payloads.entries()) {
         if (!payload.name?.trim()) {
           skipped.push(`Zeile ${index + 2}: Name fehlt`);
           continue;
@@ -3536,6 +3688,7 @@ function CatalogCsvImportToolPage() {
           <Button variant={target === "properties" ? "contained" : "outlined"} onClick={() => changeTarget("properties")}>Eigenschaften</Button>
           <Button variant={target === "products" ? "contained" : "outlined"} onClick={() => changeTarget("products")}>Produkte</Button>
           <Button variant={target === "categories" ? "contained" : "outlined"} onClick={() => changeTarget("categories")}>Kategorien</Button>
+          <Button variant="outlined" onClick={() => void exportPropertiesCsv()}>Eigenschaft-Staffeln exportieren</Button>
         </Box>
         <Button variant="outlined" component="label" sx={{ width: "fit-content" }}>
           CSV Datei auswählen

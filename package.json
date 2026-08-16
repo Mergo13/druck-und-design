@@ -12,6 +12,7 @@
     "catalog:export": "tsx scripts/catalog-transfer.ts export",
     "catalog:import": "tsx scripts/catalog-transfer.ts import",
     "student-discount:test": "tsx scripts/student-discount.test.ts",
+    "global-property-pricing:test": "tsx scripts/global-property-pricing.test.ts",
     "deploy:check": "tsx scripts/check-production-env.ts",
     "security:audit": "npm audit --omit=dev",
     "postinstall": "prisma generate"

@@ -119,7 +119,17 @@ export const moduleCreateSchemas = {
           value: z.string().min(1),
           label: z.string().optional(),
           basePrice: z.number().nonnegative().optional(),
-          stepPrice: z.number().nonnegative().optional()
+          stepPrice: z.number().nonnegative().optional(),
+          pricingMode: z.enum(["included", "fixed", "tiered", "flat", "multiplier"]).optional(),
+          fixedPrice: z.number().nonnegative().optional(),
+          multiplier: z.number().nonnegative().optional(),
+          tierPrices: z.array(z.object({
+            quantity: z.number().int().positive(),
+            fromQuantity: z.number().int().positive().optional(),
+            toQuantity: z.number().int().positive().optional(),
+            price: z.number().nonnegative(),
+            unitPrice: z.number().nonnegative().optional()
+          })).optional()
         })
       ])),
       basePrice: z.number().nonnegative().optional(),
@@ -164,8 +174,9 @@ export const moduleCreateSchemas = {
       stepPrice: z.number().nonnegative().optional(),
       values: z.array(z.object({
         value: z.string().min(1),
-        pricingMode: z.enum(["included", "fixed", "tiered"]),
+        pricingMode: z.enum(["global", "included", "fixed", "tiered", "flat", "multiplier"]),
         fixedPrice: z.number().nonnegative().optional(),
+        multiplier: z.number().nonnegative().optional(),
         tierPrices: z.array(z.object({
           quantity: z.number().int().positive(),
           price: z.number().nonnegative()

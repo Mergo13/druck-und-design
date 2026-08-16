@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { Star } from "lucide-react";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
-import { getPublicProductBySlug, getUserByEmail } from "@/lib/catalog-repository";
+import { getGlobalProperties, getPublicProductBySlug, getUserByEmail } from "@/lib/catalog-repository";
 import { CheckCircle2 } from "lucide-react";
 import { getSessionUser } from "@/lib/auth";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { withoutPrices } from "@/lib/product-price-visibility";
 import { prisma } from "@/lib/prisma";
+import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { getStudentDiscountPercent, isStudentDiscountEligibleProduct, isVerifiedStudent } from "@/lib/student-discount";
 
 export const dynamic = "force-dynamic";
@@ -37,14 +38,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!rawProduct) notFound();
   const session = await getSessionUser();
   const authenticated = Boolean(session);
-  const [accountProfile, storeControl] = await Promise.all([
+  const [accountProfile, storeControl, globalProperties] = await Promise.all([
     session?.email ? getUserByEmail(session.email).catch(() => null) : null,
-    prisma.storeControlSetting.findUnique({ where: { id: "store-control" } }).catch(() => null)
+    prisma.storeControlSetting.findUnique({ where: { id: "store-control" } }).catch(() => null),
+    getGlobalProperties().catch(() => [])
   ]);
   const studentVerified = isVerifiedStudent(accountProfile);
   const studentDiscountPercent = getStudentDiscountPercent(storeControl?.studentDiscountPercent);
   const studentDiscountEligible = isStudentDiscountEligibleProduct(rawProduct);
-  const product = authenticated ? rawProduct : withoutPrices(rawProduct);
+  const pricedProduct = resolveGlobalPropertyPricing(rawProduct, globalProperties);
+  const product = authenticated ? pricedProduct : withoutPrices(pricedProduct);
 
   const schema = {
     "@context": "https://schema.org",

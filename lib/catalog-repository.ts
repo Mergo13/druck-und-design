@@ -4,7 +4,7 @@ import generateRetailData from "data-generator-retail";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { Order, UserAccount } from "@/types";
-import type { GlobalProperty, ProductCatalogItem, ProductCategory, ProductIndustry } from "@/types/print-platform";
+import type { GlobalProperty, ProductCatalogItem, ProductCategory, ProductIndustry, ProductPropertyTierPrice } from "@/types/print-platform";
 
 type LegacyPlatformDb = {
   categories: ProductCategory[];
@@ -21,6 +21,20 @@ let industriesSeeded = false;
 
 function asJson(value: unknown) {
   return value as Prisma.InputJsonValue;
+}
+
+function normalizePropertyTierPrices(tiers: ProductPropertyTierPrice[] | undefined) {
+  return (tiers ?? []).map((tier) => {
+    const quantity = Number(tier.fromQuantity ?? tier.quantity);
+    const unitPrice = Number(tier.unitPrice ?? tier.price) || 0;
+    return {
+      quantity,
+      fromQuantity: quantity,
+      toQuantity: tier.toQuantity === undefined ? undefined : Number(tier.toQuantity),
+      price: unitPrice,
+      unitPrice
+    };
+  }).filter((tier) => Number.isFinite(tier.quantity) && tier.quantity > 0);
 }
 
 async function readLegacyDb(): Promise<LegacyPlatformDb> {
@@ -543,7 +557,11 @@ export async function upsertGlobalProperty(property: GlobalProperty, originalSlu
       value: value.value,
       label: value.label,
       sortOrder: Number(value.sortOrder) || index,
-      active: value.active ?? true
+      active: value.active ?? true,
+      pricingMode: value.pricingMode ?? "included",
+      fixedPrice: Number(value.fixedPrice ?? 0) || 0,
+      multiplier: Number(value.multiplier ?? 1) || 1,
+      tierPrices: normalizePropertyTierPrices(value.tierPrices)
     }))
   };
   const targetSlug = originalSlug ?? slug;
