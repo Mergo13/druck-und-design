@@ -148,6 +148,32 @@ model AdminOrder {
   updatedAt       DateTime @updatedAt
 }
 
+model EmbossingDesign {
+  id                  String    @id @default(cuid())
+  userId              String
+  productId           String
+  configurationId     String?
+  status              String    @default("draft")
+  embossingColor      String
+  template            String
+  layoutVersion       Int       @default(1)
+  coverGeometry       Json
+  sourceContent       Json
+  resolvedLayout      Json
+  productionRules     Json
+  lineCount           Int       @default(0)
+  logoUpload          Json?
+  previewUrl          String?
+  productionPdfUrl    String?
+  productionSvgUrl    String?
+  finalizedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([productId])
+}
+
 model AdminQuote {
   id        String   @id @default(cuid())
   customer  String

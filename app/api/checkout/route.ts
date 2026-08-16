@@ -234,6 +234,7 @@ export async function POST(request: Request) {
       normalPrice: item.lineNormalPrice,
       finalPrice: item.lineFinalPrice,
       studentDiscount: item.studentDiscount,
+      embossingDesign: item.embossingDesign,
       config: item.config ?? {},
       pricingConfig: item.pricingConfig ?? {},
       printCheckRequested: item.printCheckRequested ?? false,

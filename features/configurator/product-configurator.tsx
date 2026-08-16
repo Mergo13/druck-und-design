@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPri
 import { applyStudentDiscount } from "@/lib/student-discount";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
+import { EmbossingConfigurator } from "@/features/embossing/embossing-configurator";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
@@ -63,6 +64,13 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const [isDragging, setIsDragging] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
   const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
+  const [finalizedEmbossing, setFinalizedEmbossing] = useState<{
+    id: string;
+    cartConfig: Record<string, string>;
+    lineCount: number;
+    previewUrl?: string;
+    productionPdfUrl?: string;
+  } | null>(null);
   const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
 
   useEffect(() => {
@@ -70,6 +78,18 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       if (mockupUrl) URL.revokeObjectURL(mockupUrl);
     };
   }, [mockupUrl]);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`dud_pending_config:${product.slug}`);
+    if (!stored) return;
+    try {
+      const restored = JSON.parse(stored) as Record<string, string>;
+      setConfig((current) => ({ ...current, ...restored }));
+    } catch {
+      // ignore invalid browser state
+    }
+    sessionStorage.removeItem(`dud_pending_config:${product.slug}`);
+  }, [product.slug]);
 
   useEffect(() => {
     void (async () => {
@@ -103,6 +123,21 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
   }, [config, currentQuantity, enabledProperties, firstVariant, product]);
+  const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
+    ...config,
+    ...(finalizedEmbossing?.cartConfig ?? {}),
+    resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
+  }), [config, currentQuantity, finalizedEmbossing, product]);
+  const embossingSelection = useMemo(() => resolveEmbossingSelection(config), [config]);
+  const embossingActive = Boolean(embossingSelection && !/keine|ohne/i.test(embossingSelection.value));
+  const embossingColor = embossingColorFromValue(embossingSelection?.value);
+  const embossingOptionPrice = useMemo(() => {
+    const line = priceSnapshot.lines.find((entry) => /prägung|praegung/i.test(entry.label));
+    return line?.price ?? 0;
+  }, [priceSnapshot.lines]);
+  const handleEmbossingFinalized = useCallback((design: typeof finalizedEmbossing) => {
+    setFinalizedEmbossing(design);
+  }, []);
   const tierBreakdown = useMemo(() => {
     if (product.pricingType !== "tiered") return null;
     try {
@@ -176,6 +211,10 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   }
 
   async function addToCart() {
+    if (embossingActive && !finalizedEmbossing) {
+      setCartMessage("Bitte schließen Sie die Prägegestaltung ab, bevor Sie das Produkt in den Warenkorb legen.");
+      return false;
+    }
     const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{
       slug: string;
       name: string;
@@ -204,7 +243,19 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     }
 
     const merged = [...existing];
-    const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, config);
+    const authoritativeConfig = {
+      ...config,
+      ...(finalizedEmbossing?.cartConfig ?? {}),
+      resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
+    };
+    const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig);
+    const authoritativeDiscount = applyStudentDiscount({
+      subtotal: priceSnapshot.total,
+      product,
+      user: studentVerified ? { studentVerification: { status: "approved" } } : null,
+      percent: studentDiscountPercent
+    });
+    const authoritativeDisplayedTotal = authoritativeDiscount.total;
     const baseBreakdown = product.pricingType === "tiered"
       ? (() => {
         try {
@@ -218,15 +269,21 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     const selectedConfig = Object.fromEntries([
       ["Menge", String(currentQuantity)],
       ["Grundpreis", baseBreakdown],
+      ...(finalizedEmbossing ? [
+        ["Prägezeilen", String(finalizedEmbossing.lineCount)],
+        ["Prägung gespeichert", "✓"],
+        ["Produktions-PDF", finalizedEmbossing.productionPdfUrl ?? "-"],
+        ["Prägetext", finalizedEmbossing.cartConfig.PraegungText ?? "-"]
+      ] as Array<[string, string]> : []),
       ...priceSnapshot.lines.map((line) => [line.label, `${line.value}${line.price ? ` (+${formatEuro(line.price)})` : ""}`])
     ]);
-    const found = merged.find((entry) => entry.slug === product.slug);
+    const found = merged.find((entry) => entry.slug === product.slug && JSON.stringify(entry.pricingConfig ?? {}) === JSON.stringify(authoritativeConfig));
     if (found) {
       found.quantity += 1;
-      found.unitPrice = displayedTotal;
-      found.normalUnitPrice = currentPrice;
+      found.unitPrice = authoritativeDisplayedTotal;
+      found.normalUnitPrice = priceSnapshot.total;
       found.config = selectedConfig;
-      found.pricingConfig = config;
+      found.pricingConfig = authoritativeConfig;
       found.studentDiscountEligible = product.studentDiscountEligible !== false;
       if (uploadedFile) {
         found.printCheckFileName = uploadedFile.name;
@@ -238,9 +295,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         name: product.name,
         quantity: 1,
         category: product.category,
-        unitPrice: displayedTotal,
-        normalUnitPrice: currentPrice,
-        pricingConfig: config,
+        unitPrice: authoritativeDisplayedTotal,
+        normalUnitPrice: priceSnapshot.total,
+        pricingConfig: authoritativeConfig,
         studentDiscountEligible: product.studentDiscountEligible !== false,
         printCheckRequested: false,
         printCheckFee: 0,
@@ -391,6 +448,33 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </select>
           </label>
         ))}
+        {embossingActive ? (
+          authenticated ? (
+            <EmbossingConfigurator
+              productId={product.slug}
+              embossingColor={embossingColor}
+              authenticated={authenticated}
+              currentEmbossingPrice={embossingOptionPrice}
+              onFinalized={handleEmbossingFinalized}
+            />
+          ) : (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm font-black text-amber-950">Präge-Cover-Generator</p>
+              <p className="mt-1 text-xs leading-5 text-amber-900">Für die Gestaltung der Prägung ist ein Kundenkonto erforderlich.</p>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3 bg-amber-700 hover:bg-amber-800"
+                onClick={() => {
+                  sessionStorage.setItem(`dud_pending_config:${product.slug}`, JSON.stringify(config));
+                  window.location.href = `/login?next=${encodeURIComponent(`/produkt/${product.slug}`)}`;
+                }}
+              >
+                Prägung konfigurieren
+              </Button>
+            </div>
+          )
+        ) : null}
       </div>
       <label
         onDragEnter={(event) => {
@@ -488,6 +572,19 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
 function normalizePropertyValue(value: ProductCategoryProperty["values"][number]) {
   if (typeof value === "string") return { value, label: value };
   return { value: value.value, label: value.label || value.value };
+}
+
+function resolveEmbossingSelection(config: Record<string, string>) {
+  const entry = Object.entries(config).find(([key]) => /prägung|praegung/i.test(key));
+  if (!entry) return null;
+  return { key: entry[0], value: entry[1] };
+}
+
+function embossingColorFromValue(value?: string) {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized.includes("silber")) return "silber" as const;
+  if (normalized.includes("blind")) return "blind" as const;
+  return "gold" as const;
 }
 
 async function getImageDimensions(file: File) {

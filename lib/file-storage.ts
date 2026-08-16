@@ -5,7 +5,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 type SaveFileOptions = {
-  folder: "products" | "contact" | "print-check" | "site-images" | "industries";
+  folder: "products" | "contact" | "print-check" | "site-images" | "industries" | "embossing";
   allowedExtensions: readonly string[];
   maxBytes: number;
   optimizeForWeb?: boolean;
@@ -241,6 +241,30 @@ export async function saveUploadedFile(file: File, options: SaveFileOptions) {
     originalSize: prepared.originalSize,
     optimized: prepared.optimized,
     mimeType: prepared.mimeType
+  };
+}
+
+export async function saveGeneratedUploadFile(params: {
+  folder: SaveFileOptions["folder"];
+  filenameBase: string;
+  extension: string;
+  contents: Buffer | string;
+}) {
+  const storage = process.env.UPLOAD_STORAGE?.trim() || "local";
+  if (storage !== "local") {
+    throw new Error("UPLOAD_STORAGE muss auf 'local' gesetzt sein.");
+  }
+  const extension = params.extension.startsWith(".") ? params.extension : `.${params.extension}`;
+  const base = sanitizeFilenameBase(params.filenameBase) || `${Date.now()}-${randomUUID().slice(0, 8)}`;
+  const relativeDir = path.join("uploads", params.folder);
+  const absoluteDir = path.join(process.cwd(), "public", relativeDir);
+  await fs.mkdir(absoluteDir, { recursive: true });
+  const filename = await unusedFilename(absoluteDir, `${base}${extension}`);
+  await fs.writeFile(path.join(absoluteDir, filename), params.contents);
+  return {
+    url: `/${relativeDir.replace(/\\/g, "/")}/${filename}`,
+    name: filename,
+    size: Buffer.byteLength(params.contents)
   };
 }
 

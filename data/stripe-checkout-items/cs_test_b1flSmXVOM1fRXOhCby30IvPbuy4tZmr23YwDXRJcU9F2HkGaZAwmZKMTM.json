@@ -1,0 +1,30 @@
+{
+  "createdAt": "2026-08-16T21:37:15.548Z",
+  "items": [
+    {
+      "slug": "abschlussarbeiten",
+      "name": "Abschlussarbeiten",
+      "category": "druck",
+      "quantity": 1,
+      "unitPrice": 15,
+      "normalUnitPrice": 15,
+      "normalPrice": 15,
+      "finalPrice": 15,
+      "studentDiscount": {
+        "eligible": true,
+        "verified": false,
+        "percent": 20,
+        "amount": 0
+      },
+      "config": {
+        "Menge": "1",
+        "Grundpreis": "1 Stück × 15,00 € / Stück = 15,00 €"
+      },
+      "pricingConfig": {
+        "auflage": "1"
+      },
+      "printCheckRequested": false,
+      "printCheckFee": 0
+    }
+  ]
+}

@@ -814,6 +814,7 @@ function OrderEdit() {
   return (
     <Edit>
       <SimpleForm>
+        <OrderEmbossingDetails />
         <TextInput source="id" disabled />
         <TextInput source="customer" label="Kunde" validate={[required()]} />
         <TextInput source="email" label="E-Mail" />
@@ -831,6 +832,50 @@ function OrderEdit() {
         <TextInput source="shippingAddress" label="Lieferadresse" multiline />
       </SimpleForm>
     </Edit>
+  );
+}
+
+function OrderEmbossingDetails() {
+  const record = useRecordContext<AdminRecord & { items?: Array<Record<string, any>> }>();
+  const embossingItems = (record?.items ?? []).filter((item) => item.embossingDesign || item.config?.PraegungDesignId || item.config?.PraegungDesignID);
+  if (!embossingItems.length) return null;
+  return (
+    <Box sx={{ display: "grid", gap: 1.5, mb: 2 }}>
+      {embossingItems.map((item, index) => {
+        const design = item.embossingDesign ?? {};
+        const config = item.config ?? {};
+        const resolvedText = config.PraegungText && config.PraegungText !== "-" ? config.PraegungText : [
+          config["Hochschule / Schule"],
+          config["Art der Arbeit"],
+          config.Titel,
+          config.Untertitel,
+          config.Name,
+          config.Jahr
+        ].filter(Boolean).join("\n\n");
+        return (
+          <Box key={`${item.id ?? index}-embossing`} sx={{ border: `1px solid ${adminColors.border}`, borderRadius: 2, p: 2, bgcolor: adminColors.canvas }}>
+            <Typography variant="caption" sx={{ display: "block", color: adminColors.muted, fontWeight: 900, textTransform: "uppercase", letterSpacing: ".08em" }}>
+              PRÄGUNG
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 1, fontWeight: 900, color: adminColors.ink }}>
+              {design.color === "silber" ? "Silberprägung" : design.color === "blind" ? "Blindprägung" : "Goldprägung"}
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>Vorlage: {design.template ?? config.Vorlage ?? "-"}</Typography>
+            <Typography variant="body2">Prägezeilen: {design.lineCount ?? config["Prägezeilen"] ?? "-"}</Typography>
+            <Typography variant="body2">Cover: Schwarz</Typography>
+            <Box sx={{ mt: 1, display: "flex", gap: 1, flexWrap: "wrap" }}>
+              {(design.previewUrl || config.PraegungVorschau) ? <Button size="small" variant="outlined" href={design.previewUrl || config.PraegungVorschau} target="_blank">Vorschau öffnen</Button> : null}
+              {(design.productionPdfUrl || config.ProduktionsPDF) ? <Button size="small" variant="contained" href={design.productionPdfUrl || config.ProduktionsPDF} target="_blank">Produktions-PDF öffnen</Button> : null}
+            </Box>
+            {resolvedText ? (
+              <Typography variant="body2" sx={{ mt: 1.5, whiteSpace: "pre-wrap", fontFamily: "monospace", color: adminColors.ink }}>
+                {resolvedText}
+              </Typography>
+            ) : null}
+          </Box>
+        );
+      })}
+    </Box>
   );
 }
 

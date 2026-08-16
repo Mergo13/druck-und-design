@@ -155,8 +155,15 @@ export async function POST(request: Request) {
         normalUnitPrice: item.normalUnitPrice,
         unitPrice: item.unitPrice,
         studentDiscount: item.studentDiscount,
+        embossingDesign: item.embossingDesign,
         config: {
           ...item.config,
+          ...(item.embossingDesign ? {
+            PraegungDesignId: item.embossingDesign.id,
+            Prägezeilen: String(item.embossingDesign.lineCount),
+            ProduktionsPDF: item.embossingDesign.productionPdfUrl ?? "-",
+            PraegungVorschau: item.embossingDesign.previewUrl ?? "-"
+          } : {}),
           pricingConfig: item.pricingConfig,
           Rechtsgrundlage: "AGB, Datenschutz und Druckdaten-Hinweise akzeptiert",
           Druckfreigabe: "Erteilt",

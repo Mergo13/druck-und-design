@@ -4,6 +4,7 @@ import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { applyStudentDiscount, getStudentDiscountPercent, isVerifiedStudent } from "@/lib/student-discount";
 import type { UserAccount } from "@/types";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
+import { prisma } from "@/lib/prisma";
 
 type CartPricingInput = {
   slug: string;
@@ -34,6 +35,14 @@ export type PricedCartItem = {
   printCheckFee: number;
   printCheckFileName?: string;
   printCheckFileUrl?: string;
+  embossingDesign?: {
+    id: string;
+    color: string;
+    template: string;
+    lineCount: number;
+    previewUrl?: string | null;
+    productionPdfUrl?: string | null;
+  };
   studentDiscount: {
     eligible: boolean;
     verified: boolean;
@@ -81,7 +90,7 @@ function calculateProductUnitPrice(product: ProductCatalogItem, quantity: number
 
 export async function priceCartItems(params: {
   items: CartPricingInput[];
-  user?: Pick<UserAccount, "studentVerification"> | null;
+  user?: Pick<UserAccount, "id" | "studentVerification"> | null;
   studentDiscountPercent?: number | null;
 }) {
   const [categories, globalProperties] = await Promise.all([getCategories(), getGlobalProperties()]);
@@ -95,6 +104,25 @@ export async function priceCartItems(params: {
     if (!rawProduct) throw new Error(`Produkt ${item.slug} ist nicht verfügbar.`);
     const product = resolveGlobalPropertyPricing(rawProduct, globalProperties);
     const pricingConfig = selectedOptionsFromItem(item);
+    const designId = pricingConfig.PraegungDesignId || pricingConfig.PraegungDesignID || pricingConfig.embossingDesignId;
+    let embossingDesign: PricedCartItem["embossingDesign"] | undefined;
+    if (designId) {
+      if (!params.user?.id) throw new Error("Prägung erfordert ein angemeldetes Kundenkonto.");
+      const design = await (prisma as any).embossingDesign.findFirst({
+        where: { id: designId, userId: params.user.id, status: "finalized" }
+      });
+      if (!design) throw new Error("Finalisierte Prägung wurde nicht gefunden oder gehört nicht zu diesem Kundenkonto.");
+      pricingConfig.resolvedEmbossingLineCount = String(design.lineCount);
+      pricingConfig["Prägezeilen"] = String(design.lineCount);
+      embossingDesign = {
+        id: design.id,
+        color: design.embossingColor,
+        template: design.template,
+        lineCount: design.lineCount,
+        previewUrl: design.previewUrl,
+        productionPdfUrl: design.productionPdfUrl
+      };
+    }
     const productQuantity = configuredQuantity(pricingConfig);
     const lineQuantity = safeLineQuantity(item.quantity);
     const categoryProperties = categoriesBySlug.get(product.category)?.properties ?? [];
@@ -118,6 +146,7 @@ export async function priceCartItems(params: {
       printCheckFee: money(Number(item.printCheckFee ?? 0) || 0),
       printCheckFileName: item.printCheckFileName,
       printCheckFileUrl: item.printCheckFileUrl,
+      embossingDesign,
       studentDiscount: {
         eligible: product.studentDiscountEligible !== false,
         verified,
