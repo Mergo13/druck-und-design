@@ -186,6 +186,7 @@ export type ProductCatalogItem = {
   bestsellerSortOrder?: number;
   isStudentShop?: boolean;
   studentShopSortOrder?: number;
+  studentDiscountEligible?: boolean;
   priceTiers?: ProductPriceTier[];
   pricingProperties?: ProductPricingProperty[];
   priceHistory?: Array<{

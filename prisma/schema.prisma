@@ -319,6 +319,7 @@ model StoreControlSetting {
   maintenanceMode Boolean  @default(false)
   vacationMode    Boolean  @default(false)
   disableCheckout Boolean  @default(false)
+  studentDiscountPercent Float @default(20)
   announcementBar String?
   maintenanceAvailableAt String?
   updatedAt       DateTime @updatedAt

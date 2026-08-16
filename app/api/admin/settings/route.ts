@@ -22,6 +22,7 @@ const settingsSchema = z.object({
     maintenanceMode: z.boolean(),
     vacationMode: z.boolean(),
     disableCheckout: z.boolean(),
+    studentDiscountPercent: z.number().min(0).max(100).optional(),
     announcementBar: z.string().optional()
   })
 });
@@ -78,6 +79,7 @@ export async function PUT(request: Request) {
         maintenanceMode: storeControl.maintenanceMode,
         vacationMode: storeControl.vacationMode,
         disableCheckout: storeControl.disableCheckout,
+        studentDiscountPercent: storeControl.studentDiscountPercent ?? 20,
         announcementBar: storeControl.announcementBar || null
       }
     })

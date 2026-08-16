@@ -31,6 +31,16 @@ async function readPendingCheckoutItems(sessionId: string) {
         category?: string;
         quantity?: number;
         unitPrice?: number;
+        normalUnitPrice?: number;
+        normalPrice?: number;
+        finalPrice?: number;
+        pricingConfig?: Record<string, string>;
+        studentDiscount?: {
+          eligible?: boolean;
+          verified?: boolean;
+          percent?: number;
+          amount?: number;
+        };
         config?: Record<string, string>;
         printCheckFileName?: string;
         printCheckFileUrl?: string;
@@ -147,6 +157,10 @@ export async function POST(request: Request) {
           price: unitPrice,
           config: {
             ...(item.config ?? {}),
+            PricingConfig: JSON.stringify(item.pricingConfig ?? {}),
+            Normalpreis: item.normalPrice !== undefined ? String(item.normalPrice) : "-",
+            Endpreis: item.finalPrice !== undefined ? String(item.finalPrice) : "-",
+            Studentenrabatt: item.studentDiscount?.amount ? `${item.studentDiscount.percent}% (-${item.studentDiscount.amount})` : "Nein",
             Kategorie: item.category || "",
             PrintDatei: item.printCheckFileUrl ?? item.config?.PrintDatei ?? "-",
             Dateiname: item.printCheckFileName ?? item.config?.Datei ?? "-",

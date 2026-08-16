@@ -17,6 +17,7 @@ export async function GET() {
     maintenanceMode: Boolean(storeControl?.maintenanceMode),
     vacationMode: Boolean(storeControl?.vacationMode),
     disableCheckout: Boolean(storeControl?.disableCheckout),
+    studentDiscountPercent: Number(storeControl?.studentDiscountPercent ?? 20),
     announcementBar: storeControl?.announcementBar ?? "",
     maintenanceAvailableAt: storeControl?.maintenanceAvailableAt ?? "",
     isAdmin: Boolean(adminUser?.active)

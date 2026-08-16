@@ -4,7 +4,10 @@ import { z } from "zod";
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { requireModulePermission } from "@/lib/admin-permissions";
 import { getSessionUser } from "@/lib/auth";
+import { priceCartItems } from "@/lib/cart-pricing";
+import { getUserByEmail } from "@/lib/catalog-repository";
 import { prisma } from "@/lib/prisma";
+import { canApplyCouponWithStudentDiscount } from "@/lib/student-discount";
 
 const orderItemSchema = z.object({
   id: z.string().optional(),
@@ -12,7 +15,8 @@ const orderItemSchema = z.object({
   name: z.string().min(1).max(200),
   quantity: z.number().int().min(1).max(100000),
   price: z.number().nonnegative().max(1_000_000),
-  config: z.record(z.string(), z.string()).default({})
+  config: z.record(z.string(), z.string()).default({}),
+  pricingConfig: z.record(z.string(), z.string()).optional()
 });
 
 const orderRequestSchema = z.object({
@@ -96,9 +100,29 @@ export async function POST(request: Request) {
   }
 
   const body = parsed.data;
-  const itemsTotal = body.items.reduce((sum, item) => sum + item.price, 0);
+  const accountProfile = await getUserByEmail(sessionUser.email).catch(() => null);
+  let pricedCart;
+  try {
+    pricedCart = await priceCartItems({
+      items: body.items.map((item) => ({
+        slug: item.productSlug,
+        name: item.name,
+        quantity: item.quantity,
+        config: item.config,
+        pricingConfig: item.pricingConfig
+      })),
+      user: accountProfile,
+      studentDiscountPercent: storeControl?.studentDiscountPercent
+    });
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Warenkorb konnte nicht berechnet werden." }, { status: 400 });
+  }
+  const itemsTotal = pricedCart.subtotalAfterDiscount;
   let coupon;
   try {
+    if (body.couponCode && !canApplyCouponWithStudentDiscount(pricedCart.studentDiscountTotal)) {
+      throw new Error("Studentenrabatt und Gutscheincode sind nicht kombinierbar.");
+    }
     coupon = await resolveCouponDiscount(body.couponCode, itemsTotal);
   } catch (error) {
     return NextResponse.json({ message: error instanceof Error ? error.message : "Gutschein konnte nicht angewendet werden." }, { status: 400 });
@@ -120,10 +144,20 @@ export async function POST(request: Request) {
       couponDiscount: coupon.discount || undefined,
       total,
       status: "Anfrage",
-      items: body.items.map((item) => ({
-        ...item,
+      items: pricedCart.items.map((item) => ({
+        id: randomUUID(),
+        productSlug: item.slug,
+        name: item.name,
+        quantity: item.quantity,
+        price: item.lineFinalPrice,
+        normalPrice: item.lineNormalPrice,
+        finalPrice: item.lineFinalPrice,
+        normalUnitPrice: item.normalUnitPrice,
+        unitPrice: item.unitPrice,
+        studentDiscount: item.studentDiscount,
         config: {
           ...item.config,
+          pricingConfig: item.pricingConfig,
           Rechtsgrundlage: "AGB, Datenschutz und Druckdaten-Hinweise akzeptiert",
           Druckfreigabe: "Erteilt",
           Freigabezeitpunkt: new Date().toISOString()

@@ -6,6 +6,8 @@ import { getSessionUser } from "@/lib/auth";
 import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { prisma } from "@/lib/prisma";
 import { getUserByEmail } from "@/lib/catalog-repository";
+import { priceCartItems } from "@/lib/cart-pricing";
+import { canApplyCouponWithStudentDiscount } from "@/lib/student-discount";
 
 const printCheckFee = Number(process.env.PRINT_CHECK_FEE_EUR?.trim() || "9.99");
 const checkoutItemsDir = path.join(process.cwd(), "data", "stripe-checkout-items");
@@ -16,7 +18,10 @@ type CheckoutItem = {
   category: string;
   quantity: number;
   unitPrice?: number;
+  normalUnitPrice?: number;
   config?: Record<string, string>;
+  pricingConfig?: Record<string, string>;
+  studentDiscountEligible?: boolean;
   printCheckRequested?: boolean;
   printCheckFee?: number;
   printCheckFileName?: string;
@@ -61,10 +66,27 @@ export async function POST(request: Request) {
 
   const stripe = new Stripe(stripeSecret);
   const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3010";
-  const itemsSubtotal = items.reduce((sum, item) => sum + (item.unitPrice ?? 0) * Math.max(1, item.quantity || 1), 0);
+  const sessionUser = await getSessionUser().catch(() => null);
+  const accountProfile = sessionUser?.email
+    ? await getUserByEmail(sessionUser.email).catch(() => null)
+    : null;
+  let pricedCart;
+  try {
+    pricedCart = await priceCartItems({
+      items,
+      user: accountProfile,
+      studentDiscountPercent: storeControl?.studentDiscountPercent
+    });
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Warenkorb konnte nicht berechnet werden." }, { status: 400 });
+  }
+  const itemsSubtotal = pricedCart.subtotalAfterDiscount;
   const normalizedCouponCode = body?.couponCode?.trim().toUpperCase() || "";
   let couponDiscount = 0;
   if (normalizedCouponCode) {
+    if (!canApplyCouponWithStudentDiscount(pricedCart.studentDiscountTotal)) {
+      return NextResponse.json({ message: "Studentenrabatt und Gutscheincode sind nicht kombinierbar." }, { status: 400 });
+    }
     const coupon = await prisma.coupon.findUnique({ where: { code: normalizedCouponCode } });
     const now = new Date();
     if (!coupon || !coupon.active) {
@@ -85,13 +107,13 @@ export async function POST(request: Request) {
     couponDiscount = Math.min(itemsSubtotal, Math.max(0, Math.round(rawDiscount * 100) / 100));
   }
 
-  const lineItems = items.flatMap((item) => {
+  const lineItems = pricedCart.items.flatMap((item) => {
     const orderLines = [
       {
         quantity: Math.max(1, item.quantity || 1),
         price_data: {
           currency: "eur",
-          unit_amount: Math.max(50, Math.round((item.unitPrice ?? 1) * 100)),
+          unit_amount: Math.max(50, Math.round(item.unitPrice * 100)),
           product_data: {
             name: item.name,
             description: item.category
@@ -102,10 +124,10 @@ export async function POST(request: Request) {
     if (item.printCheckRequested) {
       orderLines.push({
         quantity: 1,
-        price_data: {
-          currency: "eur",
-          unit_amount: Math.round((item.printCheckFee ?? printCheckFee) * 100),
-          product_data: {
+          price_data: {
+            currency: "eur",
+            unit_amount: Math.round((item.printCheckFee || printCheckFee) * 100),
+            product_data: {
             name: `Profi Print-Check (${item.name})`,
             description: item.printCheckFileName || "Datei- und Qualitätsprüfung"
           }
@@ -130,10 +152,6 @@ export async function POST(request: Request) {
     });
   }
 
-  const sessionUser = await getSessionUser().catch(() => null);
-  const accountProfile = sessionUser?.email
-    ? await getUserByEmail(sessionUser.email).catch(() => null)
-    : null;
   const effectiveCompany = body?.company || accountProfile?.company || sessionUser?.company || "";
   const effectiveVatId = accountProfile?.vatId || sessionUser?.vatId || "";
   const effectiveBillingAddress = body?.billingAddress || accountProfile?.billingAddress || sessionUser?.billingAddress || "";
@@ -189,6 +207,11 @@ export async function POST(request: Request) {
       processingFee: String(processingFee),
       couponCode: normalizedCouponCode,
       couponDiscount: String(couponDiscount),
+      studentVerified: pricedCart.studentVerified ? "yes" : "no",
+      studentDiscountPercent: String(pricedCart.studentDiscountPercent),
+      studentDiscountTotal: String(pricedCart.studentDiscountTotal),
+      subtotalBeforeDiscount: String(pricedCart.subtotalBeforeDiscount),
+      subtotalAfterDiscount: String(pricedCart.subtotalAfterDiscount),
       legalAcceptedAt: new Date().toISOString(),
       printApprovalAcceptedAt: new Date().toISOString()
     }
@@ -201,15 +224,20 @@ export async function POST(request: Request) {
   await fs.mkdir(checkoutItemsDir, { recursive: true });
   await fs.writeFile(path.join(checkoutItemsDir, `${session.id}.json`), JSON.stringify({
     createdAt: new Date().toISOString(),
-    items: items.map((item) => ({
+    items: pricedCart.items.map((item) => ({
       slug: item.slug,
       name: item.name,
       category: item.category,
-      quantity: Math.max(1, item.quantity || 1),
-      unitPrice: item.unitPrice ?? 0,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      normalUnitPrice: item.normalUnitPrice,
+      normalPrice: item.lineNormalPrice,
+      finalPrice: item.lineFinalPrice,
+      studentDiscount: item.studentDiscount,
       config: item.config ?? {},
+      pricingConfig: item.pricingConfig ?? {},
       printCheckRequested: item.printCheckRequested ?? false,
-      printCheckFee: item.printCheckFee ?? 0,
+      printCheckFee: item.printCheckRequested ? (item.printCheckFee || printCheckFee) : 0,
       printCheckFileName: item.printCheckFileName,
       printCheckFileUrl: item.printCheckFileUrl
     }))

@@ -56,6 +56,7 @@ export async function POST(request: Request) {
     ...body,
     priceHistory,
     productStatus: body.productStatus ?? (body.published === false || body.visible === false ? "inactive" : "active"),
+    studentDiscountEligible: body.studentDiscountEligible ?? true,
     visible: body.productStatus ? body.productStatus === "active" : (body.visible ?? true),
     published: body.productStatus ? body.productStatus === "active" : (body.published ?? true)
   };

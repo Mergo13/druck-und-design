@@ -118,13 +118,15 @@ function categoryFromRow(row: { data: unknown; slug: string; name: string; visib
 }
 
 function productFromRow(row: { data: unknown; slug: string; name: string; category: string; visible: boolean; published: boolean }) {
+  const data = row.data as ProductCatalogItem;
   return {
-    ...(row.data as ProductCatalogItem),
+    ...data,
     slug: row.slug,
     name: row.name,
     category: row.category,
     visible: row.visible,
-    published: row.published
+    published: row.published,
+    studentDiscountEligible: data.studentDiscountEligible ?? true
   };
 }
 
@@ -794,7 +796,7 @@ export async function upsertProduct(product: ProductCatalogItem) {
   const productStatus = product.productStatus ?? (product.visible === false || product.published === false ? "inactive" : "active");
   const visible = productStatus === "active";
   const published = productStatus === "active";
-  const nextProduct = { ...product, productStatus, visible, published, industrySlugs: product.industrySlugs ?? [] };
+  const nextProduct = { ...product, productStatus, visible, published, studentDiscountEligible: product.studentDiscountEligible ?? true, industrySlugs: product.industrySlugs ?? [] };
   await prisma.catalogProduct.upsert({
     where: { slug: product.slug },
     update: {

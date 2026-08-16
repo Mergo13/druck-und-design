@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import { Star } from "lucide-react";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
-import { getPublicProductBySlug } from "@/lib/catalog-repository";
+import { getPublicProductBySlug, getUserByEmail } from "@/lib/catalog-repository";
 import { CheckCircle2 } from "lucide-react";
 import { getSessionUser } from "@/lib/auth";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { withoutPrices } from "@/lib/product-price-visibility";
+import { prisma } from "@/lib/prisma";
+import { getStudentDiscountPercent, isStudentDiscountEligibleProduct, isVerifiedStudent } from "@/lib/student-discount";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   if (!rawProduct) notFound();
   const session = await getSessionUser();
   const authenticated = Boolean(session);
+  const [accountProfile, storeControl] = await Promise.all([
+    session?.email ? getUserByEmail(session.email).catch(() => null) : null,
+    prisma.storeControlSetting.findUnique({ where: { id: "store-control" } }).catch(() => null)
+  ]);
+  const studentVerified = isVerifiedStudent(accountProfile);
+  const studentDiscountPercent = getStudentDiscountPercent(storeControl?.studentDiscountPercent);
+  const studentDiscountEligible = isStudentDiscountEligibleProduct(rawProduct);
   const product = authenticated ? rawProduct : withoutPrices(rawProduct);
 
   const schema = {
@@ -59,6 +68,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
               {product.rating} Kundenbewertung
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{formatProductDeliveryText(product.deliveryText)}</span>
+              {authenticated && studentVerified && studentDiscountEligible ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">✓ Studentenstatus verifiziert · {studentDiscountPercent} % Studentenrabatt</span>
+              ) : null}
             </div>
             <div>
               <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-5xl">{product.name}</h1>
@@ -83,7 +95,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
         </div>
         <div className="lg:sticky lg:top-24">
-          <ProductConfigurator product={product} authenticated={authenticated} />
+          <ProductConfigurator product={product} authenticated={authenticated} studentVerified={studentVerified} studentDiscountPercent={studentDiscountPercent} />
         </div>
       </div>
     </section>

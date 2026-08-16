@@ -145,6 +145,7 @@ export const moduleCreateSchemas = {
     bestsellerSortOrder: z.number().optional(),
     isStudentShop: z.boolean().optional(),
     studentShopSortOrder: z.number().optional(),
+    studentDiscountEligible: z.boolean().optional(),
     productStatus: z.enum(["draft", "active", "inactive"]).optional(),
     areaPricing: z.object({
       defaultWidthCm: z.number().optional(),

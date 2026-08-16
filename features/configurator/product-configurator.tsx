@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { applyStudentDiscount } from "@/lib/student-discount";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 
@@ -14,7 +15,7 @@ const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".ti
 const maxFileSize = 50 * 1024 * 1024;
 const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
 
-export function ProductConfigurator({ product, authenticated }: { product: ProductCatalogItem; authenticated: boolean }) {
+export function ProductConfigurator({ product, authenticated, studentVerified = false, studentDiscountPercent = 20 }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number }) {
   const router = useRouter();
   const firstVariant = product.variants[0];
   const productOptions = useMemo(() => {
@@ -110,7 +111,14 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       return null;
     }
   }, [currentQuantity, product.priceTiers, product.pricingType]);
-  const displayedTotal = currentPrice;
+  const studentDiscount = useMemo(() => applyStudentDiscount({
+    subtotal: currentPrice,
+    product,
+    user: studentVerified ? { studentVerification: { status: "approved" } } : null,
+    percent: studentDiscountPercent
+  }), [currentPrice, product, studentDiscountPercent, studentVerified]);
+  const studentDiscountAmount = studentDiscount.discounts[0]?.amount ?? 0;
+  const displayedTotal = studentDiscount.total;
 
   async function readFilePreview(file: File) {
     const fileName = file.name.toLowerCase();
@@ -174,6 +182,9 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
       quantity: number;
       category: string;
       unitPrice?: number;
+      normalUnitPrice?: number;
+      pricingConfig?: Record<string, string>;
+      studentDiscountEligible?: boolean;
       printCheckRequested?: boolean;
       printCheckFee?: number;
       printCheckFileName?: string;
@@ -212,8 +223,11 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
     const found = merged.find((entry) => entry.slug === product.slug);
     if (found) {
       found.quantity += 1;
-      found.unitPrice = currentPrice;
+      found.unitPrice = displayedTotal;
+      found.normalUnitPrice = currentPrice;
       found.config = selectedConfig;
+      found.pricingConfig = config;
+      found.studentDiscountEligible = product.studentDiscountEligible !== false;
       if (uploadedFile) {
         found.printCheckFileName = uploadedFile.name;
         found.printCheckFileUrl = uploadedUrl ?? found.printCheckFileUrl;
@@ -224,7 +238,10 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
         name: product.name,
         quantity: 1,
         category: product.category,
-        unitPrice: currentPrice,
+        unitPrice: displayedTotal,
+        normalUnitPrice: currentPrice,
+        pricingConfig: config,
+        studentDiscountEligible: product.studentDiscountEligible !== false,
         printCheckRequested: false,
         printCheckFee: 0,
         printCheckFileName: uploadedFile?.name,
@@ -245,6 +262,13 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
           <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
           <h2 className="text-2xl font-black">{authenticated ? formatEuro(displayedTotal) : "Preis nach Anmeldung"}</h2>
           <p className="text-sm text-muted-foreground">Konfiguration mit optionalem Datei-Upload</p>
+          {authenticated && studentDiscountAmount > 0 ? (
+            <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs font-semibold text-emerald-800">
+              <p>✓ Studentenstatus verifiziert</p>
+              <p>Normalpreis: {formatEuro(currentPrice)}</p>
+              <p>Studentenpreis: {formatEuro(displayedTotal)}</p>
+            </div>
+          ) : null}
           {authenticated && tierBreakdown ? <p className="text-xs font-semibold text-muted-foreground">{tierBreakdown.quantity} Stück × {formatEuro(tierBreakdown.unitPrice)} / Stück = {formatEuro(tierBreakdown.totalPrice)}</p> : null}
           {authenticated ? <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p> : null}
         </div>

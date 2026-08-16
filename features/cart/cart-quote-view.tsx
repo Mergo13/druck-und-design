@@ -12,8 +12,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { applyStudentDiscount, canApplyCouponWithStudentDiscount, isVerifiedStudent } from "@/lib/student-discount";
 import { formatEuro } from "@/lib/utils";
 import type { Order } from "@/types";
+import type { ProductCatalogItem } from "@/types/print-platform";
 
 type CartEntry = {
   slug: string;
@@ -21,6 +23,9 @@ type CartEntry = {
   category: string;
   quantity: number;
   unitPrice?: number;
+  normalUnitPrice?: number;
+  pricingConfig?: Record<string, string>;
+  studentDiscountEligible?: boolean;
   config?: Record<string, string>;
   printCheckRequested?: boolean;
   printCheckFee?: number;
@@ -62,12 +67,18 @@ export function CartQuoteView() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null);
   const [couponMessage, setCouponMessage] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [studentDiscountPercent, setStudentDiscountPercent] = useState(20);
 
   useEffect(() => {
     const raw = localStorage.getItem("dud_cart");
     setCart(raw ? JSON.parse(raw) as CartEntry[] : []);
     void (async () => {
       const profRes = await fetch("/api/user/profile");
+      const controlRes = await fetch("/api/storefront/control").catch(() => null);
+      if (controlRes?.ok) {
+        const control = await controlRes.json();
+        setStudentDiscountPercent(Number(control.studentDiscountPercent ?? 20));
+      }
       if (profRes.ok) {
         const prof = await profRes.json();
         setProfile(prof);
@@ -97,14 +108,33 @@ export function CartQuoteView() {
   }, []);
 
   const hasItems = useMemo(() => cart.length > 0, [cart]);
-  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.unitPrice ?? 0) * item.quantity, 0), [cart]);
+  const studentVerified = isVerifiedStudent(profile);
+  const subtotal = useMemo(() => cart.reduce((sum, item) => sum + (item.normalUnitPrice ?? item.unitPrice ?? 0) * item.quantity, 0), [cart]);
+  const studentDiscountTotal = useMemo(() => cart.reduce((sum, item) => {
+    const normalLineTotal = (item.normalUnitPrice ?? item.unitPrice ?? 0) * item.quantity;
+    const result = applyStudentDiscount({
+      subtotal: normalLineTotal,
+      product: { studentDiscountEligible: item.studentDiscountEligible !== false } as ProductCatalogItem,
+      user: studentVerified ? { studentVerification: { status: "approved" } } : null,
+      percent: studentDiscountPercent
+    });
+    return sum + (result.discounts[0]?.amount ?? 0);
+  }, 0), [cart, studentDiscountPercent, studentVerified]);
+  const subtotalAfterStudentDiscount = Math.max(0, subtotal - studentDiscountTotal);
   const printCheckTotal = useMemo(
     () => cart.reduce((sum, item) => sum + (item.printCheckRequested ? (item.printCheckFee ?? PRINT_CHECK_FEE) : 0), 0),
     [cart]
   );
   const shippingCost = useMemo(() => (deliveryMethod === "versand" && selectedRate ? selectedRate.price : 0), [deliveryMethod, selectedRate]);
-  const couponDiscount = useMemo(() => Math.min(subtotal, appliedCoupon?.discountAmount ?? 0), [appliedCoupon, subtotal]);
-  const grandTotal = Math.max(0, subtotal + printCheckTotal - couponDiscount + shippingCost + PROCESSING_FEE);
+  const couponDiscount = useMemo(() => Math.min(subtotalAfterStudentDiscount, appliedCoupon?.discountAmount ?? 0), [appliedCoupon, subtotalAfterStudentDiscount]);
+  const grandTotal = Math.max(0, subtotalAfterStudentDiscount + printCheckTotal - couponDiscount + shippingCost + PROCESSING_FEE);
+
+  useEffect(() => {
+    if (!canApplyCouponWithStudentDiscount(studentDiscountTotal) && appliedCoupon) {
+      setAppliedCoupon(null);
+      setCouponMessage("Studentenrabatt und Gutscheincode sind nicht kombinierbar.");
+    }
+  }, [appliedCoupon, studentDiscountTotal]);
 
   function updateQuantity(slug: string, nextQuantity: number) {
     const next = cart.map((item) => item.slug === slug ? { ...item, quantity: Math.max(1, nextQuantity) } : item);
@@ -188,6 +218,11 @@ export function CartQuoteView() {
 
   async function applyCoupon() {
     const code = couponCode.trim();
+    if (!canApplyCouponWithStudentDiscount(studentDiscountTotal)) {
+      setAppliedCoupon(null);
+      setCouponMessage("Studentenrabatt und Gutscheincode sind nicht kombinierbar.");
+      return;
+    }
     if (!code) {
       setAppliedCoupon(null);
       setCouponMessage("Bitte Gutscheincode eingeben.");
@@ -548,6 +583,12 @@ export function CartQuoteView() {
                 <span className="text-muted-foreground">Zwischensumme</span>
                 <span className="font-semibold">{formatEuro(subtotal)}</span>
               </div>
+              {studentDiscountTotal > 0 ? (
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span>{studentDiscountPercent} % Studentenrabatt</span>
+                  <span className="font-semibold">-{formatEuro(studentDiscountTotal)}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Print-Check</span>
                 <span className="font-semibold">{formatEuro(printCheckTotal)}</span>
@@ -579,8 +620,9 @@ export function CartQuoteView() {
                   }}
                   className="h-10 min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold uppercase outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                   placeholder="CODE"
+                  disabled={studentDiscountTotal > 0}
                 />
-                <Button type="button" variant="outline" className="h-10 border-slate-200 bg-white px-3 text-xs" onClick={() => void applyCoupon()} disabled={couponLoading || !hasItems}>
+                <Button type="button" variant="outline" className="h-10 border-slate-200 bg-white px-3 text-xs" onClick={() => void applyCoupon()} disabled={couponLoading || !hasItems || studentDiscountTotal > 0}>
                   {couponLoading ? "Prüft..." : "Einlösen"}
                 </Button>
               </div>

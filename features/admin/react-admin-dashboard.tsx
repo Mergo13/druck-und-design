@@ -1982,6 +1982,7 @@ function ProductHomepagePlacementFields() {
           <BooleanInput source="isStudentShop" label="Im Studenten Shop anzeigen" />
           <NumberInput source="studentShopSortOrder" label="Reihenfolge Studenten Shop" defaultValue={10} />
         </Box>
+        <BooleanInput source="studentDiscountEligible" label="Studentenrabatt erlauben" defaultValue />
       </CardContent>
     </Card>
   );
@@ -2012,7 +2013,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", color: "#0f172a", bgcolor: "#fff", "& .RaSimpleForm-main": { maxWidth: "none" }, "& .MuiTypography-root": { color: "inherit" }, "& .MuiInputBase-root": { color: "#0f172a", bgcolor: "#fff" }, "& .MuiInputLabel-root": { color: "#334155" } }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", color: "#0f172a", bgcolor: "#fff", "& .RaSimpleForm-main": { maxWidth: "none" }, "& .MuiTypography-root": { color: "inherit" }, "& .MuiInputBase-root": { color: "#0f172a", bgcolor: "#fff" }, "& .MuiInputLabel-root": { color: "#334155" } }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductImageUploadControls />
         <TextInput source="slug" validate={[required()]} />
         <TextInput source="name" validate={[required()]} />
@@ -2763,6 +2764,7 @@ type StoreSettingsResponse = {
     maintenanceMode: boolean;
     vacationMode: boolean;
     disableCheckout: boolean;
+    studentDiscountPercent: number;
     announcementBar?: string | null;
     maintenanceAvailableAt?: string;
   };
@@ -2899,6 +2901,7 @@ function OnlineShopToolPage() {
   const { settings, loading, updateStoreControl } = useStoreSettings();
   const checkoutDisabled = Boolean(settings?.storeControl.disableCheckout);
   const shopActive = !checkoutDisabled;
+  const studentDiscountPercent = Number(settings?.storeControl.studentDiscountPercent ?? 20);
 
   async function toggle() {
     try {
@@ -2906,6 +2909,15 @@ function OnlineShopToolPage() {
       notify(shopActive ? "Online Shop deaktiviert. Checkout und neue Transaktionen sind gesperrt." : "Online Shop aktiviert.", {
         type: shopActive ? "warning" : "success"
       });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+    }
+  }
+
+  async function saveStudentDiscountPercent(value: number) {
+    try {
+      await updateStoreControl({ studentDiscountPercent: Math.min(100, Math.max(0, value)) });
+      notify("Studentenrabatt gespeichert.", { type: "success" });
     } catch (error) {
       notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
     }
@@ -2931,6 +2943,18 @@ function OnlineShopToolPage() {
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
         Ein Klick wechselt den Status. Bei deaktiviertem Shop bleibt der Katalog sichtbar, aber `/api/checkout` blockiert jede Zahlung.
       </Typography>
+      <Box sx={{ mt: 3, maxWidth: 260 }}>
+        <MuiTextField
+          size="small"
+          type="number"
+          label="Studentenrabatt (%)"
+          value={studentDiscountPercent}
+          onChange={(event) => void saveStudentDiscountPercent(Number(event.target.value))}
+          slotProps={{ htmlInput: { min: 0, max: 100, step: 1 } }}
+          disabled={loading}
+          fullWidth
+        />
+      </Box>
     </AdminToolShell>
   );
 }

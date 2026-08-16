@@ -245,6 +245,7 @@ export async function GET(request: Request) {
         maintenanceMode: Boolean(storeControl?.maintenanceMode),
         vacationMode: Boolean(storeControl?.vacationMode),
         disableCheckout: Boolean(storeControl?.disableCheckout),
+        studentDiscountPercent: Number(storeControl?.studentDiscountPercent ?? 20),
         announcementBar: storeControl?.announcementBar ?? "",
         maintenanceAvailableAt: storeControl?.maintenanceAvailableAt ?? ""
       }
@@ -440,10 +441,13 @@ export async function POST(request: Request) {
     const permission = await requirePermission("usersRoles", "update");
     if ("response" in permission) return permission.response;
 
-    const updates: { maintenanceMode?: boolean; vacationMode?: boolean; disableCheckout?: boolean; announcementBar?: string | null; maintenanceAvailableAt?: string | null } = {};
+    const updates: { maintenanceMode?: boolean; vacationMode?: boolean; disableCheckout?: boolean; studentDiscountPercent?: number; announcementBar?: string | null; maintenanceAvailableAt?: string | null } = {};
     if (typeof body.maintenanceMode === "boolean") updates.maintenanceMode = body.maintenanceMode;
     if (typeof body.vacationMode === "boolean") updates.vacationMode = body.vacationMode;
     if (typeof body.disableCheckout === "boolean") updates.disableCheckout = body.disableCheckout;
+    if (typeof body.studentDiscountPercent === "number" && Number.isFinite(body.studentDiscountPercent)) {
+      updates.studentDiscountPercent = Math.min(100, Math.max(0, body.studentDiscountPercent));
+    }
     if (typeof body.announcementBar === "string") updates.announcementBar = body.announcementBar;
     const maintenanceAvailableAt = typeof body.maintenanceAvailableAt === "string" ? body.maintenanceAvailableAt : "";
     updates.maintenanceAvailableAt = maintenanceAvailableAt || null;
@@ -465,6 +469,7 @@ export async function POST(request: Request) {
         maintenanceMode: updated.maintenanceMode,
         vacationMode: updated.vacationMode,
         disableCheckout: updated.disableCheckout,
+        studentDiscountPercent: Number(updated.studentDiscountPercent ?? 20),
         announcementBar: updated.announcementBar ?? "",
         maintenanceAvailableAt
       }
