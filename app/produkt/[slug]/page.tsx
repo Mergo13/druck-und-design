@@ -6,6 +6,7 @@ import { ProductConfigurator } from "@/features/configurator/product-configurato
 import { getPublicProductBySlug } from "@/lib/catalog-repository";
 import { CheckCircle2 } from "lucide-react";
 import { getSessionUser } from "@/lib/auth";
+import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { withoutPrices } from "@/lib/product-price-visibility";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-amber-600">
               <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
               {product.rating} Kundenbewertung
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{product.deliveryText}</span>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{formatProductDeliveryText(product.deliveryText)}</span>
             </div>
             <div>
               <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-5xl">{product.name}</h1>

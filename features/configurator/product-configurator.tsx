@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
@@ -249,7 +250,7 @@ export function ProductConfigurator({ product, authenticated }: { product: Produ
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
           <CalendarCheck className="ml-auto h-4 w-4 text-primary" />
-          {config.lieferzeit === "sameday" ? "Heute versandbereit" : "Lieferung in 2-5 Tagen"}
+          {formatProductDeliveryText(product.deliveryText, config.lieferzeit)}
         </div>
       </div>
       <div className="mt-6 grid gap-4">
