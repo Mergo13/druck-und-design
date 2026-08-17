@@ -814,7 +814,16 @@ export async function upsertProduct(product: ProductCatalogItem) {
   const productStatus = product.productStatus ?? (product.visible === false || product.published === false ? "inactive" : "active");
   const visible = productStatus === "active";
   const published = productStatus === "active";
-  const nextProduct = { ...product, productStatus, visible, published, studentDiscountEligible: product.studentDiscountEligible ?? true, industrySlugs: product.industrySlugs ?? [] };
+  const nextProduct = {
+    ...product,
+    productStatus,
+    visible,
+    published,
+    studentDiscountEligible: product.studentDiscountEligible ?? true,
+    pdfAnalysisMode: product.pdfAnalysisMode ?? "disabled",
+    productBindingConfig: product.productBindingConfig ?? { enabledSystems: [], bindingSizeSelectionMode: "automatic" },
+    industrySlugs: product.industrySlugs ?? []
+  };
   await prisma.catalogProduct.upsert({
     where: { slug: product.slug },
     update: {

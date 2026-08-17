@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument } from "pdf-lib";
 import { getCategories, getGlobalProperties, getPublicProductBySlug } from "@/lib/catalog-repository";
-import { pricingQuantitiesForDocument } from "@/lib/document-production";
+import { pricingQuantitiesForProductDocument } from "@/lib/document-production";
 import { resolveBindingConfigurationForProduct, type BindingResolutionResult } from "@/lib/binding-resolution";
 import { getProductionBindingConfig } from "@/lib/production-binding-config";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
@@ -117,7 +117,7 @@ function enabledCategoryProperties(product: ProductCatalogItem, categoryProperti
 
 function calculateProductUnitPrice(product: ProductCatalogItem, quantity: number, selectedOptions: Record<string, string>, categoryProperties: ProductCategoryProperty[]) {
   if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-    return calculateConfiguredProductPrice(product, quantity, selectedOptions, pricingQuantitiesForDocument(selectedOptions, quantity)).total;
+    return calculateConfiguredProductPrice(product, quantity, selectedOptions, pricingQuantitiesForProductDocument(product, categoryProperties, selectedOptions, quantity)).total;
   }
   const firstVariant = product.variants[0];
   const productPrice = firstVariant

@@ -15,7 +15,15 @@ assert.equal(duplex.sheetsPerCopy, 13);
 assert.equal(duplex.totalSheets, 39);
 assert.deepEqual(pricingQuantitiesForDocument(duplexConfig, 3), {
   baseQuantity: 78,
-  propertyQuantity: 3
+  propertyQuantity: 3,
+  copies: 3,
+  printedPages: 78,
+  sheets: 39,
+  blackWhitePages: 78,
+  colorPages: 0,
+  frontCovers: 3,
+  backCovers: 3,
+  perOrder: 1
 });
 
 const oddDuplex = deriveDocumentProduction({
@@ -32,5 +40,24 @@ const simplex = deriveDocumentProduction({
 assert.equal(simplex.totalPrintedPages, 78);
 assert.equal(simplex.sheetsPerCopy, 26);
 assert.equal(simplex.totalSheets, 78);
+
+const fullColor = deriveDocumentProduction({
+  "PDF-Seiten": "18",
+  printColorMode: "full_color"
+}, 5);
+assert.equal(fullColor.totalPrintedPages, 90);
+assert.equal(fullColor.totalColorPages, 90);
+assert.equal(fullColor.totalBlackWhitePages, 0);
+
+const mixed = deriveDocumentProduction({
+  "PDF-Seiten": "18",
+  printColorMode: "auto",
+  pdfAnalysisColorPageCount: "4",
+  pdfAnalysisBwPageCount: "14"
+}, 5);
+assert.equal(mixed.colorPagesPerCopy, 4);
+assert.equal(mixed.blackWhitePagesPerCopy, 14);
+assert.equal(mixed.totalColorPages, 20);
+assert.equal(mixed.totalBlackWhitePages, 70);
 
 console.log("document-production tests passed");

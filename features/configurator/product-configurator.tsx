@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BindingConfigurationSummary } from "@/features/configurator/binding-configuration-summary";
 import { resolveBindingConfigurationForProduct, type BindingSystem, type BindingVariant } from "@/lib/binding-resolution";
-import { deriveDocumentProduction, pricingQuantitiesForDocument } from "@/lib/document-production";
+import { deriveProductDocumentProduction, pricingQuantitiesForProductDocument, type PrintColorMode } from "@/lib/document-production";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { applyStudentDiscount } from "@/lib/student-discount";
@@ -84,8 +84,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const pdfAnalysisEnabled = pdfAnalysisMode !== "disabled";
   const pdfAnalysisRequired = pdfAnalysisMode === "required";
   const pdfAnalysisBlocking = pdfAnalysisRequired && !pdfAnalysis?.valid;
-  const documentProduction = deriveDocumentProduction(config, currentQuantity);
-  const pricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForDocument(config, currentQuantity) : undefined;
+  const documentProduction = deriveProductDocumentProduction(product, categoryProperties, config, currentQuantity);
+  const pricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, config, currentQuantity) : undefined;
+  const printColorMode = documentProduction.printColorMode;
   const bindingResolution = useMemo(() => resolveBindingConfigurationForProduct({
     product,
     categoryProperties,
@@ -147,16 +148,24 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     if (!enabled.size) return [];
     return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
   }, [categoryProperties, product.enabledCategoryProperties]);
+  const hasConfiguredPrintColorProperty = useMemo(() => {
+    const names = [
+      ...(product.pricingProperties ?? []).map((property) => property.name),
+      ...enabledProperties.map((property) => property.name),
+      ...productOptions.map((option) => option.label)
+    ].join(" ");
+    return /druckart|farbmodus|farbe.*sw|schwarz.*weiß|schwarz.*weiss|color/i.test(names);
+  }, [enabledProperties, product.pricingProperties, productOptions]);
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
     if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-      return calculateConfiguredProductPrice(product, quantity, config, pdfAnalysisEnabled ? pricingQuantitiesForDocument(config, quantity) : undefined).total;
+      return calculateConfiguredProductPrice(product, quantity, config, pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, config, quantity) : undefined).total;
     }
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
-  }, [config, currentQuantity, enabledProperties, firstVariant, pdfAnalysisEnabled, product]);
+  }, [categoryProperties, config, currentQuantity, enabledProperties, firstVariant, pdfAnalysisEnabled, product]);
   const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
     ...config,
     ...(finalizedEmbossing?.cartConfig ?? {}),
@@ -199,7 +208,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       "PDF-Seiten": String(analysis.pages),
       "Seiten pro Exemplar": String(analysis.pages),
       PDFFormat: analysis.dominantFormat ?? current.PDFFormat ?? "",
-      PDFAusrichtung: analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : analysis.orientation === "square" ? "Quadratisch" : current.PDFAusrichtung ?? ""
+      PDFAusrichtung: analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : analysis.orientation === "square" ? "Quadratisch" : current.PDFAusrichtung ?? "",
+      pdfAnalysisColorPageCount: String(analysis.colorPages.length),
+      pdfAnalysisBwPageCount: String(analysis.bwPages.length),
+      pdfAnalysisColorPages: analysis.colorPages.join(","),
+      pdfAnalysisBwPages: analysis.bwPages.join(","),
+      printColorMode: current.printColorMode ?? (analysis.colorPages.length > 0 ? "auto" : "black_white")
     }));
   }
 
@@ -351,8 +365,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       authoritativeConfig.pdfAnalysisHeightMm = String(pdfAnalysis.heightMm ?? "");
       authoritativeConfig.pdfAnalysisOrientation = pdfAnalysis.orientation ?? "";
       authoritativeConfig.pdfAnalysisFormat = pdfAnalysis.dominantFormat ?? "";
+      authoritativeConfig.pdfAnalysisColorPageCount = String(pdfAnalysis.colorPages.length);
+      authoritativeConfig.pdfAnalysisBwPageCount = String(pdfAnalysis.bwPages.length);
+      authoritativeConfig.pdfAnalysisColorPages = pdfAnalysis.colorPages.join(",");
+      authoritativeConfig.pdfAnalysisBwPages = pdfAnalysis.bwPages.join(",");
     }
-    const authoritativePricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForDocument(authoritativeConfig, currentQuantity) : undefined;
+    const authoritativePricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, authoritativeConfig, currentQuantity) : undefined;
     const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
     const authoritativeDiscount = applyStudentDiscount({
       subtotal: priceSnapshot.total,
@@ -376,6 +394,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       ...(pdfAnalysisEnabled && documentProduction.pagesPerCopy > 0 ? [
         ["Seiten pro Exemplar", String(documentProduction.pagesPerCopy)],
         ["Druckseiten gesamt", String(documentProduction.totalPrintedPages)],
+        ["Druckart", printColorModeLabel(documentProduction.printColorMode)],
+        ["SW-Seiten gesamt", String(documentProduction.totalBlackWhitePages)],
+        ["Farbseiten gesamt", String(documentProduction.totalColorPages)],
         ["Blätter pro Exemplar", String(documentProduction.sheetsPerCopy)],
         ["Blätter gesamt", String(documentProduction.totalSheets)]
       ] as Array<[string, string]> : []),
@@ -519,6 +540,27 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </label>
           </div>
         ) : null}
+        {pdfAnalysisEnabled && !hasConfiguredPrintColorProperty ? (
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Druckart</p>
+            <div className="mt-3 grid gap-2">
+              {[
+                { value: "black_white", label: "Alles Schwarz-Weiß" },
+                { value: "full_color", label: "Alles Farbe" },
+                ...(pdfAnalysis && pdfAnalysis.colorPages.length > 0 ? [{ value: "auto", label: "Farbe/SW laut PDF" }] : [])
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setConfig({ ...config, printColorMode: option.value })}
+                  className={printColorMode === option.value ? "rounded-md border border-brand-blue bg-brand-mist px-3 py-2 text-left text-sm font-bold text-brand-blue" : "rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-bold text-slate-700 hover:border-brand-blue"}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <label className="grid gap-2">
           <span className="text-sm font-bold">Auflage</span>
           {product.pricingType === "tiered" ? (
@@ -650,7 +692,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           <div className="mt-3 grid gap-2 text-slate-700">
             <SummaryLine label="PDF" value={`${documentProduction.pagesPerCopy} Seiten`} />
             <SummaryLine label="Auflage" value={`${documentProduction.quantity} ${documentProduction.quantity === 1 ? "Exemplar" : "Exemplare"}`} />
-            <SummaryLine label="Druck" value={`${documentProduction.totalPrintedPages} Seiten gesamt`} />
+            <SummaryLine label="Druckart" value={printColorModeLabel(documentProduction.printColorMode)} />
+            {documentProduction.printColorMode === "auto" ? (
+              <>
+                <SummaryLine label="Pro Exemplar" value={`${documentProduction.blackWhitePagesPerCopy} SW · ${documentProduction.colorPagesPerCopy} Farbe`} />
+                <SummaryLine label="Gesamt" value={`${documentProduction.totalBlackWhitePages} SW · ${documentProduction.totalColorPages} Farbe`} />
+              </>
+            ) : (
+              <SummaryLine label="Druck" value={documentProduction.printColorMode === "full_color" ? `${documentProduction.totalColorPages} Farbseiten gesamt` : `${documentProduction.totalBlackWhitePages} SW-Seiten gesamt`} />
+            )}
             <SummaryLine
               label={documentProduction.printSides === "duplex" ? "Beidseitig" : "Einseitig"}
               value={`${documentProduction.sheetsPerCopy} Blatt / Exemplar · ${documentProduction.totalSheets} gesamt`}
@@ -777,6 +827,12 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
       <span className="text-right font-bold text-slate-900">{value}</span>
     </div>
   );
+}
+
+function printColorModeLabel(mode: PrintColorMode) {
+  if (mode === "full_color") return "Alles Farbe";
+  if (mode === "auto") return "Farbe/SW laut PDF";
+  return "Alles Schwarz-Weiß";
 }
 
 function resolveEmbossingSelection(config: Record<string, string>) {

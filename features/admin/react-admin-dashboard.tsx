@@ -56,6 +56,7 @@ import { Route } from "react-router-dom";
 import { useFormContext, useWatch } from "react-hook-form";
 import { calculateConfiguredProductPrice, calculateTierPrice, validateProductPricing } from "@/lib/print-workflow";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
+import type { BindingSystem } from "@/lib/binding-resolution";
 import type { GlobalProperty, HomepageSettings, ProductCatalogItem, ProductIndustry, ProductPriceTier, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
 type AdminRecord = RaRecord & {
@@ -1868,6 +1869,18 @@ function ProductPricingManager() {
     updateProperties(next);
   }
 
+  function updateValueProduction(
+    propertyIndex: number,
+    valueIndex: number,
+    key: keyof NonNullable<ProductPropertyValue["production"]>,
+    value: string | number | undefined
+  ) {
+    const next = structuredClone(pricingProperties);
+    const nextValue = next[propertyIndex].values[valueIndex];
+    nextValue.production = { ...(nextValue.production ?? {}), [key]: value };
+    updateProperties(next);
+  }
+
   return (
     <Card variant="outlined" sx={{
       my: 2,
@@ -2070,7 +2083,7 @@ function ProductPricingManager() {
                   <Box sx={{ display: "grid", gap: 0.9 }}>
                     {(property.values ?? []).map((value, valueIndex) => (
                       <Box key={`${value.value}-${valueIndex}`} sx={{ border: "1px solid #e2e8f0", borderRadius: 1.5, p: 1, display: "grid", gap: 1, bgcolor: value.enabled === false ? "#f8fafc" : "white", color: "#0f172a" }}>
-                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "86px minmax(160px,1fr) minmax(160px,1fr) 190px 140px auto" }, gap: 1, alignItems: "center" }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "86px minmax(150px,1fr) minmax(150px,1fr) 170px 190px 140px auto" }, gap: 1, alignItems: "center" }}>
                           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 800, color: "#0f172a" }}>
                             <input
                               type="checkbox"
@@ -2113,6 +2126,24 @@ function ProductPricingManager() {
                             <MenuItem value="flat">Festpreis</MenuItem>
                             <MenuItem value="multiplier">Multiplikator</MenuItem>
                           </MuiTextField>
+                          <MuiTextField select size="small" label="Berechnung" value={value.production?.pricingQuantitySource ?? "copies"} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            const nextValue = next[propertyIndex].values[valueIndex];
+                            nextValue.production = {
+                              ...(nextValue.production ?? {}),
+                              pricingQuantitySource: event.target.value as NonNullable<ProductPropertyValue["production"]>["pricingQuantitySource"]
+                            };
+                            updateProperties(next);
+                          }}>
+                            <MenuItem value="copies">Auflage / Exemplare</MenuItem>
+                            <MenuItem value="printed_pages">Druckseiten gesamt</MenuItem>
+                            <MenuItem value="sheets">Blätter gesamt</MenuItem>
+                            <MenuItem value="black_white_pages">SW-Seiten gesamt</MenuItem>
+                            <MenuItem value="color_pages">Farbseiten gesamt</MenuItem>
+                            <MenuItem value="front_covers">Deckblatt vorne</MenuItem>
+                            <MenuItem value="back_covers">Rückseite / Rückkarton</MenuItem>
+                            <MenuItem value="per_order">Einmal pro Auftrag</MenuItem>
+                          </MuiTextField>
                           <MuiTextField size="small" label={value.pricingMode === "global" ? inheritedValuePrice(property, value) : value.pricingMode === "flat" ? "Festpreis (€)" : "Aufpreis / Stk. (€)"} type="number" disabled={value.pricingMode !== "fixed" && value.pricingMode !== "flat"} value={value.fixedPrice ?? 0} onChange={(event) => {
                             const next = structuredClone(pricingProperties);
                             next[propertyIndex].values[valueIndex].fixedPrice = Number(event.target.value);
@@ -2138,6 +2169,86 @@ function ProductPricingManager() {
                               updateProperties(next);
                             }}>Deaktivieren</Button>
                           </Box>
+                        </Box>
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, minmax(140px, 1fr))" }, gap: 1, borderTop: "1px dashed #cbd5e1", pt: 1 }}>
+                          <MuiTextField
+                            size="small"
+                            label="Papierstärke mm"
+                            type="number"
+                            value={value.production?.caliperMm ?? value.production?.thicknessMm ?? ""}
+                            helperText="z.B. 0.10 für 80 g"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "caliperMm", event.target.value === "" ? undefined : Number(event.target.value))}
+                          />
+                          <MuiTextField
+                            size="small"
+                            label="Grammatur g/m²"
+                            type="number"
+                            value={value.production?.grammageGsm ?? ""}
+                            helperText="Nur Info/Fallback"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "grammageGsm", event.target.value === "" ? undefined : Number(event.target.value))}
+                          />
+                          <MuiTextField
+                            select
+                            size="small"
+                            label="Caliper Quelle"
+                            value={value.production?.caliperSource ?? ""}
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "caliperSource", event.target.value || undefined)}
+                          >
+                            <MenuItem value="">Keine</MenuItem>
+                            <MenuItem value="manufacturer">Hersteller</MenuItem>
+                            <MenuItem value="supplier">Lieferant</MenuItem>
+                            <MenuItem value="measured">Gemessen</MenuItem>
+                            <MenuItem value="estimated">Geschätzt</MenuItem>
+                          </MuiTextField>
+                          <MuiTextField
+                            size="small"
+                            label="Coverstärke mm"
+                            type="number"
+                            value={value.production?.coverThicknessMm ?? ""}
+                            helperText="Deckblatt/Rückkarton"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "coverThicknessMm", event.target.value === "" ? undefined : Number(event.target.value))}
+                          />
+                          <MuiTextField
+                            size="small"
+                            label="Bindungssystem ID"
+                            value={value.production?.bindingSystemId ?? ""}
+                            helperText="z.B. wire-3-1"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "bindingSystemId", event.target.value || undefined)}
+                          />
+                          <MuiTextField
+                            size="small"
+                            label="Bindungsserie"
+                            value={value.production?.bindingSeries ?? ""}
+                            helperText="z.B. classic"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "bindingSeries", event.target.value || undefined)}
+                          />
+                          <MuiTextField
+                            size="small"
+                            label="Bindungsfarbe"
+                            value={value.production?.bindingColor ?? ""}
+                            helperText="schwarz, weiss, silber"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "bindingColor", event.target.value || undefined)}
+                          />
+                          <MuiTextField
+                            size="small"
+                            label="Format"
+                            value={value.production?.format ?? ""}
+                            helperText="A4, A5 ..."
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "format", event.target.value || undefined)}
+                          />
+                          <MuiTextField
+                            select
+                            size="small"
+                            label="Druckart-Wert"
+                            value={value.production?.printColorMode ?? ""}
+                            helperText="Nur für Druckart-Eigenschaften"
+                            onChange={(event) => updateValueProduction(propertyIndex, valueIndex, "printColorMode", event.target.value || undefined)}
+                          >
+                            <MenuItem value="">Keine</MenuItem>
+                            <MenuItem value="black_white">Alles Schwarz-Weiß</MenuItem>
+                            <MenuItem value="full_color">Alles Farbe</MenuItem>
+                            <MenuItem value="auto">Farbe/SW laut PDF</MenuItem>
+                          </MuiTextField>
                         </Box>
                         {value.pricingMode === "tiered" ? (
                           <Box sx={{ overflowX: "auto", borderTop: "1px solid #e2e8f0", pt: 1 }}>
@@ -2349,6 +2460,60 @@ function ProductPdfAnalysisFields() {
   );
 }
 
+function ProductProductionConfigFields() {
+  const { setValue } = useFormContext();
+  const config = (useWatch({ name: "productBindingConfig" }) as ProductCatalogItem["productBindingConfig"] | undefined) ?? {};
+  const [systems, setSystems] = useState<BindingSystem[]>([]);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/production/bindings");
+        if (!res.ok) return;
+        const payload = await res.json() as { bindingSystems?: BindingSystem[] };
+        setSystems(payload.bindingSystems ?? []);
+      } catch {
+        setSystems([]);
+      }
+    })();
+  }, []);
+  const enabled = config.enabledSystems ?? [];
+  function updateEnabled(systemId: string, checked: boolean) {
+    const next = checked ? Array.from(new Set([...enabled, systemId])) : enabled.filter((id) => id !== systemId);
+    setValue("productBindingConfig", { ...config, enabledSystems: next }, { shouldDirty: true });
+  }
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#e2e8f0", bgcolor: "#fff" }}>
+      <CardContent sx={{ display: "grid", gap: 1.5 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>Produktionslogik</Typography>
+        <MuiTextField
+          select
+          size="small"
+          label="Bindungsgröße"
+          value={config.bindingSizeSelectionMode ?? "automatic"}
+          onChange={(event) => setValue("productBindingConfig", { ...config, bindingSizeSelectionMode: event.target.value }, { shouldDirty: true })}
+          helperText="Automatisch berechnet die passende Größe aus PDF-Seiten, Druckseiten, Papierstärke und Bindungssystem."
+        >
+          <MenuItem value="automatic">Automatisch</MenuItem>
+          <MenuItem value="manual">Manuell</MenuItem>
+          <MenuItem value="automatic-with-override">Automatisch mit Override</MenuItem>
+        </MuiTextField>
+        <Box sx={{ display: "grid", gap: 0.75 }}>
+          <Typography variant="caption" sx={{ fontWeight: 900, color: "#475569", textTransform: "uppercase", letterSpacing: ".08em" }}>Erlaubte Bindungssysteme</Typography>
+          {systems.length ? systems.map((system) => (
+            <label key={system.id} style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 800 }}>
+              <input type="checkbox" checked={enabled.includes(system.id)} onChange={(event) => updateEnabled(system.id, event.target.checked)} />
+              <span>{system.label}</span>
+              <span style={{ color: "#64748b", fontWeight: 700 }}>{system.id}</span>
+            </label>
+          )) : (
+            <Typography variant="body2" sx={{ color: "#64748b" }}>Keine Produktionsdaten geladen. Bitte zuerst unter Tools / Produktionsdaten Bindungen prüfen.</Typography>
+          )}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 function AdminFormSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#d8e0ea", bgcolor: "#fff" }}>
@@ -2417,6 +2582,7 @@ function ProductFormFields({ duplicate = false }: { duplicate?: boolean }) {
       <Box sx={{ display: "grid", gap: 1.5 }}>
         <ProductHomepagePlacementFields />
         <ProductPdfAnalysisFields />
+        <ProductProductionConfigFields />
         <ProductIndustryCheckboxes />
       </Box>
 
@@ -2439,7 +2605,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pdfAnalysisMode: "disabled", pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pdfAnalysisMode: "disabled", productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductFormFields />
       </SimpleForm>
     </Create>

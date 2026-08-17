@@ -150,4 +150,91 @@ const pagePricedStudentPrice = calculateConfiguredProductPrice(pagePricedStudent
 assert.equal(pagePricedStudentPrice.basePrice, 19.5);
 assert.equal(pagePricedStudentPrice.total, 88.5);
 
+const documentQuantityProduct = {
+  ...product,
+  basePrice: 0,
+  pricingType: "fixed" as const,
+  pricingProperties: [
+    {
+      name: "SW Druck",
+      values: [{
+        value: "sw",
+        enabled: true,
+        defaultSelected: true,
+        pricingMode: "fixed" as const,
+        fixedPrice: 0.1,
+        production: { pricingQuantitySource: "black_white_pages" as const }
+      }]
+    },
+    {
+      name: "Farbdruck",
+      values: [{
+        value: "farbe",
+        enabled: true,
+        defaultSelected: true,
+        pricingMode: "fixed" as const,
+        fixedPrice: 0.45,
+        production: { pricingQuantitySource: "color_pages" as const }
+      }]
+    },
+    {
+      name: "Innenpapier",
+      values: [{
+        value: "120g",
+        enabled: true,
+        defaultSelected: true,
+        pricingMode: "fixed" as const,
+        fixedPrice: 0.02,
+        production: { pricingQuantitySource: "sheets" as const }
+      }]
+    },
+    {
+      name: "Deckblatt",
+      values: [{
+        value: "250g",
+        enabled: true,
+        defaultSelected: true,
+        pricingMode: "fixed" as const,
+        fixedPrice: 0.5,
+        production: { pricingQuantitySource: "front_covers" as const }
+      }]
+    },
+    {
+      name: "Klarsichtfolie",
+      values: [{
+        value: "mit",
+        enabled: true,
+        defaultSelected: true,
+        pricingMode: "fixed" as const,
+        fixedPrice: 0.25,
+        production: { pricingQuantitySource: "copies" as const }
+      }]
+    },
+    {
+      name: "Einrichtung",
+      values: [{
+        value: "standard",
+        enabled: true,
+        defaultSelected: true,
+        pricingMode: "fixed" as const,
+        fixedPrice: 5,
+        production: { pricingQuantitySource: "per_order" as const }
+      }]
+    }
+  ]
+} as ProductCatalogItem;
+const documentQuantityPrice = calculateConfiguredProductPrice(documentQuantityProduct, 5, {}, {
+  baseQuantity: 90,
+  propertyQuantity: 5,
+  copies: 5,
+  printedPages: 90,
+  sheets: 45,
+  blackWhitePages: 70,
+  colorPages: 20,
+  frontCovers: 5,
+  backCovers: 5,
+  perOrder: 1
+});
+assert.equal(documentQuantityPrice.total, 25.65);
+
 console.log("global-property-pricing tests passed");

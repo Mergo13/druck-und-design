@@ -1,4 +1,4 @@
-import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty } from "@/types/print-platform";
+import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty, ProductPropertyProductionMetadata } from "@/types/print-platform";
 
 function money(value: number) {
   return Math.round(value * 100) / 100;
@@ -45,6 +45,14 @@ export function calculateConfiguredProductPrice(
   pricingQuantities?: {
     baseQuantity?: number;
     propertyQuantity?: number;
+    copies?: number;
+    printedPages?: number;
+    sheets?: number;
+    blackWhitePages?: number;
+    colorPages?: number;
+    frontCovers?: number;
+    backCovers?: number;
+    perOrder?: number;
   }
 ) {
   const qty = safeQuantity(quantity);
@@ -70,20 +78,21 @@ export function calculateConfiguredProductPrice(
     const selectedValue = selected || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
     const match = enabledValues.find((value) => value.value === selectedValue);
     if (!match) return sum;
+    const quantityForValue = resolvePropertyPricingQuantity(match.production, pricingQuantities, propertyQty);
     const propertyStepUnitPrice = Math.max(0, Number(property.stepPrice) || 0);
     const valueUnitPrice = match.pricingMode === "tiered"
-      ? calculateTierPrice(propertyQty, match.tierPrices).unitPrice
+      ? quantityForValue > 0 ? calculateTierPrice(quantityForValue, match.tierPrices).unitPrice : 0
       : 0;
     const valuePrice = match.pricingMode === "fixed"
-      ? money(Math.max(0, Number(match.fixedPrice) || 0) * propertyQty)
+      ? money(Math.max(0, Number(match.fixedPrice) || 0) * quantityForValue)
       : match.pricingMode === "flat"
         ? Math.max(0, Number(match.fixedPrice) || 0)
       : match.pricingMode === "multiplier"
         ? money(base * Math.max(0, Number(match.multiplier ?? 1) || 1) - base)
       : match.pricingMode === "tiered"
-        ? money(valueUnitPrice * propertyQty)
+        ? money(valueUnitPrice * quantityForValue)
         : 0;
-    const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * propertyQty;
+    const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * quantityForValue;
     const price = money(propertyStepPrice + valuePrice);
     lines.push({ label: property.name, value: match.labelOverride || match.label || match.value, price });
     return sum + price;
@@ -97,6 +106,26 @@ export function calculateConfiguredProductPrice(
     lines,
     total: money(base + surcharge)
   };
+}
+
+function resolvePropertyPricingQuantity(
+  production: ProductPropertyProductionMetadata | undefined,
+  pricingQuantities: Parameters<typeof calculateConfiguredProductPrice>[3],
+  fallbackQuantity: number
+) {
+  const source = production?.pricingQuantitySource;
+  if (!source) return fallbackQuantity;
+  const value = source === "copies" ? pricingQuantities?.copies
+    : source === "printed_pages" ? pricingQuantities?.printedPages
+      : source === "sheets" ? pricingQuantities?.sheets
+        : source === "black_white_pages" ? pricingQuantities?.blackWhitePages
+          : source === "color_pages" ? pricingQuantities?.colorPages
+            : source === "front_covers" ? pricingQuantities?.frontCovers
+              : source === "back_covers" ? pricingQuantities?.backCovers
+                : source === "per_order" ? pricingQuantities?.perOrder
+                  : fallbackQuantity;
+  const numeric = Number(value ?? fallbackQuantity);
+  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : fallbackQuantity;
 }
 
 export function getProductStartingPriceLabel(product: ProductCatalogItem) {
