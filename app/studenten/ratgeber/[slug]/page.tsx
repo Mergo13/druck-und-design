@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { StructuredData } from "@/components/structured-data";
 import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
-import { getStudentArticleBySlug, getStudentArticles } from "@/lib/student-content";
+import { getStudentArticleBySlug, getStudentArticleProfile, getStudentArticles } from "@/lib/student-content";
 
 export async function generateStaticParams() {
   const articles = await getStudentArticles();
@@ -43,13 +43,13 @@ export default async function StudentenArticlePage({ params }: { params: Promise
   if (!article) notFound();
 
   const productBySlug = new Map(products.map((product) => [product.slug, product]));
+  const profile = getStudentArticleProfile(article);
+  const primaryProduct = productBySlug.get(profile.targetProductSlug) ?? productBySlug.get(article.relatedProducts[0] ?? "");
   const relatedProducts = article.relatedProducts.map((productSlug) => productBySlug.get(productSlug)).filter(Boolean).slice(0, 3);
   const relatedArticles = article.relatedArticles.map((relatedSlug) => allArticles.find((item) => item.slug === relatedSlug)).filter(Boolean).slice(0, 3);
-  const paragraphs = article.body.split(/\n{2,}/).filter(Boolean);
-  const toc = paragraphs.slice(0, 4).map((paragraph, index) => ({
-    id: `abschnitt-${index + 1}`,
-    label: paragraph.slice(0, 68).replace(/[.:,;!?]\s*$/, "")
-  }));
+  const blocks = parseArticleBody(article.body);
+  const headings = blocks.filter((block): block is Extract<ArticleBodyBlock, { type: "heading" }> => block.type === "heading").slice(0, 5);
+  const toc = headings.map((heading) => ({ id: heading.id, label: heading.text }));
 
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -96,10 +96,27 @@ export default async function StudentenArticlePage({ params }: { params: Promise
         <p className="mt-8 text-xs font-black uppercase tracking-[0.14em] text-brand-blue">{article.category}</p>
         <h1 className="mt-4 text-4xl font-black leading-tight text-brand-ink md:text-6xl">{article.title}</h1>
         <p className="mt-5 text-lg leading-8 text-slate-600">{article.excerpt}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <span className="rounded-full border border-brand-blue/20 bg-brand-mist px-3 py-1 text-xs font-black uppercase text-brand-blue">{profile.searchIntent}</span>
+          <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-black text-slate-600">{profile.primaryKeyword}</span>
+        </div>
 
         {article.featuredImage ? (
           <div className="relative mt-8 aspect-[16/9] overflow-hidden rounded-lg bg-brand-mist">
             <Image src={article.featuredImage} alt={article.title} fill className="object-cover" sizes="(min-width: 768px) 768px, 100vw" />
+          </div>
+        ) : null}
+
+        {primaryProduct ? (
+          <div className="mt-8 rounded-lg border border-brand-blue/20 bg-brand-mist p-5 md:flex md:items-center md:justify-between md:gap-6">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">{profile.conversionGoal}</p>
+              <h2 className="mt-2 text-2xl font-black text-brand-ink">{primaryProduct.name}</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{primaryProduct.short}</p>
+            </div>
+            <Button asChild className="mt-4 shrink-0 md:mt-0">
+              <Link href={`/produkt/${primaryProduct.slug}`}>{profile.ctaLabel}</Link>
+            </Button>
           </div>
         ) : null}
 
@@ -114,15 +131,18 @@ export default async function StudentenArticlePage({ params }: { params: Promise
           </div>
         ) : null}
 
-        <div className="prose prose-slate mt-8 max-w-none">
-          {paragraphs.map((paragraph, index) => (
-            <p id={toc[index]?.id} key={index} className="scroll-mt-24 text-base leading-8 text-slate-700">{paragraph}</p>
-          ))}
+        <div className="mt-8 grid gap-6">
+          {blocks.map((block, index) => <ArticleBodyBlockView key={`${block.type}-${index}`} block={block} />)}
         </div>
 
         <div className="mt-10 rounded-lg border-l-4 border-brand-blue bg-brand-mist p-5">
-          <p className="font-black text-brand-ink">Kurz vor der Abgabe?</p>
-          <p className="mt-2 text-sm leading-6 text-slate-600">Lade deine PDF-Datei im bestehenden Produktkonfigurator hoch und wähle Bindung, Papier, Exemplare und Abholung oder Versand.</p>
+          <p className="font-black text-brand-ink">Nächster Schritt</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">Lade deine PDF-Datei im bestehenden Produktkonfigurator hoch. Seitenanzahl, Auflage, Druckart, Papier und Bindung fließen dort in die echte Preisberechnung ein.</p>
+          {primaryProduct ? (
+            <Link href={`/produkt/${primaryProduct.slug}`} className="mt-3 inline-flex items-center gap-2 text-sm font-black text-brand-blue">
+              {profile.ctaLabel} <ArrowRight className="h-4 w-4" />
+            </Link>
+          ) : null}
         </div>
 
         {relatedProducts.length ? (
@@ -172,11 +192,54 @@ export default async function StudentenArticlePage({ params }: { params: Promise
 
         <div className="mt-12 rounded-lg bg-slate-950 p-7 text-white">
           <h2 className="text-2xl font-black">Druckauftrag starten</h2>
-          <p className="mt-2 text-white/70">Konfiguriere Abschlussarbeit, Bindung oder Poster im bestehenden Shop.</p>
-          <Button asChild className="mt-5"><Link href="/studenten">Zum Studenten-Shop</Link></Button>
+          <p className="mt-2 text-white/70">{primaryProduct ? `${primaryProduct.name} direkt konfigurieren und mit deiner PDF den Preis berechnen.` : "Konfiguriere Abschlussarbeit, Bindung oder Poster im bestehenden Shop."}</p>
+          <Button asChild className="mt-5"><Link href={primaryProduct ? `/produkt/${primaryProduct.slug}` : "/studenten"}>{primaryProduct ? profile.ctaLabel : "Zum Studenten-Shop"}</Link></Button>
         </div>
       </article>
     </main>
   );
 }
 
+type ArticleBodyBlock =
+  | { type: "heading"; id: string; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; items: string[] };
+
+function parseArticleBody(body: string): ArticleBodyBlock[] {
+  return body.split(/\n{2,}/).filter(Boolean).map((rawBlock, index) => {
+    const block = rawBlock.trim();
+    if (block.startsWith("## ")) {
+      return {
+        type: "heading",
+        id: `abschnitt-${index + 1}`,
+        text: block.replace(/^##\s+/, "").trim()
+      };
+    }
+    if (block.split("\n").every((line) => line.trim().startsWith("- "))) {
+      return {
+        type: "list",
+        items: block.split("\n").map((line) => line.trim().replace(/^-\s+/, "")).filter(Boolean)
+      };
+    }
+    return { type: "paragraph", text: block };
+  });
+}
+
+function ArticleBodyBlockView({ block }: { block: ArticleBodyBlock }) {
+  if (block.type === "heading") {
+    return <h2 id={block.id} className="scroll-mt-24 text-2xl font-black leading-tight text-brand-ink">{block.text}</h2>;
+  }
+  if (block.type === "list") {
+    return (
+      <ul className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-5">
+        {block.items.map((item) => (
+          <li key={item} className="flex gap-3 text-sm leading-6 text-slate-700">
+            <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-blue" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return <p className="text-base leading-8 text-slate-700">{block.text}</p>;
+}

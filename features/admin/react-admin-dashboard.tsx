@@ -1344,6 +1344,12 @@ function StudentArticleList() {
 function StudentArticleForm() {
   return (
     <>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <Typography sx={{ fontWeight: 800 }}>SEO & Funnel</Typography>
+        <Typography variant="body2">
+          Verwende Tags wie intent:commercial, intent:transactional, intent:local oder intent:informational. Der erste Eintrag unter "Verknüpfte Produkte" wird als Haupt-CTA im Ratgeber verwendet.
+        </Typography>
+      </Alert>
       <TextInput source="slug" label="Slug" validate={[required()]} />
       <TextInput source="title" label="Titel" validate={[required()]} fullWidth />
       <TextInput source="excerpt" label="Kurzbeschreibung" multiline validate={[required()]} fullWidth />
@@ -1369,15 +1375,15 @@ function StudentArticleForm() {
       <TextInput source="seoTitle" label="SEO Titel" fullWidth />
       <TextInput source="metaDescription" label="Meta Description" multiline fullWidth />
       <TextInput source="canonicalUrl" label="Canonical URL" fullWidth />
-      <TextInput source="body" label="Artikeltext" multiline validate={[required()]} fullWidth />
+      <TextInput source="body" label="Artikeltext" multiline validate={[required()]} fullWidth helperText="Unterüberschriften mit ## schreiben, Listen mit - beginnen. Beispiel: ## Was kostet es? / - Seitenanzahl / - Bindung" />
       <ArrayInput source="tags" label="Tags">
         <SimpleFormIterator inline disableClear>
-          <TextInput source="" label="Tag" helperText={false} />
+          <TextInput source="" label="Tag" helperText="z.B. intent:commercial oder cluster:Abschlussarbeiten" />
         </SimpleFormIterator>
       </ArrayInput>
       <ArrayInput source="relatedProducts" label="Verknüpfte Produkte">
         <SimpleFormIterator inline disableClear>
-          <TextInput source="" label="Produkt-Slug" helperText={false} />
+          <TextInput source="" label="Produkt-Slug" helperText="Erster Produkt-Slug = Haupt-CTA" />
         </SimpleFormIterator>
       </ArrayInput>
       <ArrayInput source="relatedArticles" label="Verwandte Artikel">

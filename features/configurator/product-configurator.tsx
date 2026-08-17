@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
 
 export function ProductConfigurator({ product, authenticated, studentVerified = false, studentDiscountPercent = 20 }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const firstVariant = product.variants[0];
   const productOptions = useMemo(() => {
     if (!firstVariant) return [];
@@ -113,6 +114,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     }
     sessionStorage.removeItem(`dud_pending_config:${product.slug}`);
   }, [product.slug]);
+
+  useEffect(() => {
+    const preset = searchParams.get("studentPreset");
+    if (!preset) return;
+    setConfig((current) => applyStudentProductPreset(product, categoryProperties, current, preset));
+  }, [categoryProperties, product, searchParams]);
 
   useEffect(() => {
     void (async () => {
@@ -818,6 +825,65 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
 function normalizePropertyValue(value: ProductCategoryProperty["values"][number]) {
   if (typeof value === "string") return { value, label: value };
   return { value: value.value, label: value.label || value.value };
+}
+
+function applyStudentProductPreset(
+  product: ProductCatalogItem,
+  categoryProperties: ProductCategoryProperty[],
+  current: Record<string, string>,
+  preset: string
+) {
+  const next = { ...current };
+
+  if (preset === "hardcover" || preset === "hardcover-praegung") {
+    applyMatchingProperty(next, product, categoryProperties, /bindung|bind/i, /hardcover|hard.?cover/i);
+  }
+
+  if (preset === "hardcover-praegung") {
+    applyMatchingProperty(
+      next,
+      product,
+      categoryProperties,
+      /prägung|praegung|veredelung/i,
+      /gold|silber|prägung|praegung/i,
+      /keine|ohne|nein/i
+    );
+  }
+
+  return next;
+}
+
+function applyMatchingProperty(
+  config: Record<string, string>,
+  product: ProductCatalogItem,
+  categoryProperties: ProductCategoryProperty[],
+  propertyPattern: RegExp,
+  valuePattern: RegExp,
+  excludePattern?: RegExp
+) {
+  const productProperty = (product.pricingProperties ?? []).find((property) => propertyPattern.test(property.name));
+  if (productProperty) {
+    const match = productProperty.values
+      .filter((value) => value.enabled !== false)
+      .find((value) => {
+        const searchable = `${value.value} ${value.label ?? ""} ${value.labelOverride ?? ""}`;
+        return valuePattern.test(searchable) && (!excludePattern || !excludePattern.test(searchable));
+      });
+    if (match) {
+      config[`eigenschaft:${productProperty.name}`] = match.value;
+      return;
+    }
+  }
+
+  const categoryProperty = categoryProperties.find((property) => propertyPattern.test(property.name));
+  if (!categoryProperty) return;
+  const match = categoryProperty.values
+    .map(normalizePropertyValue)
+    .find((value) => {
+      const searchable = `${value.value} ${value.label}`;
+      return valuePattern.test(searchable) && (!excludePattern || !excludePattern.test(searchable));
+    });
+  if (match) config[`eigenschaft:${categoryProperty.name}`] = match.value;
 }
 
 function SummaryLine({ label, value }: { label: string; value: string }) {

@@ -90,14 +90,14 @@ const priceExamples = [
     subtitle: "Hardcover",
     text: "Für Bachelor-, Master- und Diplomarbeiten.",
     slug: "abschlussarbeiten",
-    href: "/produkt/abschlussarbeiten"
+    href: "/produkt/abschlussarbeiten?studentPreset=hardcover"
   },
   {
     title: "Premium",
     subtitle: "Hardcover + Prägung",
     text: "Für finale Abgaben mit Gold- oder Silberprägung.",
     slug: "abschlussarbeiten",
-    href: "/produkt/abschlussarbeiten"
+    href: "/produkt/abschlussarbeiten?studentPreset=hardcover-praegung"
   }
 ] as const;
 

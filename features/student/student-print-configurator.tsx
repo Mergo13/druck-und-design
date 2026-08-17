@@ -21,7 +21,6 @@ import {
   productionLabel,
   recommendBinding,
   recommendPaper,
-  resolveColorCounts,
   studentProductConfig,
   type PdfAnalysis,
   type StudentColorMode,
@@ -94,11 +93,50 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
   const production = deriveStudentProductionQuantities(selection, analysis ?? undefined);
   const pageCount = production.pageCount;
   const sheets = production.sheetsPerCopy;
-  const color = resolveColorCounts(selection, analysis ?? undefined);
   const bindings = getAvailableBindings({ pages: pageCount, sheets, format: selection.format, presetKey: selection.presetKey });
   const availableBindings = bindings.filter((binding) => binding.available);
   const blockThickness = estimateBlockThicknessMm(sheets, selection.paper);
   const selectedProductConfig = activeProduct ? productPriceConfig(activeProduct, selection) : {};
+  const configurationPresets = useMemo(() => {
+    function firstAvailable(preferred: StudentPrintSelection["binding"], fallback: StudentPrintSelection["binding"]) {
+      if (bindings.some((binding) => binding.value === preferred && binding.available)) return preferred;
+      if (bindings.some((binding) => binding.value === fallback && binding.available)) return fallback;
+      return availableBindings[0]?.value ?? "keine";
+    }
+    const recommendedPaper = recommendPaper(selection.presetKey, pageCount);
+    const recommendedBinding = firstAvailable(
+      recommendBinding({ presetKey: selection.presetKey, pages: pageCount, sheets, format: selection.format }),
+      selection.binding
+    );
+    const cheapBinding = firstAvailable("spiralbindung", "heftklammer");
+    const premiumBinding = firstAvailable("hardcover", recommendedBinding);
+    return [
+      {
+        id: "recommended",
+        title: "Empfohlen",
+        text: `${colorModeLabel("auto")}, ${paperLabel(recommendedPaper)}, ${bindingLabel(recommendedBinding)}`,
+        patch: { colorMode: "auto" as const, paper: recommendedPaper, binding: recommendedBinding }
+      },
+      {
+        id: "budget",
+        title: "Günstigste Variante",
+        text: `Alles Schwarz-Weiß, ${paperLabel("80g-weiss")}, beidseitig, ${bindingLabel(cheapBinding)}`,
+        patch: { colorMode: "bw" as const, paper: "80g-weiss" as const, printSides: "duplex" as const, binding: cheapBinding }
+      },
+      {
+        id: "premium",
+        title: "Premium",
+        text: `Alles Farbe, ${paperLabel("100g-weiss")}, ${bindingLabel(premiumBinding)}`,
+        patch: { colorMode: "color" as const, paper: "100g-weiss" as const, binding: premiumBinding }
+      }
+    ];
+  }, [availableBindings, bindings, pageCount, selection.binding, selection.format, selection.presetKey, sheets]);
+  function applyConfigurationPreset(patch: Partial<StudentPrintSelection>) {
+    setSelection((current) => ({ ...current, ...patch }));
+  }
+  function isConfigurationPresetActive(patch: Partial<StudentPrintSelection>) {
+    return Object.entries(patch).every(([key, value]) => selection[key as keyof StudentPrintSelection] === value);
+  }
 
   const groupedPresets = useMemo(() => ({
     student: presets.filter((preset) => preset.audience === "student"),
@@ -492,9 +530,19 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
                 </div>
 
                 <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <VariantCard title="Empfohlen" text={`${color.label}, ${paperLabel(selection.paper)}, ${bindingLabel(selection.binding)}`} price={price?.unitPrice} active />
-                  <VariantCard title="Günstigste Variante" text="Alles Schwarz-Weiß, 80 g weiß, beidseitig" />
-                  <VariantCard title="Premium" text={`Farbe wie PDF, ${selection.paper === "80g-weiss" ? "100 g weiß" : paperLabel(selection.paper)}, hochwertige Bindung`} />
+                  {configurationPresets.map((preset) => {
+                    const active = isConfigurationPresetActive(preset.patch);
+                    return (
+                      <VariantCard
+                        key={preset.id}
+                        title={preset.title}
+                        text={preset.text}
+                        price={active ? price?.unitPrice : undefined}
+                        active={active}
+                        onClick={() => applyConfigurationPreset(preset.patch)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             ) : null}
@@ -570,13 +618,13 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function VariantCard({ title, text, price, active }: { title: string; text: string; price?: number; active?: boolean }) {
+function VariantCard({ title, text, price, active, onClick }: { title: string; text: string; price?: number; active?: boolean; onClick: () => void }) {
   return (
-    <div className={active ? "rounded-lg border border-brand-blue bg-brand-mist p-4" : "rounded-lg border border-slate-200 bg-white p-4"}>
+    <button type="button" onClick={onClick} className={active ? "rounded-lg border border-brand-blue bg-brand-mist p-4 text-left ring-2 ring-brand-blue/10" : "rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-brand-blue/50 hover:bg-brand-mist/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30"}>
       <p className="font-black text-brand-ink">{title}</p>
       <p className="mt-2 min-h-10 text-sm leading-5 text-slate-600">{text}</p>
-      {price !== undefined ? <p className="mt-3 text-sm font-black text-brand-blue">{formatEuro(price)}</p> : <p className="mt-3 text-xs font-bold text-slate-500">Wird aus bestehenden Optionen berechnet.</p>}
-    </div>
+      {price !== undefined ? <p className="mt-3 text-sm font-black text-brand-blue">{formatEuro(price)}</p> : <p className="mt-3 text-xs font-bold text-slate-500">Auswählen und Preis berechnen</p>}
+    </button>
   );
 }
 
