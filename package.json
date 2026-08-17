@@ -16,6 +16,8 @@
     "global-property-pricing:test": "tsx scripts/global-property-pricing.test.ts",
     "document-production:test": "tsx scripts/document-production.test.ts",
     "embossing:test": "tsx scripts/embossing.test.ts",
+    "binding-resolution:test": "tsx scripts/binding-resolution.test.ts",
+    "production-binding-config:test": "tsx scripts/production-binding-config.test.ts",
     "deploy:check": "tsx scripts/check-production-env.ts",
     "security:audit": "npm audit --omit=dev",
     "postinstall": "prisma generate"

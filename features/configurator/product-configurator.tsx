@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BindingConfigurationSummary } from "@/features/configurator/binding-configuration-summary";
+import { resolveBindingConfigurationForProduct, type BindingSystem, type BindingVariant } from "@/lib/binding-resolution";
 import { deriveDocumentProduction, pricingQuantitiesForDocument } from "@/lib/document-production";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
@@ -69,6 +71,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const [isDragging, setIsDragging] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
   const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
+  const [bindingConfig, setBindingConfig] = useState<{ bindingSystems: BindingSystem[]; bindingVariants: BindingVariant[] } | null>(null);
   const [finalizedEmbossing, setFinalizedEmbossing] = useState<{
     id: string;
     cartConfig: Record<string, string>;
@@ -80,6 +83,14 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const isDocumentProduct = /abschlussarbeiten/i.test(product.slug);
   const documentProduction = deriveDocumentProduction(config, currentQuantity);
   const pricingQuantities = isDocumentProduct ? pricingQuantitiesForDocument(config, currentQuantity) : undefined;
+  const bindingResolution = useMemo(() => resolveBindingConfigurationForProduct({
+    product,
+    categoryProperties,
+    config,
+    quantity: currentQuantity,
+    bindingSystems: bindingConfig?.bindingSystems,
+    bindingVariants: bindingConfig?.bindingVariants
+  }), [bindingConfig, categoryProperties, config, currentQuantity, product]);
 
   useEffect(() => {
     return () => {
@@ -112,6 +123,18 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       }
     })();
   }, [product.category]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/production/bindings");
+        if (!res.ok) return;
+        setBindingConfig(await res.json() as { bindingSystems: BindingSystem[]; bindingVariants: BindingVariant[] });
+      } catch {
+        setBindingConfig(null);
+      }
+    })();
+  }, []);
 
   const enabledProperties = useMemo(() => {
     if (product.pricingProperties?.length) {
@@ -284,11 +307,27 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     }
 
     const merged = [...existing];
-    const authoritativeConfig = {
+    const authoritativeConfig: Record<string, string> = {
       ...config,
       ...(finalizedEmbossing?.cartConfig ?? {}),
       resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
     };
+    const authoritativeBindingResolution = resolveBindingConfigurationForProduct({
+      product,
+      categoryProperties,
+      config: authoritativeConfig,
+      quantity: currentQuantity,
+      bindingSystems: bindingConfig?.bindingSystems,
+      bindingVariants: bindingConfig?.bindingVariants
+    });
+    if (authoritativeBindingResolution?.status === "resolved") {
+      authoritativeConfig.resolvedBindingSystem = authoritativeBindingResolution.bindingSystemId;
+      authoritativeConfig.resolvedBindingSize = authoritativeBindingResolution.sizeLabel ?? "";
+      authoritativeConfig.resolvedBindingDiameterMm = String(authoritativeBindingResolution.diameterMm ?? "");
+      authoritativeConfig.resolvedBindingRingCount = String(authoritativeBindingResolution.ringCount ?? "");
+      authoritativeConfig.resolvedBindingSheetCount = String(authoritativeBindingResolution.sheetCount);
+      authoritativeConfig.resolvedBindingBlockThicknessMm = String(authoritativeBindingResolution.blockThicknessMm);
+    }
     const authoritativePricingQuantities = isDocumentProduct ? pricingQuantitiesForDocument(authoritativeConfig, currentQuantity) : undefined;
     const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
     const authoritativeDiscount = applyStudentDiscount({
@@ -322,6 +361,13 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         ["Prägung gespeichert", "✓"],
         ["Produktions-PDF", finalizedEmbossing.productionPdfUrl ?? "-"],
         ["Prägetext", finalizedEmbossing.cartConfig.PraegungText ?? "-"]
+      ] as Array<[string, string]> : []),
+      ...(authoritativeBindingResolution?.status === "resolved" ? [
+        ["Bindungssystem", authoritativeBindingResolution.bindingSystemLabel],
+        ["Bindungsgröße", authoritativeBindingResolution.sizeLabel ?? "-"],
+        ["Bindungs-Blattzahl", String(authoritativeBindingResolution.sheetCount)],
+        ["Blockstärke", `${authoritativeBindingResolution.blockThicknessMm.toLocaleString("de-DE")} mm`],
+        ...(authoritativeBindingResolution.ringCount ? [["Ringe", String(authoritativeBindingResolution.ringCount)] as [string, string]] : [])
       ] as Array<[string, string]> : []),
       ...priceSnapshot.lines.map((line) => [line.label, `${line.value}${line.price ? ` (+${formatEuro(line.price)})` : ""}`])
     ]);
@@ -540,6 +586,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </select>
           </label>
         ))}
+        <BindingConfigurationSummary result={bindingResolution} />
         {embossingActive ? (
           authenticated ? (
             <EmbossingConfigurator

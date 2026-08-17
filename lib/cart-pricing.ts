@@ -3,6 +3,8 @@ import path from "path";
 import { PDFDocument } from "pdf-lib";
 import { getCategories, getGlobalProperties, getPublicProductBySlug } from "@/lib/catalog-repository";
 import { pricingQuantitiesForDocument } from "@/lib/document-production";
+import { resolveBindingConfigurationForProduct, type BindingResolutionResult } from "@/lib/binding-resolution";
+import { getProductionBindingConfig } from "@/lib/production-binding-config";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { applyStudentDiscount, getStudentDiscountPercent, isVerifiedStudent } from "@/lib/student-discount";
@@ -46,6 +48,9 @@ export type PricedCartItem = {
     lineCount: number;
     previewUrl?: string | null;
     productionPdfUrl?: string | null;
+  };
+  production?: {
+    binding?: BindingResolutionResult;
   };
   studentDiscount: {
     eligible: boolean;
@@ -116,7 +121,7 @@ export async function priceCartItems(params: {
   user?: Pick<UserAccount, "id" | "studentVerification"> | null;
   studentDiscountPercent?: number | null;
 }) {
-  const [categories, globalProperties] = await Promise.all([getCategories(), getGlobalProperties()]);
+  const [categories, globalProperties, bindingConfig] = await Promise.all([getCategories(), getGlobalProperties(), getProductionBindingConfig()]);
   const categoriesBySlug = new Map(categories.map((category) => [category.slug, category]));
   const percent = getStudentDiscountPercent(params.studentDiscountPercent);
   const verified = isVerifiedStudent(params.user);
@@ -156,6 +161,26 @@ export async function priceCartItems(params: {
     const productQuantity = configuredQuantity(pricingConfig);
     const lineQuantity = safeLineQuantity(item.quantity);
     const categoryProperties = categoriesBySlug.get(product.category)?.properties ?? [];
+    const bindingResolution = resolveBindingConfigurationForProduct({
+      product,
+      categoryProperties,
+      config: pricingConfig,
+      quantity: productQuantity,
+      bindingSystems: bindingConfig.bindingSystems,
+      bindingVariants: bindingConfig.bindingVariants
+    });
+    if (bindingResolution?.status === "resolved") {
+      pricingConfig.resolvedBindingSystem = bindingResolution.bindingSystemId;
+      pricingConfig.resolvedBindingSize = bindingResolution.sizeLabel ?? "";
+      pricingConfig.resolvedBindingDiameterMm = String(bindingResolution.diameterMm ?? "");
+      pricingConfig.resolvedBindingSpineWidthMm = String(bindingResolution.spineWidthMm ?? "");
+      pricingConfig.resolvedBindingRingCount = String(bindingResolution.ringCount ?? "");
+      pricingConfig.resolvedBindingSheetCount = String(bindingResolution.sheetCount);
+      pricingConfig.resolvedBindingBlockThicknessMm = String(bindingResolution.blockThicknessMm);
+      pricingConfig.resolvedBindingVariantId = bindingResolution.variantId ?? "";
+      pricingConfig.resolvedBindingSku = bindingResolution.sku ?? "";
+      pricingConfig.resolvedBindingSupplierArticle = bindingResolution.supplierArticleNumber ?? "";
+    }
     const normalUnitPrice = calculateProductUnitPrice(product, productQuantity, pricingConfig, categoryProperties);
     const lineNormalPrice = money(normalUnitPrice * lineQuantity);
     const discountResult = applyStudentDiscount({ subtotal: lineNormalPrice, product, user: params.user, percent });
@@ -177,6 +202,7 @@ export async function priceCartItems(params: {
       printCheckFileName: item.printCheckFileName,
       printCheckFileUrl: item.printCheckFileUrl,
       embossingDesign,
+      production: bindingResolution ? { binding: bindingResolution } : undefined,
       studentDiscount: {
         eligible: product.studentDiscountEligible !== false,
         verified,

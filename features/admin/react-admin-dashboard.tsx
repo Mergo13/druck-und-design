@@ -16,6 +16,7 @@ import StarIcon from "@mui/icons-material/Star";
 import MailIcon from "@mui/icons-material/Mail";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import TuneIcon from "@mui/icons-material/Tune";
 import { Alert, Box, Button, Card, CardContent, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
@@ -613,6 +614,7 @@ function AdminDashboardHome() {
     { label: "Upload-Ordner", path: "/tools/uploads", color: "primary" as const },
     { label: "Bildpfade Import", path: "/tools/image-import", color: "primary" as const },
     { label: "CSV Katalog Import", path: "/tools/catalog-csv", color: "primary" as const },
+    { label: "Produktionsdaten Bindungen", path: "/tools/production-bindings", color: "primary" as const },
     { label: "Homepage Inhalte", path: "/tools/homepage", color: "primary" as const },
     { label: "Website Bilder", path: "/tools/site-images", color: "primary" as const },
     { label: "Backup", path: "/tools/backup", color: "primary" as const },
@@ -5109,6 +5111,171 @@ function CRMToolPage() {
   );
 }
 
+type ProductionBindingConfigPayload = {
+  bindingSystems: Array<Record<string, any>>;
+  bindingVariants: Array<Record<string, any>>;
+  updatedAt?: string;
+};
+
+function ProductionBindingConfigToolPage() {
+  const notify = useNotify();
+  const [configText, setConfigText] = useState("");
+  const [config, setConfig] = useState<ProductionBindingConfigPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/production/bindings");
+      if (!res.ok) throw new Error("Produktionsdaten konnten nicht geladen werden.");
+      const payload = await res.json() as ProductionBindingConfigPayload;
+      setConfig(payload);
+      setConfigText(JSON.stringify(payload, null, 2));
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Laden fehlgeschlagen.", { type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const parsed = JSON.parse(configText) as ProductionBindingConfigPayload;
+      const res = await fetch("/api/admin/production/bindings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed)
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.message ?? "Speichern fehlgeschlagen.");
+      setConfig(payload);
+      setConfigText(JSON.stringify(payload, null, 2));
+      notify("Produktionsdaten gespeichert.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Speichern fehlgeschlagen.", { type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetDefaults() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/production/bindings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reset: true })
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(payload?.message ?? "Zurücksetzen fehlgeschlagen.");
+      setConfig(payload);
+      setConfigText(JSON.stringify(payload, null, 2));
+      notify("Standard-Produktionsdaten wiederhergestellt.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Zurücksetzen fehlgeschlagen.", { type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function readImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setConfigText(String(reader.result ?? ""));
+    reader.readAsText(file);
+    event.target.value = "";
+  }
+
+  function exportJson() {
+    const blob = new Blob([configText], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "production-binding-config.json";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const systems = config?.bindingSystems ?? [];
+  const variants = config?.bindingVariants ?? [];
+  const activeVariants = variants.filter((variant) => variant.active !== false);
+  const suppliers = Array.from(new Set(variants.map((variant) => variant.supplier).filter(Boolean)));
+
+  return (
+    <AdminToolShell title="Produktionsdaten Bindungen" description="Technische Binding-Systeme, Größen, Kapazitäten, Farben, SKUs und Lieferantenartikel zentral pflegen. Diese Daten werden vom Konfigurator und serverseitig beim Warenkorb/Checkout verwendet.">
+      <Box sx={{ display: "grid", gap: 2 }}>
+        <Grid container spacing={1.25}>
+          <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Binding-Systeme" value={String(systems.length)} /></Grid>
+          <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Varianten" value={String(variants.length)} /></Grid>
+          <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Aktive Varianten" value={String(activeVariants.length)} /></Grid>
+          <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Lieferanten" value={String(suppliers.length)} /></Grid>
+        </Grid>
+
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ display: "grid", gap: 1.5 }}>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+              <Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Import / Export</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  JSON ist bewusst importfreundlich: Supplier-Exporte können später in dieses Format gemappt werden.
+                </Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Button variant="outlined" component="label">
+                  JSON importieren
+                  <input hidden type="file" accept=".json,application/json" onChange={readImportFile} />
+                </Button>
+                <Button variant="outlined" onClick={exportJson} disabled={!configText.trim()}>Export</Button>
+                <Button variant="outlined" color="warning" onClick={() => void resetDefaults()} disabled={saving}>Defaults</Button>
+                <Button variant="contained" onClick={() => void save()} disabled={saving || loading || !configText.trim()}>
+                  {saving ? "Speichert..." : "Speichern"}
+                </Button>
+              </Box>
+            </Box>
+            <MuiTextField
+              label="Production Binding Config JSON"
+              value={configText}
+              onChange={(event) => setConfigText(event.target.value)}
+              multiline
+              minRows={18}
+              fullWidth
+              disabled={loading}
+              helperText="Bearbeite bindingSystems, sizes/referenceCapacity und bindingVariants. Ungültiges JSON wird nicht gespeichert."
+              sx={{ "& textarea": { fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12.5, lineHeight: 1.5 } }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Diagnose</Typography>
+            <Box sx={{ mt: 1.25, display: "grid", gap: 1 }}>
+              {systems.map((system) => (
+                <Box key={String(system.id)} sx={{ border: `1px solid ${adminColors.border}`, borderRadius: 1.5, p: 1.25, bgcolor: "#f8fafc" }}>
+                  <Typography variant="body2" sx={{ fontWeight: 950 }}>{system.label ?? system.id}</Typography>
+                  <Typography variant="caption" sx={{ display: "block", color: adminColors.muted }}>
+                    {system.type ?? "other"} · {system.resolutionStrategy ?? "physical-thickness"} · {Array.isArray(system.sizes) ? system.sizes.length : 0} Größen
+                  </Typography>
+                  <Typography variant="caption" sx={{ display: "block", color: adminColors.muted }}>
+                    Varianten: {variants.filter((variant) => variant.bindingSystemId === system.id).length}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    </AdminToolShell>
+  );
+}
+
 const adminMenuGroups = [
   {
     label: "Übersicht",
@@ -5121,6 +5288,7 @@ const adminMenuGroups = [
     items: [
       { href: "#/products", label: "Produkte", description: "Produkte, Staffelpreise und Konfigurator", icon: <Inventory2Icon /> },
       { href: "#/properties", label: "Eigenschaften", description: "Globale Werte, Aufpreise und Staffeln", icon: <LocalOfferIcon /> },
+      { href: "#/tools/production-bindings", label: "Produktionsdaten", description: "Bindungen, Größen, Varianten und Lieferanten", icon: <TuneIcon /> },
       { href: "#/categories", label: "Kategorien", description: "Shop-Struktur, Eigenschaften und Bilder", icon: <CategoryIcon /> },
       { href: "#/industries", label: "Branchen", description: "Landingpages und Branchen-Zuordnung", icon: <BusinessIcon /> }
     ]
@@ -5252,6 +5420,7 @@ export function ReactAdminDashboard() {
         <Route path="/tools/uploads" element={<UploadFoldersToolPage />} />
         <Route path="/tools/image-import" element={<CatalogImageImportToolPage />} />
         <Route path="/tools/catalog-csv" element={<CatalogCsvImportToolPage />} />
+        <Route path="/tools/production-bindings" element={<ProductionBindingConfigToolPage />} />
         <Route path="/tools/homepage" element={<HomepageContentToolPage />} />
         <Route path="/tools/site-images" element={<SiteImagesToolPage />} />
         <Route path="/tools/backup" element={<BackupToolPage />} />

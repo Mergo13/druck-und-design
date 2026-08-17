@@ -55,6 +55,7 @@ export type ProductCategoryProperty = {
     label?: string;
     basePrice?: number;
     stepPrice?: number;
+    production?: ProductPropertyProductionMetadata;
   }>;
   basePrice?: number;
   stepPrice?: number;
@@ -90,6 +91,19 @@ export type ProductPropertyValue = {
   fixedPrice?: number;
   multiplier?: number;
   tierPrices?: ProductPropertyTierPrice[];
+  production?: ProductPropertyProductionMetadata;
+};
+
+export type ProductPropertyProductionMetadata = {
+  thicknessMm?: number;
+  caliperMm?: number;
+  grammageGsm?: number;
+  caliperSource?: "manufacturer" | "supplier" | "measured" | "estimated";
+  coverThicknessMm?: number;
+  bindingSystemId?: string;
+  bindingSeries?: string;
+  bindingColor?: string;
+  format?: string;
 };
 
 export type ProductPricingProperty = {
@@ -192,6 +206,10 @@ export type ProductCatalogItem = {
   isStudentShop?: boolean;
   studentShopSortOrder?: number;
   studentDiscountEligible?: boolean;
+  productBindingConfig?: {
+    enabledSystems?: string[];
+    bindingSizeSelectionMode?: "automatic" | "manual" | "automatic-with-override";
+  };
   priceTiers?: ProductPriceTier[];
   pricingProperties?: ProductPricingProperty[];
   priceHistory?: Array<{

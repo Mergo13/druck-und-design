@@ -163,6 +163,7 @@ export async function POST(request: Request) {
         normalUnitPrice: item.normalUnitPrice,
         unitPrice: item.unitPrice,
         studentDiscount: item.studentDiscount,
+        production: item.production,
         embossingDesign: item.embossingDesign,
         config: {
           ...item.config,
