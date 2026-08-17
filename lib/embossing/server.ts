@@ -20,6 +20,14 @@ export const embossingSourceSchema = z.object({
     mimeType: z.string().max(120).optional(),
     widthMm: z.number().positive().max(200).optional(),
     heightMm: z.number().positive().max(200).optional()
+  }).optional(),
+  coverUpload: z.object({
+    url: z.string().max(500),
+    name: z.string().max(200).optional(),
+    mimeType: z.string().max(120).optional(),
+    lineCount: z.number().int().min(0).max(40).optional(),
+    extractedLines: z.array(z.string().max(220)).max(40).optional(),
+    analysisMessage: z.string().max(300).optional()
   }).optional()
 });
 

@@ -33,11 +33,21 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
     return NextResponse.json({ message: "Produktionsdatei konnte nicht erstellt werden." }, { status: 500 });
   }
 
+  const sourceContent = design.sourceContent ?? {};
+  const coverUpload = sourceContent.coverUpload;
+  const resolvedLineCount = Math.max(0, Math.round(Number(coverUpload?.lineCount ?? 0))) || layout.lineCount;
+  const resolvedText = coverUpload?.extractedLines?.length
+    ? coverUpload.extractedLines.join("\n")
+    : layout.elements
+      .filter((element: any) => element.type === "text")
+      .map((element: any) => element.lines.join("\n"))
+      .join("\n\n");
+
   const updated = await (prisma as any).embossingDesign.update({
     where: { id: design.id },
     data: {
       status: "finalized",
-      lineCount: layout.lineCount,
+      lineCount: resolvedLineCount,
       previewUrl: files.previewUrl,
       productionPdfUrl: files.productionPdfUrl,
       productionSvgUrl: files.productionSvgUrl,
@@ -54,13 +64,11 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
         color: updated.embossingColor,
         template: updated.template,
         lineCount: updated.lineCount,
-        resolvedText: layout.elements
-          .filter((element: any) => element.type === "text")
-          .map((element: any) => element.lines.join("\n"))
-          .join("\n\n"),
+        resolvedText,
         productionPdfUrl: updated.productionPdfUrl,
         previewUrl: updated.previewUrl
       }),
+      ...(coverUpload?.url ? { PraegungCoverUpload: coverUpload.url, PraegungCoverDatei: coverUpload.name ?? "-" } : {}),
       resolvedEmbossingLineCount: String(updated.lineCount)
     }
   });

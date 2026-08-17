@@ -51,6 +51,7 @@ export function EmbossingConfigurator({
   const [message, setMessage] = useState("");
   const [advancedOffset, setAdvancedOffset] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const uploadedCoverLineCount = Math.max(0, Math.round(Number(sourceContent.coverUpload?.lineCount ?? 0)));
 
   const layout = useMemo(() => generateEmbossingLayout({
     coverGeometry: defaultCoverGeometry,
@@ -126,6 +127,35 @@ export function EmbossingConfigurator({
       }
     }));
     setTemplate("logo");
+  }
+
+  async function uploadCover(file?: File) {
+    if (!file) return;
+    setMessage("");
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch("/api/embossing/upload-cover", { method: "POST", body: form });
+    const payload = await response.json().catch(() => ({ message: "Cover-Upload fehlgeschlagen." }));
+    if (!response.ok) {
+      setMessage(payload.message ?? "Cover-Upload fehlgeschlagen.");
+      return;
+    }
+    const extractedLines = Array.isArray(payload.analysis?.extractedLines)
+      ? payload.analysis.extractedLines.map((line: unknown) => String(line)).filter(Boolean)
+      : [];
+    const lineCount = Number(payload.analysis?.lineCount ?? 0);
+    setSourceContent((current) => ({
+      ...current,
+      coverUpload: {
+        url: payload.url,
+        name: payload.name,
+        mimeType: payload.mimeType,
+        lineCount: Number.isFinite(lineCount) ? Math.max(0, Math.round(lineCount)) : 0,
+        extractedLines,
+        analysisMessage: payload.analysis?.analysisMessage
+      }
+    }));
+    setMessage(payload.analysis?.analysisMessage ?? "Cover-Datei gespeichert.");
   }
 
   async function finalizeDesign() {
@@ -229,6 +259,52 @@ export function EmbossingConfigurator({
             <span>Logo hochladen · SVG oder Vektor-PDF empfohlen</span>
             <input type="file" accept=".svg,.pdf,.png,image/svg+xml,application/pdf,image/png" className="sr-only" onChange={(event) => void uploadLogo(event.target.files?.[0])} />
           </label>
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <label className="flex cursor-pointer items-center gap-3 text-xs font-semibold text-amber-950">
+              <UploadCloud className="h-4 w-4 text-amber-700" />
+              <span>Eigenes Cover hochladen · PDF, SVG oder PNG</span>
+              <input type="file" accept=".svg,.pdf,.png,image/svg+xml,application/pdf,image/png" className="sr-only" onChange={(event) => void uploadCover(event.target.files?.[0])} />
+            </label>
+            <p className="mt-1 text-xs leading-5 text-amber-900">
+              Bei PDF/SVG wird lesbarer Text analysiert. Wenn Text als Pfad oder Bild angelegt ist, trägst du die Prägezeilen manuell ein.
+            </p>
+            {sourceContent.coverUpload ? (
+              <div className="mt-3 grid gap-2 rounded-md border border-amber-200 bg-white p-3 text-xs">
+                <p className="font-black text-slate-900">{sourceContent.coverUpload.name ?? "Cover-Datei"} gespeichert</p>
+                <p className="text-slate-600">{sourceContent.coverUpload.analysisMessage ?? "Cover-Datei wurde gespeichert."}</p>
+                <label className="grid gap-1 font-bold text-slate-700">
+                  Prägezeilen aus eigener Datei
+                  <input
+                    type="number"
+                    min="1"
+                    max="40"
+                    step="1"
+                    value={sourceContent.coverUpload.lineCount || ""}
+                    onChange={(event) => {
+                      const lineCount = Math.max(0, Math.round(Number(event.target.value) || 0));
+                      setSourceContent((current) => ({
+                        ...current,
+                        coverUpload: current.coverUpload ? { ...current.coverUpload, lineCount } : current.coverUpload
+                      }));
+                    }}
+                    placeholder="z.B. 3"
+                    className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+                  />
+                </label>
+                {sourceContent.coverUpload.extractedLines?.length ? (
+                  <p className="text-slate-500">Erkannt: {sourceContent.coverUpload.extractedLines.slice(0, 4).join(" · ")}{sourceContent.coverUpload.extractedLines.length > 4 ? " ..." : ""}</p>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSourceContent((current) => ({ ...current, coverUpload: undefined }))}
+                >
+                  Eigene Cover-Datei entfernen
+                </Button>
+              </div>
+            ) : null}
+          </div>
           <div className="flex gap-2">
             <Button type="button" variant={mode === "auto" ? "default" : "outline"} size="sm" onClick={() => setMode("auto")}>Automatisch</Button>
             <Button type="button" variant={mode === "advanced" ? "default" : "outline"} size="sm" onClick={() => setMode("advanced")}>Positionen anpassen</Button>
@@ -245,9 +321,9 @@ export function EmbossingConfigurator({
             <EmbossingCoverPreview layout={layout} color={embossingColor} />
           </div>
           <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
-            <p className="font-black">Prägezeilen: {layout.lineCount}</p>
+            <p className="font-black">Prägezeilen: {uploadedCoverLineCount || layout.lineCount}</p>
             <p className="mt-1 text-slate-600">Prägung: {formatEuro(currentEmbossingPrice)}</p>
-            <p className="mt-1 text-slate-500">{saving ? "Speichert..." : "Entwurf automatisch gespeichert"}</p>
+            <p className="mt-1 text-slate-500">{uploadedCoverLineCount ? "Zählung aus eigener Cover-Datei" : saving ? "Speichert..." : "Entwurf automatisch gespeichert"}</p>
           </div>
         </div>
       </div>

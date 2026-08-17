@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   }
   const payload = parsed.data;
   const resolvedLayout = resolveLayoutFromPayload(payload);
+  const uploadedCoverLineCount = Math.max(0, Math.round(Number(payload.sourceContent.coverUpload?.lineCount ?? 0)));
   const data = {
     userId: auth.session.id,
     productId: payload.productId,
@@ -40,8 +41,8 @@ export async function POST(request: Request) {
     sourceContent: payload.sourceContent,
     resolvedLayout,
     productionRules: defaultEmbossingProductionRules,
-    lineCount: resolvedLayout.lineCount,
-    logoUpload: payload.sourceContent.logo ?? undefined,
+    lineCount: uploadedCoverLineCount || resolvedLayout.lineCount,
+    logoUpload: payload.sourceContent.coverUpload ?? payload.sourceContent.logo ?? undefined,
     status: "draft"
   };
 

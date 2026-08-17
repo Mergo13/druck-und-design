@@ -43,6 +43,14 @@ export type EmbossingSourceContent = {
     widthMm?: number;
     heightMm?: number;
   };
+  coverUpload?: {
+    url: string;
+    name?: string;
+    mimeType?: string;
+    lineCount?: number;
+    extractedLines?: string[];
+    analysisMessage?: string;
+  };
 };
 
 export type EmbossingTextElement = {
