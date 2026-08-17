@@ -1,256 +1,387 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BadgeEuro, BookOpen, CheckCircle2, Clock, FileUp, GraduationCap, MapPin, PackageCheck, Truck } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, CheckCircle2, FileUp, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { SectionHeading } from "@/components/ui/section-heading";
 import { StructuredData } from "@/components/structured-data";
 import { StudentPrintConfigurator } from "@/features/student/student-print-configurator";
 import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
+import { getStudentArticles, studentLandingPages } from "@/lib/student-content";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Studenten Shop & Druckservice in Wels | Abschlussarbeiten, Skripten & Poster",
-  description: "Studenten Shop und Druckservice in Wels für Abschlussarbeiten, Skripten, Poster und Bindungen. Studentenrabatt mit gültigem Studentenausweis.",
+  title: "Abschlussarbeit drucken & binden in Wels | Studenten Druckservice",
+  description: "Studenten Druckservice in Wels für Bachelorarbeit, Masterarbeit, Diplomarbeit, Skripten und Poster. PDF hochladen, Preis berechnen, abholen oder liefern lassen.",
   alternates: { canonical: "/studenten" },
   openGraph: {
-    title: "Studenten Shop & Druckservice in Wels",
-    description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell drucken.",
+    title: "Abschlussarbeit drucken & binden in Wels",
+    description: "PDF hochladen, Druck und Bindung auswählen, Preis direkt sehen.",
     url: "/studenten",
     type: "website",
     locale: "de_AT"
   }
 };
 
-const categoryCards = [
-  ["Bachelorarbeit", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Masterarbeit", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Diplomarbeit", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Dissertation / Doktorarbeit", "dissertation-drucken-binden", "/studenten/ratgeber/dissertation-drucken-binden"],
-  ["Abschlussarbeit allgemein", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Seminararbeit", "spiralbindung", "/produkt/spiralbindung"],
-  ["Projektarbeit", "spiralbindung", "/produkt/spiralbindung"],
-  ["Skripten & Lernunterlagen", "skripten-guenstig-drucken-binden", "/studenten/ratgeber/skripten-guenstig-drucken-binden"],
-  ["Wissenschaftsposter", "plakate", "/produkt/plakate"],
-  ["Plakate A0 / A1 / A2", "plakate", "/produkt/plakate"],
-  ["Präsentationen", "magazine", "/produkt/magazine"],
-  ["Broschüren", "magazine", "/produkt/magazine"],
-  ["Spiralbindung", "spiralbindung", "/produkt/spiralbindung"],
-  ["Klebebindung", "welche-bindung-bachelorarbeit", "/studenten/ratgeber/welche-bindung-bachelorarbeit"],
-  ["Softcover", "hardcover-oder-softcover", "/studenten/ratgeber/hardcover-oder-softcover"],
-  ["Hardcover", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Gold-/Silberprägung", "gold-silberpraegung-abschlussarbeit", "/studenten/ratgeber/gold-silberpraegung-abschlussarbeit"]
+const decisionCards = [
+  {
+    title: "Abschlussarbeit",
+    subtitle: "Bachelor · Master · Diplom · Dissertation",
+    href: "/produkt/abschlussarbeiten",
+    cta: "Abschlussarbeit konfigurieren",
+    primary: true
+  },
+  {
+    title: "Skripten & Lernunterlagen",
+    subtitle: "SW oder Farbe · Duplex · Spiralbindung",
+    href: "/produkt/spiralbindung",
+    cta: "Skripten drucken"
+  },
+  {
+    title: "Wissenschaftsposter",
+    subtitle: "A2 · A1 · A0 · Großformat",
+    href: "/produkt/plakate",
+    cta: "Poster konfigurieren"
+  },
+  {
+    title: "Seminar- & Projektarbeiten",
+    subtitle: "Drucken · Binden · Mehrere Exemplare",
+    href: "/produkt/abschlussarbeiten",
+    cta: "Arbeit konfigurieren"
+  }
+] as const;
+
+const bindingOptions = [
+  {
+    title: "Spiralbindung",
+    label: "Praktisch",
+    description: "Für Skripten, Seminararbeiten und Lernunterlagen.",
+    slug: "spiralbindung",
+    href: "/produkt/spiralbindung"
+  },
+  {
+    title: "Klebebindung",
+    label: "Modern",
+    description: "Sauberer Buchrücken für Seminar- und Abschlussarbeiten.",
+    slug: "abschlussarbeiten",
+    href: "/produkt/abschlussarbeiten"
+  },
+  {
+    title: "Hardcover",
+    label: "Empfohlen",
+    description: "Hochwertiger Einband für Abschlussarbeiten. Optional mit Gold- oder Silberprägung.",
+    slug: "abschlussarbeiten",
+    href: "/produkt/abschlussarbeiten",
+    featured: true
+  }
+] as const;
+
+const priceExamples = [
+  {
+    title: "Einfach",
+    subtitle: "Spiralbindung",
+    text: "Für Skripten, Seminararbeiten und Lernunterlagen.",
+    slug: "spiralbindung",
+    href: "/produkt/spiralbindung"
+  },
+  {
+    title: "Beliebt",
+    subtitle: "Hardcover",
+    text: "Für Bachelor-, Master- und Diplomarbeiten.",
+    slug: "abschlussarbeiten",
+    href: "/produkt/abschlussarbeiten"
+  },
+  {
+    title: "Premium",
+    subtitle: "Hardcover + Prägung",
+    text: "Für finale Abgaben mit Gold- oder Silberprägung.",
+    slug: "abschlussarbeiten",
+    href: "/produkt/abschlussarbeiten"
+  }
 ] as const;
 
 const benefits = [
-  [BadgeEuro, "Studentenpreise"],
-  [Clock, "Schnelle Produktion"],
-  [FileUp, "PDF-Datei hochladen"],
-  [MapPin, "Abholung in Wels"],
-  [Truck, "Versand möglich"],
-  [BookOpen, "Persönliche Beratung"],
-  [PackageCheck, "Hochwertiger Digitaldruck"],
-  [GraduationCap, "Hardcover & Softcover"],
-  [CheckCircle2, "Gold-/Silber-Veredelung"]
+  ["Preis sofort wissen", "PDF hochladen, Ausstattung wählen und Preis direkt sehen."],
+  ["Alles aus einer Hand", "Druck, Bindung und Veredelung in einem Auftrag."],
+  ["Lokal in Wels", "Online bestellen und bequem im Studio abholen."]
 ] as const;
-
-const bindingCards = [
-  ["Spiralbindung", "Praktisch für Skripten, Projektarbeiten und häufiges Umblättern.", "spiralbindung", "/produkt/spiralbindung"],
-  ["Klebebindung", "Sauberer Abschluss für Seminar- und Projektarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Softcover", "Leichte, hochwertige Lösung für umfangreiche Dokumente.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Hardcover", "Premium-Lösung für Bachelor-, Master- und Diplomarbeiten.", "abschlussarbeiten", "/produkt/abschlussarbeiten"],
-  ["Hardcover + Gold/Silber", "Hochwertige Präsentation für finale Abgaben.", "abschlussarbeiten", "/produkt/abschlussarbeiten"]
-] as const;
-
-function productMap(products: Awaited<ReturnType<typeof getPublicProducts>>) {
-  return new Map(products.map((product) => [product.slug, product]));
-}
 
 function isRuntimeUploadImage(src?: string) {
   return Boolean(src?.startsWith("/uploads/"));
 }
 
+function SectionIntro({ eyebrow, title, text }: { eyebrow?: string; title: string; text?: string }) {
+  return (
+    <div className="max-w-3xl">
+      {eyebrow ? <p className="text-sm font-semibold uppercase text-brand-blue">{eyebrow}</p> : null}
+      <h2 className="mt-3 text-3xl font-semibold leading-tight text-[#181818] md:text-5xl">{title}</h2>
+      {text ? <p className="mt-4 text-base leading-7 text-[#6b6b6b] md:text-lg">{text}</p> : null}
+    </div>
+  );
+}
+
+function productMap(products: Awaited<ReturnType<typeof getPublicProducts>>) {
+  return new Map(products.map((product) => [product.slug, product]));
+}
+
 export default async function StudentenPage() {
-  const products = await getPublicProducts();
+  const [products, articles] = await Promise.all([
+    getPublicProducts(),
+    getStudentArticles().catch(() => [])
+  ]);
   const bySlug = productMap(products);
   const thesisProduct = bySlug.get("abschlussarbeiten") ?? products.find((product) => product.isStudentShop) ?? products[0];
-  const thesisImage = thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp";
   const thesisHref = thesisProduct ? `/produkt/${thesisProduct.slug}` : "/produkte";
-  const studentProducts = products
-    .filter((product) => product.isStudentShop || ["abschlussarbeiten", "spiralbindung", "plakate", "magazine"].includes(product.slug))
-    .sort((a, b) => Number(a.studentShopSortOrder ?? 999) - Number(b.studentShopSortOrder ?? 999))
-    .slice(0, 8);
+  const thesisImage = thesisProduct?.heroImage || "/uploads/products/abschlussarbeiten.webp";
+  const selectedGuides = [
+    articles.find((article) => article.slug === "welche-bindung-bachelorarbeit"),
+    articles.find((article) => article.slug === "pdf-fuer-druck-vorbereiten"),
+    articles.find((article) => article.slug === "gold-silberpraegung-abschlussarbeit")
+  ].filter(Boolean).slice(0, 3);
 
   return (
-    <main className="bg-white">
+    <main className="bg-[#fafaf8] text-[#181818]">
       <StructuredData data={{
         "@context": "https://schema.org",
         "@type": "WebPage",
-        name: "Studenten Shop & Druckservice in Wels",
-        description: "Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell drucken.",
+        name: "Studenten Druckservice Wels",
+        description: "Abschlussarbeiten, Skripten und Poster online konfigurieren, drucken und binden lassen.",
         url: "https://druck-und-design.at/studenten",
         inLanguage: "de-AT"
       }} />
-      <section className="relative overflow-hidden bg-slate-950 text-white">
-        <div className="absolute inset-0">
-          <Image src={thesisImage} alt="Studenten Shop und Druckservice in Wels" fill priority unoptimized={isRuntimeUploadImage(thesisImage)} className="object-cover opacity-45" sizes="100vw" />
-          <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/88 to-slate-950/25" />
-        </div>
-        <div className="container-page relative py-24 md:py-32">
-          <Badge variant="outline" className="border-white/25 bg-white/10 text-white">Studenten-Shop</Badge>
-          <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight md:text-6xl">Studenten Shop & Druckservice in Wels</h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-white/82">Abschlussarbeiten, Skripten, Poster und Bindungen schnell und professionell drucken.</p>
-          <div className="mt-7 inline-flex rounded-full border border-white/20 bg-white px-4 py-2 text-sm font-black text-brand-ink shadow-lg">
-            Studentenrabatt mit gültigem Studentenausweis
+
+      <section className="relative isolate overflow-hidden bg-[#181818] text-white">
+        <Image
+          src={thesisImage}
+          alt="Professionell gebundene Abschlussarbeit"
+          fill
+          priority
+          unoptimized={isRuntimeUploadImage(thesisImage)}
+          className="absolute inset-0 -z-10 object-cover opacity-32"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 -z-10 bg-black/55" />
+        <div className="mx-auto grid min-h-[720px] w-[min(100%-48px,1200px)] items-end py-16 md:py-24">
+          <div className="max-w-4xl">
+            <p className="text-sm font-semibold uppercase text-white/75">Studenten Druckservice in Wels</p>
+            <h1 className="mt-5 text-[clamp(3rem,7vw,5.5rem)] font-semibold leading-[0.98] tracking-normal">
+              Alles für deine Abgabe.
+              <br />
+              Drucken, binden & fertig.
+            </h1>
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-white/82">
+              Bachelorarbeit, Masterarbeit, Diplomarbeit, Skripten und Poster direkt online konfigurieren.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-3">
+              <Button asChild size="lg" className="bg-brand-blue hover:bg-brand-blue/90">
+                <Link href={thesisHref}>Abschlussarbeit drucken <ArrowRight className="h-4 w-4" /></Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/20">
+                <Link href="#studentenprodukte">Andere Studentenprodukte</Link>
+              </Button>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold text-white/78">
+              {["PDF hochladen", "Preis sofort sehen", "Studentenrabatt", "Abholung in Wels"].map((item) => (
+                <span key={item} className="inline-flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-white" />
+                  {item}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg">
-              <Link href={thesisHref}>Jetzt bestellen <ArrowRight className="h-4 w-4" /></Link>
+        </div>
+      </section>
+
+      <section id="studentenprodukte" className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+        <SectionIntro eyebrow="Start" title="Was möchtest du drucken?" text="Wähle zuerst den Typ deiner Arbeit. Danach führt dich der bestehende Konfigurator zu Upload, Ausstattung, Preis und Bestellung." />
+        <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {decisionCards.map((card) => (
+            <Link
+              key={card.title}
+              href={card.href}
+              className={"primary" in card && card.primary
+                ? "group rounded-[18px] border border-brand-blue bg-white p-6 transition hover:-translate-y-0.5"
+                : "group rounded-[18px] border border-[#e8e8e5] bg-white p-6 transition hover:-translate-y-0.5 hover:border-brand-blue/40"}
+            >
+              <p className="text-2xl font-semibold leading-tight text-[#181818]">{card.title}</p>
+              <p className="mt-3 min-h-12 text-sm leading-6 text-[#6b6b6b]">{card.subtitle}</p>
+              <p className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-brand-blue">
+                {card.cta}
+                <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+              </p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y border-[#e8e8e5] bg-white">
+        <div className="mx-auto grid w-[min(100%-48px,1200px)] gap-10 py-20 md:grid-cols-[0.9fr_1.1fr] md:items-center md:py-24">
+          <div>
+            <SectionIntro eyebrow="Abschlussarbeit" title="Deine Arbeit. Professionell gebunden." text="Vom PDF bis zur fertigen Bindung bleibt der Ablauf bewusst einfach." />
+            <div className="mt-8 grid gap-4">
+              {["PDF hochladen", "Ausstattung wählen", "Abholen oder liefern lassen"].map((step, index) => (
+                <div key={step} className="flex items-center gap-4 border-t border-[#e8e8e5] pt-4">
+                  <span className="text-sm font-semibold text-brand-blue">0{index + 1}</span>
+                  <span className="text-lg font-semibold text-[#181818]">{step}</span>
+                </div>
+              ))}
+            </div>
+            <Button asChild className="mt-9 bg-brand-blue hover:bg-brand-blue/90">
+              <Link href={thesisHref}>Jetzt konfigurieren <ArrowRight className="h-4 w-4" /></Link>
+            </Button>
+          </div>
+          <div className="relative aspect-[4/3] overflow-hidden rounded-[18px] border border-[#e8e8e5] bg-[#fafaf8]">
+            <Image
+              src={thesisImage}
+              alt="Hardcover Abschlussarbeit mit professioneller Bindung"
+              fill
+              unoptimized={isRuntimeUploadImage(thesisImage)}
+              className="object-cover"
+              sizes="(min-width: 900px) 50vw, 100vw"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+        <SectionIntro eyebrow="PDF Quick Start" title="Du hast deine PDF schon fertig?" text="Lege deine Datei ab, lass Seiten und Format prüfen und springe direkt in die bestehende Konfiguration." />
+        <div className="mt-8 overflow-hidden rounded-[18px] border border-[#e8e8e5] bg-white">
+          <StudentPrintConfigurator products={products} />
+        </div>
+      </section>
+
+      <section className="border-y border-[#e8e8e5] bg-white">
+        <div className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+          <SectionIntro eyebrow="Bindung" title="Welche Bindung passt zu deiner Arbeit?" text="Die wichtigsten Optionen für Studium und Abgabe. Preise kommen aus den bestehenden Produktdaten." />
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {bindingOptions.map((option) => {
+              const product = bySlug.get(option.slug) ?? thesisProduct;
+              return (
+                <Link
+                  href={option.href}
+                  key={option.title}
+                  className={"featured" in option && option.featured
+                    ? "rounded-[18px] border border-brand-blue bg-[#f8fbff] p-6 md:-mt-4 md:p-8"
+                    : "rounded-[18px] border border-[#e8e8e5] bg-white p-6"}
+                >
+                  <span className="text-sm font-semibold text-brand-blue">{option.label}</span>
+                  <h3 className="mt-4 text-2xl font-semibold text-[#181818]">{option.title}</h3>
+                  <p className="mt-3 min-h-20 text-sm leading-6 text-[#6b6b6b]">{option.description}</p>
+                  <p className="mt-6 text-sm font-semibold text-[#181818]">{product ? getProductStartingPriceLabel(product) : "Preis berechnen"}</p>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+        <div className="grid gap-6 rounded-[18px] border border-[#e8e8e5] bg-white p-6 md:grid-cols-[1fr_1fr] md:p-10">
+          <div>
+            <p className="text-sm font-semibold uppercase text-brand-blue">Studentenrabatt</p>
+            <h2 className="mt-3 text-3xl font-semibold text-[#181818] md:text-5xl">Student? Dann zahlst du weniger.</h2>
+            <p className="mt-5 max-w-xl leading-7 text-[#6b6b6b]">Für Schüler und Studierende kann ein gültiger Nachweis erforderlich sein. Gruppen- und Klassendruck wird separat behandelt.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 md:content-center">
+            <div className="rounded-[18px] border border-[#e8e8e5] bg-[#fafaf8] p-6">
+              <p className="text-5xl font-semibold text-[#181818]">-20 %</p>
+              <p className="mt-3 text-sm font-semibold text-[#6b6b6b]">für Schüler & Studierende</p>
+            </div>
+            <div className="rounded-[18px] border border-[#e8e8e5] bg-[#fafaf8] p-6">
+              <p className="text-5xl font-semibold text-[#181818]">-25 %</p>
+              <p className="mt-3 text-sm font-semibold text-[#6b6b6b]">bei Gruppen- oder Klassendruck</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="border-y border-[#e8e8e5] bg-white">
+        <div className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+          <SectionIntro eyebrow="Preise" title="Was kostet meine Abschlussarbeit?" text="Die genaue Summe hängt von Seitenanzahl, Auflage, Papier, Bindung und Prägung ab. Deshalb führt dich der Konfigurator direkt zum echten Preis." />
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {priceExamples.map((example) => {
+              const product = bySlug.get(example.slug);
+              return (
+                <Link key={example.title} href={example.href} className="rounded-[18px] border border-[#e8e8e5] bg-white p-6">
+                  <p className="text-sm font-semibold uppercase text-brand-blue">{example.title}</p>
+                  <h3 className="mt-4 text-2xl font-semibold text-[#181818]">{example.subtitle}</h3>
+                  <p className="mt-3 min-h-12 text-sm leading-6 text-[#6b6b6b]">{example.text}</p>
+                  <p className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand-blue">
+                    {product ? getProductStartingPriceLabel(product) : "Preis berechnen"}
+                    <ArrowRight className="h-4 w-4" />
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+        <div className="grid gap-4 md:grid-cols-3">
+          {benefits.map(([title, text]) => (
+            <div key={title} className="rounded-[18px] border border-[#e8e8e5] bg-white p-6">
+              <h3 className="text-xl font-semibold text-[#181818]">{title}</h3>
+              <p className="mt-3 text-sm leading-6 text-[#6b6b6b]">{text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-y border-[#e8e8e5] bg-white">
+        <div className="mx-auto grid w-[min(100%-48px,1200px)] gap-8 py-20 md:grid-cols-[0.8fr_1.2fr] md:py-24">
+          <SectionIntro eyebrow="Oberösterreich" title="Für Studierende in Oberösterreich" text="Lokale Einstiege für Hochschulen und Studierende in Wels, Linz und Umgebung." />
+          <div className="grid gap-3 sm:grid-cols-2">
+            {studentLandingPages.map((page) => (
+              <Link key={page.slug} href={`/studenten/${page.slug}`} className="flex items-center justify-between rounded-[14px] border border-[#e8e8e5] bg-[#fafaf8] px-4 py-4 font-semibold text-[#181818] hover:border-brand-blue/40">
+                {page.title.replace("Studenten Druckservice für ", "").replace("Drucken und Binden für ", "")}
+                <ArrowRight className="h-4 w-4 text-brand-blue" />
+              </Link>
+            ))}
+            <Link href="/druckerei-wels" className="flex items-center justify-between rounded-[14px] border border-[#e8e8e5] bg-[#fafaf8] px-4 py-4 font-semibold text-[#181818] hover:border-brand-blue/40">
+              Studenten in Wels
+              <MapPin className="h-4 w-4 text-brand-blue" />
+            </Link>
+            <Link href="/druckerei-linz" className="flex items-center justify-between rounded-[14px] border border-[#e8e8e5] bg-[#fafaf8] px-4 py-4 font-semibold text-[#181818] hover:border-brand-blue/40">
+              Studenten in Linz
+              <MapPin className="h-4 w-4 text-brand-blue" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-[min(100%-48px,1200px)] py-20 md:py-24">
+        <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+          <SectionIntro eyebrow="Ratgeber" title="Kurz nachlesen, sicher bestellen." text="Drei hilfreiche Artikel für Abgabe, PDF und Bindung." />
+          <Button asChild variant="outline" className="w-fit">
+            <Link href="/studenten/ratgeber">Alle Studenten-Ratgeber</Link>
+          </Button>
+        </div>
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
+          {selectedGuides.map((article) => article ? (
+            <Link key={article.slug} href={`/studenten/ratgeber/${article.slug}`} className="rounded-[18px] border border-[#e8e8e5] bg-white p-6">
+              <p className="text-sm font-semibold text-brand-blue">{article.category}</p>
+              <h3 className="mt-4 text-xl font-semibold leading-snug text-[#181818]">{article.title}</h3>
+              <p className="mt-3 line-clamp-3 text-sm leading-6 text-[#6b6b6b]">{article.excerpt}</p>
+            </Link>
+          ) : null)}
+        </div>
+      </section>
+
+      <section className="bg-[#181818] text-white">
+        <div className="mx-auto grid w-[min(100%-48px,1200px)] gap-8 py-20 md:grid-cols-[1fr_auto] md:items-center md:py-24">
+          <div>
+            <h2 className="text-4xl font-semibold leading-tight md:text-6xl">Fertig geschrieben?</h2>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-white/72">Dann kümmern wir uns um den Rest. PDF hochladen, Druck auswählen und Bestellung abschicken.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild size="lg" className="bg-brand-blue hover:bg-brand-blue/90">
+              <Link href={thesisHref}>Jetzt drucken <FileUp className="h-4 w-4" /></Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/20">
-              <Link href="#preise">Preise ansehen</Link>
+              <Link href="/kontakt">Beratung</Link>
             </Button>
-          </div>
-        </div>
-      </section>
-
-      <StudentPrintConfigurator products={products} />
-
-      <section className="container-page py-16">
-        <SectionHeading eyebrow="Studenten-Shop" title="Was möchtest du drucken oder binden?" description="Direkte Einstiege in bestehende Produkte und passende Ratgeberseiten." />
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {categoryCards.map(([label, key, href]) => {
-            const product = bySlug.get(key);
-            const safeHref = href.startsWith("/produkt/") && !product ? "/produkte" : href;
-            return (
-              <Link key={label} href={safeHref} className="group rounded-lg border border-slate-200 bg-white p-5 shadow-[0_12px_30px_rgba(17,34,68,.06)] transition hover:-translate-y-1 hover:border-brand-blue/35 hover:shadow-[0_18px_40px_rgba(17,85,204,.12)]">
-                <p className="text-lg font-black text-brand-ink transition group-hover:text-brand-blue">{label}</p>
-                <p className="mt-3 text-sm font-bold text-brand-blue">{product ? getProductStartingPriceLabel(product) : "Ratgeber öffnen"}</p>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="bg-slate-50 py-16">
-        <div className="container-page grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-center">
-          <div>
-            <SectionHeading eyebrow="Konfigurator" title="Abschlussarbeit konfigurieren" description="PDF hochladen, Ausstattung wählen und den Preis direkt berechnen." />
-            <div className="mt-7 grid gap-3 text-sm font-bold text-slate-700 sm:grid-cols-2">
-              {["PDF hochladen", "Format und Seiten prüfen", "Farbe oder Schwarz-Weiß", "Papier und Bindung wählen", "Cover und Prägung festlegen", "Preis berechnen und bestellen"].map((item) => (
-                <div key={item} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2">
-                  <CheckCircle2 className="h-4 w-4 text-brand-blue" />
-                  {item}
-                </div>
-              ))}
-            </div>
-            <Button asChild className="mt-8">
-              <Link href={thesisHref}>Konfigurator starten <ArrowRight className="h-4 w-4" /></Link>
-            </Button>
-          </div>
-          <Card className="overflow-hidden border-slate-200 shadow-[0_18px_45px_rgba(17,34,68,.08)]">
-            <div className="relative aspect-[4/3] bg-brand-mist">
-              <Image src={thesisImage} alt="Abschlussarbeiten drucken und binden" fill unoptimized={isRuntimeUploadImage(thesisImage)} className="object-cover" sizes="(min-width: 1024px) 45vw, 100vw" />
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      <section id="preise" className="container-page py-16">
-        <SectionHeading eyebrow="Bindungen" title="Bindungen im Vergleich" description="Preise und Konfigurationen kommen aus den bestehenden Produkten." />
-        <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-          {bindingCards.map(([title, text, slug, href]) => {
-            const product = bySlug.get(slug) ?? thesisProduct;
-            const productImage = product?.heroImage || "/uploads/products/abschlussarbeiten.webp";
-            const safeHref = bySlug.get(slug) ? href : thesisHref;
-            return (
-              <Card key={title} className="overflow-hidden border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.06)]">
-                <div className="relative aspect-[4/3] bg-brand-mist">
-                  <Image src={productImage} alt={title} fill unoptimized={isRuntimeUploadImage(productImage)} className="object-cover" sizes="(min-width: 1280px) 20vw, (min-width: 768px) 50vw, 100vw" />
-                </div>
-                <CardContent className="p-5">
-                  <h3 className="text-lg font-black text-brand-ink">{title}</h3>
-                  <p className="mt-2 min-h-12 text-sm leading-6 text-muted-foreground">{text}</p>
-                  <p className="mt-4 text-sm font-black text-brand-blue">{product ? getProductStartingPriceLabel(product) : "Preis auf Anfrage"}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">{product?.deliveryText || "Produktionszeit im Produkt wählbar"}</p>
-                  <Button asChild className="mt-5 w-full">
-                    <Link href={safeHref}>Konfigurieren</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="bg-[linear-gradient(180deg,#f8fbff,#eef4ff)] py-16">
-        <div className="container-page">
-          <SectionHeading eyebrow="Vorteile" title="Alles für Studium und Abgabe" />
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {benefits.map(([Icon, label]) => (
-              <div key={label} className="flex items-center gap-3 rounded-lg border border-white bg-white/85 p-4 shadow-sm">
-                <span className="grid h-10 w-10 place-items-center rounded-md bg-brand-blue text-white"><Icon className="h-5 w-5" /></span>
-                <p className="font-black text-brand-ink">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="container-page py-16">
-        <div className="grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
-          <SectionHeading eyebrow="Ablauf" title="In 3 Schritten bestellen" />
-          <div className="grid gap-4 md:grid-cols-3">
-            {["Datei hochladen", "Druck & Bindung konfigurieren", "Abholen oder liefern lassen"].map((step, index) => (
-              <div key={step} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-sm font-black text-brand-blue">0{index + 1}</p>
-                <h3 className="mt-3 text-lg font-black text-brand-ink">{step}</h3>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {studentProducts.length ? (
-        <section className="bg-slate-50 py-16">
-          <div className="container-page">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <SectionHeading eyebrow="Produkte" title="Passende Studenten-Produkte" />
-              <Button asChild variant="outline" className="w-fit"><Link href="/produkte">Alle Produkte ansehen</Link></Button>
-            </div>
-            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-              {studentProducts.map((product) => (
-                <Link key={product.slug} href={`/produkt/${product.slug}`} className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.06)] transition hover:-translate-y-1 hover:border-brand-blue/30">
-                  <div className="relative aspect-[4/3] bg-brand-mist">
-                    <Image src={product.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt={product.name} fill unoptimized={isRuntimeUploadImage(product.heroImage)} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
-                  </div>
-                  <div className="p-5">
-                    <h3 className="text-lg font-black text-brand-ink group-hover:text-brand-blue">{product.name}</h3>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{product.short}</p>
-                    <p className="mt-3 text-sm font-black text-brand-blue">{getProductStartingPriceLabel(product)}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="container-page py-16">
-        <div className="rounded-lg bg-slate-950 p-8 text-white md:p-10">
-          <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
-            <div>
-              <h2 className="text-3xl font-black">Bereit für den Druck?</h2>
-              <p className="mt-3 max-w-2xl text-white/75">Starte mit dem bestehenden Produktkonfigurator oder lies den Ratgeber für Druckdaten, Bindungen und Abgabeplanung.</p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild><Link href={thesisHref}>Jetzt bestellen</Link></Button>
-              <Button asChild variant="outline" className="border-white/35 bg-white/10 text-white hover:bg-white/20"><Link href="/studenten/ratgeber">Ratgeber öffnen</Link></Button>
-            </div>
           </div>
         </div>
       </section>

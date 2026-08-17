@@ -2661,9 +2661,23 @@ function PropertyCsvPanel() {
 
 function PropertyList() {
   return (
-    <List filters={searchFilters} sort={{ field: "sortOrder", order: "ASC" }}>
+    <List filters={searchFilters} sort={{ field: "sortOrder", order: "ASC" }} sx={{ "& .RaList-content": { bgcolor: "transparent", boxShadow: "none" } }}>
+      <Box sx={{ mb: 2, px: 0.5 }}>
+        <Typography variant="h5" sx={{ fontWeight: 950, color: adminColors.ink, letterSpacing: 0 }}>Eigenschaften</Typography>
+        <Typography variant="body2" sx={{ mt: 0.5, color: adminColors.muted, fontWeight: 650, maxWidth: 820 }}>
+          Globale Werte wie Papier, Format, Bindung oder Veredelung werden hier einmal gepflegt und danach in Produkten wiederverwendet.
+          Preise bleiben zentral, Produkt-Overrides werden nur bei Sonderfällen im Produkt gesetzt.
+        </Typography>
+      </Box>
       <PropertyCsvPanel />
-      <Datagrid rowClick="edit" bulkActionButtons={false}>
+      <Datagrid rowClick="edit" bulkActionButtons={false} sx={{
+        overflow: "hidden",
+        border: `1px solid ${adminColors.border}`,
+        borderRadius: 2,
+        bgcolor: "#fff",
+        "& .RaDatagrid-headerCell": { bgcolor: adminColors.tableHead, color: adminColors.ink, fontWeight: 900 },
+        "& .RaDatagrid-row:hover": { bgcolor: "#f8fafc" }
+      }}>
         <TextField source="slug" label="Slug" />
         <TextField source="name" label="Eigenschaft" />
         <NumberField source="values.length" label="Werte" />
@@ -2676,43 +2690,126 @@ function PropertyList() {
   );
 }
 
+const propertyPricingModes = [
+  { title: "Inklusive", text: "Der Wert ist im Grundpreis enthalten. Für Standardpapier oder Standardformat." },
+  { title: "Aufpreis / Stk.", text: "Wird pro Exemplar beziehungsweise Stück berechnet. Ideal für Bindung, Papier oder Prägung." },
+  { title: "Staffelpreis / Stk.", text: "Der Aufpreis hängt von der Auflage ab. Für Papier, Format und andere mengenabhängige Werte." },
+  { title: "Festpreis", text: "Einmaliger Preis pro Warenkorbposition. Nur für echte Einmal-Kosten verwenden." },
+  { title: "Multiplikator", text: "Erhöht den berechneten Produktpreis prozentual über einen Faktor." }
+];
+
+function PropertyPricingGuide() {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#bfdbfe", bgcolor: "#eff6ff" }}>
+      <CardContent sx={{ p: 2, display: "grid", gap: 1.3 }}>
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 950, color: "#0f172a" }}>Preislogik für Eigenschaftswerte</Typography>
+          <Typography variant="body2" sx={{ mt: 0.35, color: "#475569", fontWeight: 600 }}>
+            Diese Preise gelten global für alle Produkte, solange ein Produkt keinen eigenen Override setzt.
+          </Typography>
+        </Box>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(5, minmax(0, 1fr))" }, gap: 1 }}>
+          {propertyPricingModes.map((mode) => (
+            <Box key={mode.title} sx={{ border: "1px solid #dbeafe", bgcolor: "#fff", borderRadius: 1.5, p: 1.2 }}>
+              <Typography variant="caption" sx={{ display: "block", fontWeight: 950, color: adminColors.blue }}>{mode.title}</Typography>
+              <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#64748b", lineHeight: 1.45 }}>{mode.text}</Typography>
+            </Box>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PropertyValuesInput() {
   return (
-    <ArrayInput source="values" label="Werte">
-      <SimpleFormIterator disableClear>
-        <TextInput source="value" label="Wert" validate={[required()]} helperText={false} />
-        <TextInput source="label" label="Label" helperText={false} />
-        <SelectInput source="pricingMode" label="Preisart" defaultValue="included" choices={[
-          { id: "included", name: "Inklusive" },
-          { id: "fixed", name: "Aufpreis / Stk." },
-          { id: "tiered", name: "Staffelpreis / Stk." },
-          { id: "flat", name: "Festpreis" },
-          { id: "multiplier", name: "Multiplikator" }
-        ]} helperText={false} />
-        <NumberInput source="fixedPrice" label="Aufpreis/Festpreis (€)" min={0} step={0.01} defaultValue={0} helperText={false} />
-        <NumberInput source="multiplier" label="Multiplikator" min={0} step={0.01} defaultValue={1} helperText={false} />
-        <ArrayInput source="tierPrices" label="Staffelpreise">
-          <SimpleFormIterator inline disableClear>
-            <NumberInput source="fromQuantity" label="Von" min={1} step={1} helperText={false} />
-            <NumberInput source="toQuantity" label="Bis" min={1} step={1} helperText={false} />
-            <NumberInput source="unitPrice" label="€/Stk." min={0} step={0.01} helperText={false} />
-          </SimpleFormIterator>
-        </ArrayInput>
-        <BooleanInput source="active" label="Aktiv" defaultValue />
-      </SimpleFormIterator>
-    </ArrayInput>
+    <AdminFormSection title="Eigenschaftswerte" description="Jeder Wert ist eine auswählbare Option im Produkt-Konfigurator, zum Beispiel 80 g, 120 g oder 250 g Papier.">
+      <PropertyPricingGuide />
+      <ArrayInput source="values" label={false}>
+        <SimpleFormIterator
+          disableClear
+          getItemLabel={(index) => `Wert ${index + 1}`}
+          sx={{
+            "& .RaSimpleFormIterator-line": {
+              mb: 1.5,
+              p: 1.75,
+              border: `1px solid ${adminColors.border}`,
+              borderRadius: 2,
+              bgcolor: "#fff",
+              boxShadow: "0 10px 24px rgba(15, 23, 42, 0.04)"
+            },
+            "& .RaSimpleFormIterator-form": { display: "grid", gap: 1.3 },
+            "& .RaSimpleFormIterator-index": { color: adminColors.blue, fontWeight: 950 }
+          }}
+        >
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "180px 1fr 150px" }, gap: 1.25, alignItems: "start" }}>
+            <TextInput source="value" label="Interner Wert" validate={[required()]} helperText="Technischer Wert, z.B. 250g oder A3. Möglichst stabil halten." fullWidth />
+            <TextInput source="label" label="Anzeigename" helperText="Text im Konfigurator. Leer lassen, wenn der interne Wert gut lesbar ist." fullWidth />
+            <BooleanInput source="active" label="Aktiv" defaultValue helperText={false} />
+          </Box>
+
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "240px 180px 180px" }, gap: 1.25, alignItems: "start" }}>
+            <SelectInput source="pricingMode" label="Preisart" defaultValue="included" choices={[
+              { id: "included", name: "Inklusive" },
+              { id: "fixed", name: "Aufpreis / Stk." },
+              { id: "tiered", name: "Staffelpreis / Stk." },
+              { id: "flat", name: "Festpreis" },
+              { id: "multiplier", name: "Multiplikator" }
+            ]} helperText="Legt fest, wie dieser Wert in der zentralen Preisberechnung wirkt." fullWidth />
+            <NumberInput source="fixedPrice" label="Aufpreis/Festpreis (€)" min={0} step={0.01} defaultValue={0} helperText="Für Aufpreis / Stk. oder Festpreis." fullWidth />
+            <NumberInput source="multiplier" label="Multiplikator" min={0} step={0.01} defaultValue={1} helperText="1 = kein Aufschlag, 1.2 = +20%." fullWidth />
+          </Box>
+
+          <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#e2e8f0", bgcolor: "#f8fafc" }}>
+            <CardContent sx={{ p: 1.5, display: "grid", gap: 1 }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 950, color: "#0f172a" }}>Staffelpreise</Typography>
+                <Typography variant="caption" sx={{ display: "block", mt: 0.25, color: "#64748b", fontWeight: 650 }}>
+                  Nur relevant bei Preisart "Staffelpreis / Stk.". Beispiel: 1-99 = 0,32 €, 100-499 = 0,24 €.
+                </Typography>
+              </Box>
+              <ArrayInput source="tierPrices" label={false}>
+                <SimpleFormIterator
+                  inline
+                  disableClear
+                  getItemLabel={(index) => `Staffel ${index + 1}`}
+                  sx={{
+                    "& .RaSimpleFormIterator-line": { alignItems: "flex-start", border: 0, p: 0, mb: 0.75 },
+                    "& .RaSimpleFormIterator-form": { gap: 1 }
+                  }}
+                >
+                  <NumberInput source="fromQuantity" label="Von" min={1} step={1} helperText="inkl." />
+                  <NumberInput source="toQuantity" label="Bis" min={1} step={1} helperText="inkl." />
+                  <NumberInput source="unitPrice" label="€/Stk." min={0} step={0.01} helperText="Aufpreis pro Stück" />
+                </SimpleFormIterator>
+              </ArrayInput>
+            </CardContent>
+          </Card>
+        </SimpleFormIterator>
+      </ArrayInput>
+    </AdminFormSection>
   );
 }
 
 function PropertyEdit() {
   return (
     <Edit>
-      <SimpleForm>
-        <TextInput source="slug" label="Slug" validate={[required()]} />
-        <TextInput source="name" label="Name" validate={[required()]} />
-        <NumberInput source="sortOrder" label="Reihenfolge" />
-        <BooleanInput source="active" label="Aktiv" defaultValue />
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }}>
+        <AdminFormCanvas>
+          <AdminFormHeader title="Eigenschaft bearbeiten" description="Globale Option mit wiederverwendbaren Werten, Preisen und Staffelpreisen." />
+          <AdminFormSection title="Basisdaten" description="Slug und Name identifizieren die Eigenschaft im Admin, im Produkt und im Konfigurator.">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px 1fr 160px 160px" }, gap: 1.5, alignItems: "start" }}>
+              <TextInput source="slug" label="Slug" validate={[required()]} helperText="Technische ID, z.B. papier." fullWidth />
+              <TextInput source="name" label="Name" validate={[required()]} helperText="Sichtbarer Name, z.B. Papier." fullWidth />
+              <NumberInput source="sortOrder" label="Reihenfolge" helperText="Kleinere Zahl kommt früher." fullWidth />
+              <BooleanInput source="active" label="Aktiv" defaultValue helperText={false} />
+            </Box>
+          </AdminFormSection>
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            Globale Preise gelten automatisch in jedem Produkt, das diese Eigenschaft verwendet. Im Produktbereich nur dann überschreiben, wenn ein Sonderpreis nötig ist.
+          </Alert>
         <PropertyValuesInput />
+        </AdminFormCanvas>
       </SimpleForm>
     </Edit>
   );
@@ -2721,12 +2818,22 @@ function PropertyEdit() {
 function PropertyCreate() {
   return (
     <Create>
-      <SimpleForm defaultValues={{ active: true, sortOrder: 0, values: [] }}>
-        <TextInput source="slug" label="Slug" helperText="Optional. Wird aus dem Namen erzeugt, wenn leer." />
-        <TextInput source="name" label="Name" validate={[required()]} />
-        <NumberInput source="sortOrder" label="Reihenfolge" />
-        <BooleanInput source="active" label="Aktiv" defaultValue />
-        <PropertyValuesInput />
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ active: true, sortOrder: 0, values: [] }}>
+        <AdminFormCanvas>
+          <AdminFormHeader title="Eigenschaft anlegen" description="Eine globale Eigenschaft wird einmal angelegt und danach in Produkten aktiviert." />
+          <AdminFormSection title="Basisdaten" description="Beginne mit einem klaren Namen. Der Slug kann leer bleiben und wird beim Speichern erzeugt.">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px 1fr 160px 160px" }, gap: 1.5, alignItems: "start" }}>
+              <TextInput source="slug" label="Slug" helperText="Optional, z.B. papier." fullWidth />
+              <TextInput source="name" label="Name" validate={[required()]} helperText="z.B. Papier, Format, Bindung." fullWidth />
+              <NumberInput source="sortOrder" label="Reihenfolge" helperText="Kleinere Zahl kommt früher." fullWidth />
+              <BooleanInput source="active" label="Aktiv" defaultValue helperText={false} />
+            </Box>
+          </AdminFormSection>
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            Beispiel Papier: Werte wie 80 g, 120 g und 250 g anlegen. Standardwerte können inklusive sein, Premium-Papier kann Aufpreis oder Staffelpreise haben.
+          </Alert>
+          <PropertyValuesInput />
+        </AdminFormCanvas>
       </SimpleForm>
     </Create>
   );
