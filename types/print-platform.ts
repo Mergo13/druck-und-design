@@ -106,6 +106,8 @@ export type ProductPropertyProductionMetadata = {
   format?: string;
 };
 
+export type PdfAnalysisMode = "disabled" | "optional" | "required";
+
 export type ProductPricingProperty = {
   propertyId?: string;
   name: string;
@@ -206,6 +208,7 @@ export type ProductCatalogItem = {
   isStudentShop?: boolean;
   studentShopSortOrder?: number;
   studentDiscountEligible?: boolean;
+  pdfAnalysisMode?: PdfAnalysisMode;
   productBindingConfig?: {
     enabledSystems?: string[];
     bindingSizeSelectionMode?: "automatic" | "manual" | "automatic-with-override";

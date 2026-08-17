@@ -2322,6 +2322,33 @@ function ProductHomepagePlacementFields() {
   );
 }
 
+function ProductPdfAnalysisFields() {
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#e2e8f0", bgcolor: "#fff" }}>
+      <CardContent sx={{ display: "grid", gap: 1.5 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>PDF-Analyse</Typography>
+        <SelectInput
+          source="pdfAnalysisMode"
+          label="PDF-Analyse"
+          defaultValue="disabled"
+          choices={[
+            { id: "disabled", name: "Deaktiviert" },
+            { id: "optional", name: "Optional" },
+            { id: "required", name: "Erforderlich" }
+          ]}
+          helperText="Steuert, ob der bestehende PDF-Analyzer Seitenanzahl, Format und Ausrichtung automatisch in die Konfiguration übernimmt."
+          fullWidth
+        />
+        <Box sx={{ display: "grid", gap: 0.75, color: "#475569" }}>
+          <Typography variant="body2"><strong>Deaktiviert:</strong> Keine automatische PDF-Analyse für dieses Produkt.</Typography>
+          <Typography variant="body2"><strong>Optional:</strong> PDF kann hochgeladen werden; erkannte Dokumentdaten werden übernommen.</Typography>
+          <Typography variant="body2"><strong>Erforderlich:</strong> Eine gültig analysierte PDF ist nötig, bevor der Warenkorb möglich ist.</Typography>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 function AdminFormSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#d8e0ea", bgcolor: "#fff" }}>
@@ -2389,6 +2416,7 @@ function ProductFormFields({ duplicate = false }: { duplicate?: boolean }) {
       <AdminFormHeader title="Sichtbarkeit & Platzierung" description="Kaufmodus, Startseiten-Listen, Studentenrabatt und Branchenzuordnung." />
       <Box sx={{ display: "grid", gap: 1.5 }}>
         <ProductHomepagePlacementFields />
+        <ProductPdfAnalysisFields />
         <ProductIndustryCheckboxes />
       </Box>
 
@@ -2411,7 +2439,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pdfAnalysisMode: "disabled", pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductFormFields />
       </SimpleForm>
     </Create>

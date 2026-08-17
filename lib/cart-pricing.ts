@@ -98,6 +98,16 @@ async function pageCountFromUploadedPdf(uploadUrl?: string, fileName?: string) {
   }
 }
 
+async function verifiedUploadedPdfPageCount(item: CartPricingInput, product: ProductCatalogItem) {
+  const mode = product.pdfAnalysisMode ?? "disabled";
+  if (mode === "disabled") return 0;
+  const pageCount = await pageCountFromUploadedPdf(item.printCheckFileUrl, item.printCheckFileName);
+  if (mode === "required" && pageCount <= 0) {
+    throw new Error(`${product.name}: Bitte laden Sie eine gültige PDF hoch. Die PDF-Analyse ist für dieses Produkt erforderlich.`);
+  }
+  return pageCount;
+}
+
 function enabledCategoryProperties(product: ProductCatalogItem, categoryProperties: ProductCategoryProperty[]) {
   if (product.pricingProperties?.length) return [];
   const enabled = new Set(product.enabledCategoryProperties ?? []);
@@ -132,12 +142,16 @@ export async function priceCartItems(params: {
     if (!rawProduct) throw new Error(`Produkt ${item.slug} ist nicht verfügbar.`);
     const product = resolveGlobalPropertyPricing(rawProduct, globalProperties);
     const pricingConfig = selectedOptionsFromItem(item);
-    const verifiedPdfPageCount = await pageCountFromUploadedPdf(item.printCheckFileUrl, item.printCheckFileName);
+    const verifiedPdfPageCount = await verifiedUploadedPdfPageCount(item, product);
     if (verifiedPdfPageCount > 0) {
       pricingConfig.seitenanzahl = String(verifiedPdfPageCount);
       pricingConfig.Seitenanzahl = String(verifiedPdfPageCount);
       pricingConfig["PDF-Seiten"] = String(verifiedPdfPageCount);
       pricingConfig["Seiten pro Exemplar"] = String(verifiedPdfPageCount);
+      pricingConfig.pdfAnalysisStatus = "success";
+      pricingConfig.pdfAnalysisPageCount = String(verifiedPdfPageCount);
+      pricingConfig.pdfAnalysisFileUrl = item.printCheckFileUrl ?? pricingConfig.pdfAnalysisFileUrl ?? "";
+      pricingConfig.pdfAnalysisFileName = item.printCheckFileName ?? pricingConfig.pdfAnalysisFileName ?? "";
     }
     const designId = pricingConfig.PraegungDesignId || pricingConfig.PraegungDesignID || pricingConfig.embossingDesignId;
     let embossingDesign: PricedCartItem["embossingDesign"] | undefined;

@@ -80,9 +80,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     productionPdfUrl?: string;
   } | null>(null);
   const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
-  const isDocumentProduct = /abschlussarbeiten/i.test(product.slug);
+  const pdfAnalysisMode = product.pdfAnalysisMode ?? "disabled";
+  const pdfAnalysisEnabled = pdfAnalysisMode !== "disabled";
+  const pdfAnalysisRequired = pdfAnalysisMode === "required";
+  const pdfAnalysisBlocking = pdfAnalysisRequired && !pdfAnalysis?.valid;
   const documentProduction = deriveDocumentProduction(config, currentQuantity);
-  const pricingQuantities = isDocumentProduct ? pricingQuantitiesForDocument(config, currentQuantity) : undefined;
+  const pricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForDocument(config, currentQuantity) : undefined;
   const bindingResolution = useMemo(() => resolveBindingConfigurationForProduct({
     product,
     categoryProperties,
@@ -147,13 +150,13 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
     if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-      return calculateConfiguredProductPrice(product, quantity, config, isDocumentProduct ? pricingQuantitiesForDocument(config, quantity) : undefined).total;
+      return calculateConfiguredProductPrice(product, quantity, config, pdfAnalysisEnabled ? pricingQuantitiesForDocument(config, quantity) : undefined).total;
     }
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
-  }, [config, currentQuantity, enabledProperties, firstVariant, isDocumentProduct, product]);
+  }, [config, currentQuantity, enabledProperties, firstVariant, pdfAnalysisEnabled, product]);
   const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
     ...config,
     ...(finalizedEmbossing?.cartConfig ?? {}),
@@ -243,7 +246,14 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     setUploadedFile(file);
     setUploadedFileUrl(undefined);
     setPdfAnalysis(null);
-    if (isDocumentProduct && (file.type === "application/pdf" || fileName.endsWith(".pdf"))) {
+    const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
+    if (pdfAnalysisRequired && !isPdf) {
+      setUploadedFile(null);
+      setUploadError("Für dieses Produkt ist eine gültige PDF-Analyse erforderlich. Bitte laden Sie eine PDF-Datei hoch.");
+      return;
+    }
+
+    if (pdfAnalysisEnabled && isPdf) {
       setIsAnalyzingPdf(true);
       try {
         const form = new FormData();
@@ -328,7 +338,21 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       authoritativeConfig.resolvedBindingSheetCount = String(authoritativeBindingResolution.sheetCount);
       authoritativeConfig.resolvedBindingBlockThicknessMm = String(authoritativeBindingResolution.blockThicknessMm);
     }
-    const authoritativePricingQuantities = isDocumentProduct ? pricingQuantitiesForDocument(authoritativeConfig, currentQuantity) : undefined;
+    if (pdfAnalysisRequired && !pdfAnalysis?.valid) {
+      setCartMessage("Bitte laden Sie zuerst eine gültige PDF hoch. Die PDF-Analyse ist für dieses Produkt erforderlich.");
+      return false;
+    }
+    if (pdfAnalysis?.valid) {
+      authoritativeConfig.pdfAnalysisStatus = "success";
+      authoritativeConfig.pdfAnalysisFileUrl = pdfAnalysis.fileUrl ?? "";
+      authoritativeConfig.pdfAnalysisFileName = pdfAnalysis.fileName;
+      authoritativeConfig.pdfAnalysisPageCount = String(pdfAnalysis.pages);
+      authoritativeConfig.pdfAnalysisWidthMm = String(pdfAnalysis.widthMm ?? "");
+      authoritativeConfig.pdfAnalysisHeightMm = String(pdfAnalysis.heightMm ?? "");
+      authoritativeConfig.pdfAnalysisOrientation = pdfAnalysis.orientation ?? "";
+      authoritativeConfig.pdfAnalysisFormat = pdfAnalysis.dominantFormat ?? "";
+    }
+    const authoritativePricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForDocument(authoritativeConfig, currentQuantity) : undefined;
     const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
     const authoritativeDiscount = applyStudentDiscount({
       subtotal: priceSnapshot.total,
@@ -349,7 +373,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       : formatEuro(priceSnapshot.basePrice);
     const selectedConfig = Object.fromEntries([
       ["Menge", String(currentQuantity)],
-      ...(isDocumentProduct && documentProduction.pagesPerCopy > 0 ? [
+      ...(pdfAnalysisEnabled && documentProduction.pagesPerCopy > 0 ? [
         ["Seiten pro Exemplar", String(documentProduction.pagesPerCopy)],
         ["Druckseiten gesamt", String(documentProduction.totalPrintedPages)],
         ["Blätter pro Exemplar", String(documentProduction.sheetsPerCopy)],
@@ -446,12 +470,17 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </select>
           </label>
         ))}
-        {isDocumentProduct ? (
+        {pdfAnalysisEnabled ? (
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Dokument</p>
             {isAnalyzingPdf ? (
               <div className="mt-2 rounded-md border border-blue-100 bg-white p-3 text-sm font-semibold text-brand-blue">
                 PDF wird gelesen. Seitenanzahl, Format und Ausrichtung werden automatisch übernommen.
+              </div>
+            ) : null}
+            {pdfAnalysisRequired && !pdfAnalysis ? (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                Für dieses Produkt ist eine erfolgreiche PDF-Analyse erforderlich.
               </div>
             ) : null}
             {pdfAnalysis ? (
@@ -615,7 +644,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           )
         ) : null}
       </div>
-      {isDocumentProduct && documentProduction.pagesPerCopy > 0 ? (
+      {pdfAnalysisEnabled && documentProduction.pagesPerCopy > 0 ? (
         <div className="mt-5 rounded-md border border-slate-200 bg-white p-3 text-sm">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Deine Konfiguration</p>
           <div className="mt-3 grid gap-2 text-slate-700">
@@ -656,7 +685,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />
         <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten / Dokument hochladen"}</p>
         <p className="text-xs text-muted-foreground mt-1">
-          {isDocumentProduct ? "PDF hochladen: Seitenanzahl, Format und Ausrichtung werden automatisch erkannt." : "Klicken oder Datei hier ablegen. Upload ist auch ohne Profi Print-Check möglich."}
+          {pdfAnalysisEnabled ? "PDF hochladen: Seitenanzahl, Format und Ausrichtung werden automatisch erkannt." : "Klicken oder Datei hier ablegen. Upload ist auch ohne Profi Print-Check möglich."}
         </p>
         {uploadedFile && (
           <div className="mt-3 flex justify-center">
@@ -707,7 +736,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           <Badge variant="outline">UPLOAD</Badge>
         </div>
       ) : null}
-      {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart}>
+      {pdfAnalysisBlocking ? (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+          Bitte laden Sie zuerst eine gültige PDF hoch. Danach können Sie das Produkt in den Warenkorb legen.
+        </p>
+      ) : null}
+      {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart} disabled={pdfAnalysisBlocking || isAnalyzingPdf}>
         In den Warenkorb
       </Button> : <Button asChild className="mt-6 w-full" size="lg"><a href="/login">Anmelden und Preise sehen</a></Button>}
       {authenticated ? <Button
@@ -715,6 +749,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         size="lg"
         variant="outline"
         type="button"
+        disabled={pdfAnalysisBlocking || isAnalyzingPdf}
         onClick={() => {
           void (async () => {
             const ok = await addToCart();
