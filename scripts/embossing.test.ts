@@ -70,7 +70,7 @@ const workType = layout.elements.find((element) => element.type === "text" && el
 assert.ok(workType?.type === "text", "work type element exists");
 const safeTextWidth = safe.width * 0.92;
 for (const line of workType.lines) {
-  assert.ok(textWidthMm(line, workType.fontSizePt, workType.fontStyle, workType.weight, workType.letterSpacingMm) <= safe.width * 0.85 * 0.92 + 0.01, "work type must not dominate cover width");
+  assert.ok(textWidthMm(line, workType.fontSizePt, workType.fontStyle, workType.weight, workType.letterSpacingMm) <= safe.width * 0.62 + 0.01, "work type must not dominate cover width");
 }
 for (const element of layout.elements) {
   if (element.type !== "text") continue;

@@ -46,6 +46,7 @@ import {
   CustomRoutes,
   useRedirect,
   useGetList,
+  useListContext,
   useNotify,
   useRefresh,
   useRecordContext
@@ -279,7 +280,7 @@ const dataProvider = {
         return normalizeCatalogRecordForAdmin({ ...base, productStatus: item.productStatus ?? (item.visible === false || item.published === false ? "inactive" : "active"), pricingType: item.pricingType ?? "fixed", priceTiers: item.priceTiers ?? [{ quantity: 1, price: item.basePrice ?? 0 }], pricingProperties: item.pricingProperties ?? [], visible: item.visible ?? true, published: item.published ?? true });
       });
       const filtered = q
-        ? mapped.filter((item) => `${item.name ?? ""} ${item.slug ?? ""} ${item.id ?? ""}`.toLowerCase().includes(q))
+        ? mapped.filter((item) => `${item.name ?? ""} ${item.slug ?? ""} ${item.id ?? ""} ${item.category ?? ""} ${item.productStatus ?? ""}`.toLowerCase().includes(q))
         : mapped;
       const sorted = [...filtered].sort((a, b) => {
         const left = String(a[sortField] ?? "").toLowerCase();
@@ -779,19 +780,169 @@ function AdminDashboardHome() {
 
 function ProductList() {
   return (
-    <List filters={searchFilters} sort={{ field: "category", order: "ASC" }}>
-      <Datagrid rowClick="edit" bulkActionButtons={false}>
-        <TextField source="category" label="Gruppe" />
-        <TextField source="slug" />
-        <TextField source="name" />
-        <TextField source="productStatus" label="Status" />
-        <BooleanField source="isBestseller" label="Bestseller" />
-        <NumberField source="basePrice" />
-        <DateField source="updatedAt" emptyText="-" />
-        <EditButton />
-        <DeleteButton mutationMode="pessimistic" confirmTitle="Produkt löschen?" confirmContent="Diese Aktion kann nicht rückgängig gemacht werden." />
-      </Datagrid>
+    <List
+      filters={searchFilters}
+      sort={{ field: "category", order: "ASC" }}
+      perPage={200}
+      sx={{ "& .RaList-content": { bgcolor: "transparent", boxShadow: "none" } }}
+    >
+      <ProductGroupedList />
     </List>
+  );
+}
+
+type ProductAdminRecord = AdminRecord & ProductCatalogItem;
+type CategoryAdminRecord = AdminRecord & { sortOrder?: number };
+
+function productSortValue(product: ProductAdminRecord) {
+  return product.studentShopSortOrder ?? product.bestsellerSortOrder ?? 999;
+}
+
+function ProductGroupedList() {
+  const { data = [], isPending } = useListContext<ProductAdminRecord>();
+  const redirect = useRedirect();
+  const { data: categories = [] } = useGetList<CategoryAdminRecord>("categories", {
+    pagination: { page: 1, perPage: 200 },
+    sort: { field: "sortOrder", order: "ASC" }
+  });
+
+  const groups = useMemo(() => {
+    const categoryMap = new Map(
+      categories.map((category) => [
+        String(category.slug ?? category.id),
+        {
+          name: String(category.name ?? category.slug ?? category.id),
+          sortOrder: Number(category.sortOrder ?? 999)
+        }
+      ])
+    );
+    const grouped = new Map<string, { slug: string; name: string; sortOrder: number; products: ProductAdminRecord[] }>();
+
+    for (const product of data) {
+      const slug = String(product.category ?? "ohne-kategorie");
+      const category = categoryMap.get(slug);
+      const group = grouped.get(slug) ?? {
+        slug,
+        name: category?.name ?? "Ohne Kategorie",
+        sortOrder: category?.sortOrder ?? 999,
+        products: []
+      };
+      group.products.push(product);
+      grouped.set(slug, group);
+    }
+
+    return [...grouped.values()]
+      .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "de"))
+      .map((group) => ({
+        ...group,
+        products: [...group.products].sort((left, right) => productSortValue(left) - productSortValue(right) || left.name.localeCompare(right.name, "de"))
+      }));
+  }, [categories, data]);
+
+  if (isPending) {
+    return <Typography variant="body2" color="text.secondary">Produkte werden geladen...</Typography>;
+  }
+
+  return (
+    <Box sx={{ display: "grid", gap: 2 }}>
+      <Box sx={{ px: 0.5 }}>
+        <Typography variant="h5" sx={{ fontWeight: 950, color: adminColors.ink, letterSpacing: 0 }}>
+          Produkte
+        </Typography>
+        <Typography variant="body2" sx={{ mt: 0.5, color: adminColors.muted, fontWeight: 650, maxWidth: 820 }}>
+          Nach Kategorien gruppiert, damit Produkte schneller gefunden werden. Die Suche oben filtert weiterhin ueber Name, Slug und ID.
+        </Typography>
+      </Box>
+
+      {groups.length ? groups.map((group) => (
+        <Card key={group.slug} variant="outlined" sx={{ borderRadius: 2, borderColor: adminColors.border, overflow: "hidden" }}>
+          <CardContent sx={{ p: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, px: 2, py: 1.5, bgcolor: adminColors.tableHead, borderBottom: `1px solid ${adminColors.border}` }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, minWidth: 0 }}>
+                <Box sx={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 1.5, bgcolor: "#fff", color: adminColors.blue, border: `1px solid ${adminColors.border}` }}>
+                  <CategoryIcon fontSize="small" />
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 950, color: adminColors.ink, lineHeight: 1.15 }}>
+                    {group.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ display: "block", color: adminColors.muted, fontWeight: 700 }}>
+                    {group.slug}
+                  </Typography>
+                </Box>
+              </Box>
+              <Typography variant="caption" sx={{ flexShrink: 0, fontWeight: 900, color: adminColors.ink, bgcolor: "#fff", border: `1px solid ${adminColors.border}`, borderRadius: 999, px: 1.2, py: 0.4 }}>
+                {group.products.length} Produkte
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: "grid" }}>
+              {group.products.map((product) => {
+                const productId = String(product.id ?? product.slug);
+                return (
+                <Box
+                  key={productId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => redirect("edit", "products", productId)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      redirect("edit", "products", productId);
+                    }
+                  }}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "minmax(260px, 1.6fr) 130px 130px 110px auto" },
+                    gap: { xs: 1, md: 1.5 },
+                    alignItems: "center",
+                    px: 2,
+                    py: 1.35,
+                    borderTop: `1px solid ${adminColors.border}`,
+                    bgcolor: product.productStatus === "inactive" || product.visible === false || product.published === false ? "#f8fafc" : "#fff",
+                    cursor: "pointer",
+                    transition: "background-color 140ms ease, box-shadow 140ms ease",
+                    "&:hover": { bgcolor: "#f9fbff" },
+                    "&:focus-visible": { outline: `2px solid ${adminColors.blue}`, outlineOffset: -2, boxShadow: "inset 0 0 0 2px #fff" }
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 900, color: adminColors.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {product.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 650 }}>
+                      {product.slug}
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" sx={{ fontWeight: 850, color: product.productStatus === "active" ? "#027a48" : product.productStatus === "draft" ? "#b54708" : adminColors.muted }}>
+                    {product.productStatus === "active" ? "Aktiv" : product.productStatus === "draft" ? "Entwurf" : "Inaktiv"}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 750 }}>
+                    {product.purchaseMode === "request" ? "Anfrage" : product.purchaseMode === "both" ? "Online + Anfrage" : product.purchaseMode === "disabled" ? "Deaktiviert" : "Online"}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: adminColors.ink, fontWeight: 900 }}>
+                    {formatCurrency(Number(product.basePrice ?? 0))}
+                  </Typography>
+                  <Box onClick={(event) => event.stopPropagation()} sx={{ display: "flex", justifyContent: { xs: "flex-start", md: "flex-end" }, gap: 0.75, flexWrap: "wrap" }}>
+                    <Button size="small" variant="outlined" href={`#/products/${product.id ?? product.slug}`}>
+                      Bearbeiten
+                    </Button>
+                    <DeleteButton record={product} resource="products" mutationMode="pessimistic" confirmTitle="Produkt löschen?" confirmContent="Diese Aktion kann nicht rückgängig gemacht werden." />
+                  </Box>
+                </Box>
+                );
+              })}
+            </Box>
+          </CardContent>
+        </Card>
+      )) : (
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent>
+            <Typography variant="body2" color="text.secondary">Keine Produkte gefunden.</Typography>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
   );
 }
 

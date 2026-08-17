@@ -32,13 +32,13 @@ export const roleTypography: Record<EmbossingTextRole, {
   spacingAfterMm: number;
   maxWidthRatio: number;
 }> = {
-  institution: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.24, uppercase: true, maxLines: 2, spacingAfterMm: 10, maxWidthRatio: 0.72 },
-  workType: { preferredPt: 18, minPt: 11, maxPt: 20, lineHeight: 1.18, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.78 },
-  title: { preferredPt: 16, minPt: 10, maxPt: 18, lineHeight: 1.22, uppercase: true, maxLines: 3, spacingAfterMm: 7, maxWidthRatio: 0.8 },
-  subtitle: { preferredPt: 13, minPt: 10, maxPt: 15, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.76 },
-  author: { preferredPt: 13, minPt: 10, maxPt: 15, lineHeight: 1.2, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.68 },
-  year: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.4 },
-  custom: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.76 }
+  institution: { preferredPt: 9, minPt: 7, maxPt: 10, lineHeight: 1.26, uppercase: true, maxLines: 2, spacingAfterMm: 12, maxWidthRatio: 0.62 },
+  workType: { preferredPt: 13, minPt: 9, maxPt: 14, lineHeight: 1.2, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.62 },
+  title: { preferredPt: 12, minPt: 8, maxPt: 13, lineHeight: 1.24, uppercase: true, maxLines: 3, spacingAfterMm: 8, maxWidthRatio: 0.68 },
+  subtitle: { preferredPt: 10, minPt: 7.5, maxPt: 11, lineHeight: 1.24, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.64 },
+  author: { preferredPt: 10, minPt: 7.5, maxPt: 11, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.58 },
+  year: { preferredPt: 9, minPt: 7, maxPt: 10, lineHeight: 1.22, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.32 },
+  custom: { preferredPt: 9, minPt: 7, maxPt: 10, lineHeight: 1.22, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.62 }
 };
 
 const standardFonts = {
@@ -80,6 +80,10 @@ export function textWidthMm(text: string, fontSizePt: number, fontStyle: FontSty
 
   const tracking = Math.max(0, chars.length - 1) * letterSpacingMm;
   return (units / 1000) * fontSizePt * PT_TO_MM + tracking;
+}
+
+export function fontSizeMm(fontSizePt: number) {
+  return fontSizePt * PT_TO_MM;
 }
 
 export function lineHeightMm(fontSizePt: number, role: EmbossingTextRole) {
@@ -155,7 +159,7 @@ export function fitTextBlock(params: {
   const maxPt = Math.max(minPt, params.maxFontSizePt ?? roleStyle.maxPt);
   const preferred = Math.min(maxPt, Math.max(minPt, params.preferredFontSizePt ?? roleStyle.preferredPt));
   const maxLines = params.maxLines ?? roleStyle.maxLines;
-  const trackingStepsMm = [0.12, 0.08, 0.04, 0];
+  const trackingStepsMm = [0.06, 0.035, 0.015, 0];
 
   for (let fontSizePt = preferred; fontSizePt >= minPt; fontSizePt -= 0.25) {
     for (const letterSpacingMm of trackingStepsMm) {

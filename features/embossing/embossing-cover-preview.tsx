@@ -1,6 +1,7 @@
 "use client";
 
 import type { EmbossingColor, EmbossingResolvedLayout } from "@/lib/embossing/types";
+import { fontSizeMm } from "@/lib/embossing/typography";
 
 function previewFill(color: EmbossingColor) {
   if (color === "silber") return "#c9ced6";
@@ -36,7 +37,7 @@ export function EmbossingCoverPreview({ layout, color, showGuides = true }: { la
             y={element.yMm + (lineIndex + 0.82) * element.lineHeightMm}
             textAnchor={textAnchor}
             fontFamily={element.fontStyle === "classic" ? "Times New Roman, Times, serif" : "Helvetica, Arial, sans-serif"}
-            fontSize={`${element.fontSizePt}pt`}
+            fontSize={fontSizeMm(element.fontSizePt)}
             fontWeight={element.weight}
             letterSpacing={`${element.letterSpacingMm}mm`}
             fill={fill}

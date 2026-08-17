@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { saveGeneratedUploadFile } from "@/lib/file-storage";
+import { fontSizeMm } from "./typography";
 import type { EmbossingColor, EmbossingLayoutElement, EmbossingResolvedLayout } from "./types";
 
 const MM_TO_PT = 72 / 25.4;
@@ -25,7 +26,7 @@ function productionSvg(layout: EmbossingResolvedLayout, color: "preview" | "mask
       const textAnchor = element.alignment === "left" ? "start" : element.alignment === "right" ? "end" : "middle";
       const x = element.alignment === "left" ? element.xMm : element.alignment === "right" ? element.xMm + element.widthMm : element.xMm + element.widthMm / 2;
       const y = element.yMm + (index + 0.82) * element.lineHeightMm;
-      return `<text x="${x.toFixed(3)}" y="${y.toFixed(3)}" text-anchor="${textAnchor}" font-family="${font}" font-size="${element.fontSizePt.toFixed(2)}pt" font-weight="${element.weight}" letter-spacing="${element.letterSpacingMm.toFixed(3)}mm" fill="${fill}">${escapeXml(line)}</text>`;
+      return `<text x="${x.toFixed(3)}" y="${y.toFixed(3)}" text-anchor="${textAnchor}" font-family="${font}" font-size="${fontSizeMm(element.fontSizePt).toFixed(3)}" font-weight="${element.weight}" letter-spacing="${element.letterSpacingMm.toFixed(3)}mm" fill="${fill}">${escapeXml(line)}</text>`;
     }).join("");
   }).join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.coverGeometry.widthMm}mm" height="${layout.coverGeometry.heightMm}mm" viewBox="0 0 ${layout.coverGeometry.widthMm} ${layout.coverGeometry.heightMm}">${body}</svg>`;

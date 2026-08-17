@@ -65,6 +65,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysis | null>(null);
   const [mockupUrl, setMockupUrl] = useState<string>("");
   const [uploadError, setUploadError] = useState("");
+  const [isAnalyzingPdf, setIsAnalyzingPdf] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
   const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
@@ -220,6 +221,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     setUploadedFileUrl(undefined);
     setPdfAnalysis(null);
     if (isDocumentProduct && (file.type === "application/pdf" || fileName.endsWith(".pdf"))) {
+      setIsAnalyzingPdf(true);
       try {
         const form = new FormData();
         form.append("file", file);
@@ -231,6 +233,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         setUploadedFile(null);
         setUploadError(error instanceof Error ? error.message : "PDF konnte nicht analysiert werden.");
         return;
+      } finally {
+        setIsAnalyzingPdf(false);
       }
     }
     await readFilePreview(file);
@@ -399,6 +403,11 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         {isDocumentProduct ? (
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Dokument</p>
+            {isAnalyzingPdf ? (
+              <div className="mt-2 rounded-md border border-blue-100 bg-white p-3 text-sm font-semibold text-brand-blue">
+                PDF wird gelesen. Seitenanzahl, Format und Ausrichtung werden automatisch übernommen.
+              </div>
+            ) : null}
             {pdfAnalysis ? (
               <div className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
                 <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {documentProduction.pagesPerCopy} Seiten erkannt</p>
@@ -406,28 +415,33 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
                 <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.orientation === "landscape" ? "Querformat" : pdfAnalysis.orientation === "portrait" ? "Hochformat" : "Ausrichtung erkannt"}</p>
                 <p className="pt-1 text-xs text-slate-500">Automatisch aus PDF erkannt</p>
               </div>
-            ) : (
-              <label className="mt-3 grid gap-2">
-                <span className="text-sm font-bold">Seitenanzahl</span>
-                <input
-                  suppressHydrationWarning
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={config.seitenanzahl ?? ""}
-                  onChange={(event) => setConfig({
+            ) : null}
+            <label className="mt-3 grid gap-2">
+              <span className="text-sm font-bold">Seitenanzahl</span>
+              <input
+                suppressHydrationWarning
+                type="number"
+                min="1"
+                step="1"
+                value={config.seitenanzahl ?? ""}
+                onChange={(event) => {
+                  if (pdfAnalysis) return;
+                  setConfig({
                     ...config,
                     seitenanzahl: event.target.value,
                     Seitenanzahl: event.target.value,
                     "Seiten pro Exemplar": event.target.value,
                     "PDF-Seiten": event.target.value
-                  })}
-                  placeholder="z.B. 26"
-                  className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-                />
-                <span className="text-xs text-slate-500">Fallback ohne PDF. Nach PDF-Upload ist die erkannte Seitenanzahl verbindlich.</span>
-              </label>
-            )}
+                  });
+                }}
+                placeholder="z.B. 26"
+                readOnly={Boolean(pdfAnalysis)}
+                className={pdfAnalysis ? "h-11 rounded-md border border-emerald-200 bg-emerald-50 px-3 text-sm font-bold text-emerald-900 outline-none" : "h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"}
+              />
+              <span className="text-xs text-slate-500">
+                {pdfAnalysis ? "Automatisch aus der PDF übernommen. Entferne die Datei, wenn du manuell ändern möchtest." : "Fallback ohne PDF. Nach PDF-Upload ist die erkannte Seitenanzahl verbindlich."}
+              </span>
+            </label>
           </div>
         ) : null}
         <label className="grid gap-2">
@@ -594,7 +608,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         />
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />
         <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten / Dokument hochladen"}</p>
-        <p className="text-xs text-muted-foreground mt-1">Klicken oder Datei hier ablegen. Upload ist auch ohne Profi Print-Check möglich.</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {isDocumentProduct ? "PDF hochladen: Seitenanzahl, Format und Ausrichtung werden automatisch erkannt." : "Klicken oder Datei hier ablegen. Upload ist auch ohne Profi Print-Check möglich."}
+        </p>
         {uploadedFile && (
           <div className="mt-3 flex justify-center">
             <Button
@@ -608,6 +624,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
                 setUploadedFile(null);
                 setUploadedFileUrl(undefined);
                 setPdfAnalysis(null);
+                setIsAnalyzingPdf(false);
                 if (mockupUrl) URL.revokeObjectURL(mockupUrl);
                 setMockupUrl("");
               }}
