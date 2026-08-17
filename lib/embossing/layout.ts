@@ -16,7 +16,7 @@ const groupRoles: Record<"top" | "middle" | "bottom", EmbossingTextRole[]> = {
   bottom: ["author", "year"]
 };
 
-const SAFE_TEXT_WIDTH_RATIO = 0.92;
+const SAFE_TEXT_WIDTH_RATIO = 1;
 
 function isUsed(input: GenerateEmbossingLayoutInput, role: EmbossingTextRole) {
   if (role === "custom") return true;

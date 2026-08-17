@@ -16,7 +16,11 @@ const orderItemSchema = z.object({
   quantity: z.number().int().min(1).max(100000),
   price: z.number().nonnegative().max(1_000_000),
   config: z.record(z.string(), z.string()).default({}),
-  pricingConfig: z.record(z.string(), z.string()).optional()
+  pricingConfig: z.record(z.string(), z.string()).optional(),
+  printCheckFileName: z.string().optional(),
+  printCheckFileUrl: z.string().optional(),
+  printCheckRequested: z.boolean().optional(),
+  printCheckFee: z.number().nonnegative().optional()
 });
 
 const orderRequestSchema = z.object({
@@ -109,7 +113,11 @@ export async function POST(request: Request) {
         name: item.name,
         quantity: item.quantity,
         config: item.config,
-        pricingConfig: item.pricingConfig
+        pricingConfig: item.pricingConfig,
+        printCheckFileName: item.printCheckFileName,
+        printCheckFileUrl: item.printCheckFileUrl,
+        printCheckRequested: item.printCheckRequested,
+        printCheckFee: item.printCheckFee
       })),
       user: accountProfile,
       studentDiscountPercent: storeControl?.studentDiscountPercent

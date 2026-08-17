@@ -2,7 +2,6 @@ import { Encodings, Font, FontNames } from "@pdf-lib/standard-fonts";
 import type { EmbossingTextRole } from "./types";
 
 const PT_TO_MM = 25.4 / 72;
-const MM_TO_PT = 72 / 25.4;
 
 type FontStyle = "modern" | "classic";
 
@@ -33,13 +32,13 @@ export const roleTypography: Record<EmbossingTextRole, {
   spacingAfterMm: number;
   maxWidthRatio: number;
 }> = {
-  institution: { preferredPt: 6 * MM_TO_PT, minPt: 3.5 * MM_TO_PT, maxPt: 6.4 * MM_TO_PT, lineHeight: 1.24, uppercase: true, maxLines: 2, spacingAfterMm: 10, maxWidthRatio: 0.82 },
-  workType: { preferredPt: 8 * MM_TO_PT, minPt: 4 * MM_TO_PT, maxPt: 8.2 * MM_TO_PT, lineHeight: 1.18, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.85 },
-  title: { preferredPt: 6.5 * MM_TO_PT, minPt: 3.5 * MM_TO_PT, maxPt: 7 * MM_TO_PT, lineHeight: 1.22, uppercase: true, maxLines: 3, spacingAfterMm: 7, maxWidthRatio: 0.8 },
-  subtitle: { preferredPt: 5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5.4 * MM_TO_PT, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.78 },
-  author: { preferredPt: 5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5.4 * MM_TO_PT, lineHeight: 1.2, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.72 },
-  year: { preferredPt: 5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5.2 * MM_TO_PT, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.45 },
-  custom: { preferredPt: 4.5 * MM_TO_PT, minPt: 3 * MM_TO_PT, maxPt: 5 * MM_TO_PT, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.75 }
+  institution: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.24, uppercase: true, maxLines: 2, spacingAfterMm: 10, maxWidthRatio: 0.72 },
+  workType: { preferredPt: 18, minPt: 11, maxPt: 20, lineHeight: 1.18, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.78 },
+  title: { preferredPt: 16, minPt: 10, maxPt: 18, lineHeight: 1.22, uppercase: true, maxLines: 3, spacingAfterMm: 7, maxWidthRatio: 0.8 },
+  subtitle: { preferredPt: 13, minPt: 10, maxPt: 15, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.76 },
+  author: { preferredPt: 13, minPt: 10, maxPt: 15, lineHeight: 1.2, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.68 },
+  year: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.4 },
+  custom: { preferredPt: 12, minPt: 10, maxPt: 14, lineHeight: 1.2, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.76 }
 };
 
 const standardFonts = {
@@ -156,7 +155,7 @@ export function fitTextBlock(params: {
   const maxPt = Math.max(minPt, params.maxFontSizePt ?? roleStyle.maxPt);
   const preferred = Math.min(maxPt, Math.max(minPt, params.preferredFontSizePt ?? roleStyle.preferredPt));
   const maxLines = params.maxLines ?? roleStyle.maxLines;
-  const trackingStepsMm = [0.28, 0.18, 0.1, 0];
+  const trackingStepsMm = [0.12, 0.08, 0.04, 0];
 
   for (let fontSizePt = preferred; fontSizePt >= minPt; fontSizePt -= 0.25) {
     for (const letterSpacingMm of trackingStepsMm) {

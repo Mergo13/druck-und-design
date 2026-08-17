@@ -1,4 +1,8 @@
+import { promises as fs } from "fs";
+import path from "path";
+import { PDFDocument } from "pdf-lib";
 import { getCategories, getGlobalProperties, getPublicProductBySlug } from "@/lib/catalog-repository";
+import { pricingQuantitiesForDocument } from "@/lib/document-production";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { applyStudentDiscount, getStudentDiscountPercent, isVerifiedStudent } from "@/lib/student-discount";
@@ -70,22 +74,23 @@ function configuredQuantity(selectedOptions: Record<string, string>) {
   return safeLineQuantity(selectedOptions.auflage ?? 1);
 }
 
-function numericConfigValue(selectedOptions: Record<string, string>, keys: string[]) {
-  for (const key of keys) {
-    const raw = selectedOptions[key];
-    if (!raw) continue;
-    const value = Number(String(raw).replace(",", ".").match(/\d+(\.\d+)?/)?.[0] ?? NaN);
-    if (Number.isFinite(value) && value > 0) return Math.floor(value);
-  }
-  return 0;
+function publicUploadPath(uploadUrl?: string) {
+  if (!uploadUrl || !uploadUrl.startsWith("/uploads/") || uploadUrl.includes("..") || uploadUrl.includes("\0")) return null;
+  return path.join(process.cwd(), "public", uploadUrl.replace(/^\/+/, ""));
 }
 
-function configuredPricingQuantities(selectedOptions: Record<string, string>) {
-  const propertyQuantity = configuredQuantity(selectedOptions);
-  const pageCount = numericConfigValue(selectedOptions, ["Seiten pro Exemplar", "PDF-Seiten", "Seitenanzahl", "manualPageCount"]);
-  return pageCount > 0
-    ? { baseQuantity: pageCount * propertyQuantity, propertyQuantity }
-    : undefined;
+async function pageCountFromUploadedPdf(uploadUrl?: string, fileName?: string) {
+  const lower = `${uploadUrl ?? ""} ${fileName ?? ""}`.toLowerCase();
+  if (!lower.includes(".pdf")) return 0;
+  const absolutePath = publicUploadPath(uploadUrl);
+  if (!absolutePath) return 0;
+  try {
+    const bytes = await fs.readFile(absolutePath);
+    const pdf = await PDFDocument.load(bytes, { ignoreEncryption: false });
+    return pdf.getPageCount();
+  } catch {
+    return 0;
+  }
 }
 
 function enabledCategoryProperties(product: ProductCatalogItem, categoryProperties: ProductCategoryProperty[]) {
@@ -97,7 +102,7 @@ function enabledCategoryProperties(product: ProductCatalogItem, categoryProperti
 
 function calculateProductUnitPrice(product: ProductCatalogItem, quantity: number, selectedOptions: Record<string, string>, categoryProperties: ProductCategoryProperty[]) {
   if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-    return calculateConfiguredProductPrice(product, quantity, selectedOptions, configuredPricingQuantities(selectedOptions)).total;
+    return calculateConfiguredProductPrice(product, quantity, selectedOptions, pricingQuantitiesForDocument(selectedOptions, quantity)).total;
   }
   const firstVariant = product.variants[0];
   const productPrice = firstVariant
@@ -122,6 +127,13 @@ export async function priceCartItems(params: {
     if (!rawProduct) throw new Error(`Produkt ${item.slug} ist nicht verfügbar.`);
     const product = resolveGlobalPropertyPricing(rawProduct, globalProperties);
     const pricingConfig = selectedOptionsFromItem(item);
+    const verifiedPdfPageCount = await pageCountFromUploadedPdf(item.printCheckFileUrl, item.printCheckFileName);
+    if (verifiedPdfPageCount > 0) {
+      pricingConfig.seitenanzahl = String(verifiedPdfPageCount);
+      pricingConfig.Seitenanzahl = String(verifiedPdfPageCount);
+      pricingConfig["PDF-Seiten"] = String(verifiedPdfPageCount);
+      pricingConfig["Seiten pro Exemplar"] = String(verifiedPdfPageCount);
+    }
     const designId = pricingConfig.PraegungDesignId || pricingConfig.PraegungDesignID || pricingConfig.embossingDesignId;
     let embossingDesign: PricedCartItem["embossingDesign"] | undefined;
     if (designId) {

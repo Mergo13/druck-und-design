@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { deriveDocumentProduction, pricingQuantitiesForDocument } from "@/lib/document-production";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { applyStudentDiscount } from "@/lib/student-discount";
+import type { PdfAnalysis } from "@/lib/student-print-config";
 import { formatEuro } from "@/lib/utils";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 import { EmbossingConfigurator } from "@/features/embossing/embossing-configurator";
@@ -59,6 +61,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     return initial;
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | undefined>();
+  const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysis | null>(null);
   const [mockupUrl, setMockupUrl] = useState<string>("");
   const [uploadError, setUploadError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -72,6 +76,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     productionPdfUrl?: string;
   } | null>(null);
   const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
+  const isDocumentProduct = /abschlussarbeiten/i.test(product.slug);
+  const documentProduction = deriveDocumentProduction(config, currentQuantity);
+  const pricingQuantities = isDocumentProduct ? pricingQuantitiesForDocument(config, currentQuantity) : undefined;
 
   useEffect(() => {
     return () => {
@@ -116,18 +123,18 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
     if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-      return calculateConfiguredProductPrice(product, quantity, config).total;
+      return calculateConfiguredProductPrice(product, quantity, config, isDocumentProduct ? pricingQuantitiesForDocument(config, quantity) : undefined).total;
     }
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
-  }, [config, currentQuantity, enabledProperties, firstVariant, product]);
+  }, [config, currentQuantity, enabledProperties, firstVariant, isDocumentProduct, product]);
   const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
     ...config,
     ...(finalizedEmbossing?.cartConfig ?? {}),
     resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
-  }), [config, currentQuantity, finalizedEmbossing, product]);
+  }, pricingQuantities), [config, currentQuantity, finalizedEmbossing, pricingQuantities, product]);
   const embossingSelection = useMemo(() => resolveEmbossingSelection(config), [config]);
   const embossingActive = Boolean(embossingSelection && !/keine|ohne/i.test(embossingSelection.value));
   const embossingColor = embossingColorFromValue(embossingSelection?.value);
@@ -141,11 +148,11 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const tierBreakdown = useMemo(() => {
     if (product.pricingType !== "tiered") return null;
     try {
-      return calculateTierPrice(currentQuantity, product.priceTiers);
+      return calculateTierPrice(pricingQuantities?.baseQuantity ?? currentQuantity, product.priceTiers);
     } catch {
       return null;
     }
-  }, [currentQuantity, product.priceTiers, product.pricingType]);
+  }, [currentQuantity, pricingQuantities, product.priceTiers, product.pricingType]);
   const studentDiscount = useMemo(() => applyStudentDiscount({
     subtotal: currentPrice,
     product,
@@ -154,6 +161,20 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   }), [currentPrice, product, studentDiscountPercent, studentVerified]);
   const studentDiscountAmount = studentDiscount.discounts[0]?.amount ?? 0;
   const displayedTotal = studentDiscount.total;
+
+  function applyPdfAnalysis(analysis: PdfAnalysis) {
+    setPdfAnalysis(analysis);
+    setUploadedFileUrl(analysis.fileUrl);
+    setConfig((current) => ({
+      ...current,
+      seitenanzahl: String(analysis.pages),
+      Seitenanzahl: String(analysis.pages),
+      "PDF-Seiten": String(analysis.pages),
+      "Seiten pro Exemplar": String(analysis.pages),
+      PDFFormat: analysis.dominantFormat ?? current.PDFFormat ?? "",
+      PDFAusrichtung: analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : analysis.orientation === "square" ? "Quadratisch" : current.PDFAusrichtung ?? ""
+    }));
+  }
 
   async function readFilePreview(file: File) {
     const fileName = file.name.toLowerCase();
@@ -196,6 +217,22 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     }
 
     setUploadedFile(file);
+    setUploadedFileUrl(undefined);
+    setPdfAnalysis(null);
+    if (isDocumentProduct && (file.type === "application/pdf" || fileName.endsWith(".pdf"))) {
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const response = await fetch("/api/uploads/student-document", { method: "POST", body: form });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(payload?.message ?? "PDF konnte nicht analysiert werden.");
+        applyPdfAnalysis(payload.analysis as PdfAnalysis);
+      } catch (error) {
+        setUploadedFile(null);
+        setUploadError(error instanceof Error ? error.message : "PDF konnte nicht analysiert werden.");
+        return;
+      }
+    }
     await readFilePreview(file);
   }
 
@@ -231,11 +268,11 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       config?: Record<string, string>;
     }>;
 
-    let uploadedUrl: string | undefined;
-    if (uploadedFile) {
+    let resolvedUploadedUrl = uploadedFileUrl;
+    if (uploadedFile && !resolvedUploadedUrl) {
       try {
         const uploaded = await uploadPrintFile(uploadedFile);
-        uploadedUrl = uploaded.url;
+        resolvedUploadedUrl = uploaded.url;
       } catch (error) {
         setCartMessage(error instanceof Error ? error.message : "Datei-Upload fehlgeschlagen.");
         return false;
@@ -248,7 +285,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       ...(finalizedEmbossing?.cartConfig ?? {}),
       resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
     };
-    const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig);
+    const authoritativePricingQuantities = isDocumentProduct ? pricingQuantitiesForDocument(authoritativeConfig, currentQuantity) : undefined;
+    const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
     const authoritativeDiscount = applyStudentDiscount({
       subtotal: priceSnapshot.total,
       product,
@@ -259,7 +297,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     const baseBreakdown = product.pricingType === "tiered"
       ? (() => {
         try {
-          const tier = calculateTierPrice(currentQuantity, product.priceTiers);
+          const tier = calculateTierPrice(authoritativePricingQuantities?.baseQuantity ?? currentQuantity, product.priceTiers);
           return `${tier.quantity} Stück × ${formatEuro(tier.unitPrice)} / Stück = ${formatEuro(tier.totalPrice)}`;
         } catch {
           return formatEuro(priceSnapshot.basePrice);
@@ -268,6 +306,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       : formatEuro(priceSnapshot.basePrice);
     const selectedConfig = Object.fromEntries([
       ["Menge", String(currentQuantity)],
+      ...(isDocumentProduct && documentProduction.pagesPerCopy > 0 ? [
+        ["Seiten pro Exemplar", String(documentProduction.pagesPerCopy)],
+        ["Druckseiten gesamt", String(documentProduction.totalPrintedPages)],
+        ["Blätter pro Exemplar", String(documentProduction.sheetsPerCopy)],
+        ["Blätter gesamt", String(documentProduction.totalSheets)]
+      ] as Array<[string, string]> : []),
       ["Grundpreis", baseBreakdown],
       ...(finalizedEmbossing ? [
         ["Prägezeilen", String(finalizedEmbossing.lineCount)],
@@ -287,7 +331,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       found.studentDiscountEligible = product.studentDiscountEligible !== false;
       if (uploadedFile) {
         found.printCheckFileName = uploadedFile.name;
-        found.printCheckFileUrl = uploadedUrl ?? found.printCheckFileUrl;
+        found.printCheckFileUrl = resolvedUploadedUrl ?? found.printCheckFileUrl;
       }
     } else {
       merged.push({
@@ -302,7 +346,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         printCheckRequested: false,
         printCheckFee: 0,
         printCheckFileName: uploadedFile?.name,
-        printCheckFileUrl: uploadedUrl,
+        printCheckFileUrl: resolvedUploadedUrl,
         config: selectedConfig
       });
     }
@@ -352,6 +396,40 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </select>
           </label>
         ))}
+        {isDocumentProduct ? (
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Dokument</p>
+            {pdfAnalysis ? (
+              <div className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
+                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {documentProduction.pagesPerCopy} Seiten erkannt</p>
+                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.dominantFormat ?? "Format erkannt"}</p>
+                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.orientation === "landscape" ? "Querformat" : pdfAnalysis.orientation === "portrait" ? "Hochformat" : "Ausrichtung erkannt"}</p>
+                <p className="pt-1 text-xs text-slate-500">Automatisch aus PDF erkannt</p>
+              </div>
+            ) : (
+              <label className="mt-3 grid gap-2">
+                <span className="text-sm font-bold">Seitenanzahl</span>
+                <input
+                  suppressHydrationWarning
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={config.seitenanzahl ?? ""}
+                  onChange={(event) => setConfig({
+                    ...config,
+                    seitenanzahl: event.target.value,
+                    Seitenanzahl: event.target.value,
+                    "Seiten pro Exemplar": event.target.value,
+                    "PDF-Seiten": event.target.value
+                  })}
+                  placeholder="z.B. 26"
+                  className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                />
+                <span className="text-xs text-slate-500">Fallback ohne PDF. Nach PDF-Upload ist die erkannte Seitenanzahl verbindlich.</span>
+              </label>
+            )}
+          </div>
+        ) : null}
         <label className="grid gap-2">
           <span className="text-sm font-bold">Auflage</span>
           {product.pricingType === "tiered" ? (
@@ -476,6 +554,23 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           )
         ) : null}
       </div>
+      {isDocumentProduct && documentProduction.pagesPerCopy > 0 ? (
+        <div className="mt-5 rounded-md border border-slate-200 bg-white p-3 text-sm">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Deine Konfiguration</p>
+          <div className="mt-3 grid gap-2 text-slate-700">
+            <SummaryLine label="PDF" value={`${documentProduction.pagesPerCopy} Seiten`} />
+            <SummaryLine label="Auflage" value={`${documentProduction.quantity} ${documentProduction.quantity === 1 ? "Exemplar" : "Exemplare"}`} />
+            <SummaryLine label="Druck" value={`${documentProduction.totalPrintedPages} Seiten gesamt`} />
+            <SummaryLine
+              label={documentProduction.printSides === "duplex" ? "Beidseitig" : "Einseitig"}
+              value={`${documentProduction.sheetsPerCopy} Blatt / Exemplar · ${documentProduction.totalSheets} gesamt`}
+            />
+            {finalizedEmbossing ? (
+              <SummaryLine label="Goldprägung" value={`${finalizedEmbossing.lineCount} Prägezeilen / Exemplar · ${documentProduction.quantity} Hardcover`} />
+            ) : null}
+          </div>
+        </div>
+      ) : null}
       <label
         onDragEnter={(event) => {
           event.preventDefault();
@@ -511,6 +606,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
                 e.preventDefault();
                 e.stopPropagation();
                 setUploadedFile(null);
+                setUploadedFileUrl(undefined);
+                setPdfAnalysis(null);
                 if (mockupUrl) URL.revokeObjectURL(mockupUrl);
                 setMockupUrl("");
               }}
@@ -572,6 +669,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
 function normalizePropertyValue(value: ProductCategoryProperty["values"][number]) {
   if (typeof value === "string") return { value, label: value };
   return { value: value.value, label: value.label || value.value };
+}
+
+function SummaryLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-bold text-slate-900">{value}</span>
+    </div>
+  );
 }
 
 function resolveEmbossingSelection(config: Record<string, string>) {
