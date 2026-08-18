@@ -42,8 +42,17 @@ export function calculateTierPrice(
     })
     .filter((tier) => tier.from > 0)
     .sort((a, b) => a.from - b.from);
-  const tier = valid.find((entry) => qty >= entry.from && (entry.to === undefined || qty <= entry.to));
-  if (!tier) throw new Error(`No price tier found for quantity ${qty}`);
+  if (!valid.length) {
+    return {
+      quantity: qty,
+      tier: { from: qty, to: undefined },
+      unitPrice: 0,
+      totalPrice: 0
+    };
+  }
+  const tier = valid.find((entry) => qty >= entry.from && (entry.to === undefined || qty <= entry.to))
+    ?? valid.slice().reverse().find((entry) => qty >= entry.from)
+    ?? valid[0];
   return {
     quantity: qty,
     tier: { from: tier.from, to: tier.to },

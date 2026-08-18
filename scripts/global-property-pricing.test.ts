@@ -1,5 +1,5 @@
 import { strict as assert } from "assert";
-import { calculateConfiguredProductPrice } from "@/lib/print-workflow";
+import { calculateConfiguredProductPrice, calculateTierPrice } from "@/lib/print-workflow";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import type { GlobalProperty, ProductCatalogItem } from "@/types/print-platform";
 
@@ -473,5 +473,39 @@ const veredelungFlatResult = calculateConfiguredProductPrice(resolvedFlyer, 25, 
 });
 // 18.00 + 20 = 38.00
 assert.equal(veredelungFlatResult.total, 38);
+
+// Test 8: Out-of-range quantities when typing auflage (e.g. quantity 1 when lowest tier is 25, or quantity 200 when highest is 99)
+const qty1Result = calculateConfiguredProductPrice(resolvedFlyer, 1, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 1 * 0.72 = 0.72
+assert.equal(qty1Result.total, 0.72);
+
+const qty200Result = calculateConfiguredProductPrice(resolvedFlyer, 200, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 200 * 0.44 = 88.00
+assert.equal(qty200Result.total, 88);
+
+// Direct calculateTierPrice tests
+const directBelowTier = calculateTierPrice(1, [{ quantity: 25, fromQuantity: 25, toQuantity: 49, price: 0.72 }]);
+assert.equal(directBelowTier.unitPrice, 0.72);
+assert.equal(directBelowTier.totalPrice, 0.72);
+
+const directAboveTier = calculateTierPrice(500, [{ quantity: 25, fromQuantity: 25, toQuantity: 49, price: 0.72 }, { quantity: 50, fromQuantity: 50, toQuantity: 99, price: 0.44 }]);
+assert.equal(directAboveTier.unitPrice, 0.44);
+assert.equal(directAboveTier.totalPrice, 220);
+
+const directEmptyTier = calculateTierPrice(5, []);
+assert.equal(directEmptyTier.unitPrice, 0);
+assert.equal(directEmptyTier.totalPrice, 0);
 
 console.log("global-property-pricing tests passed");
