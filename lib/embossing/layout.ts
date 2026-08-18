@@ -1,5 +1,5 @@
 import { clampElementToRect, coverZones } from "./geometry";
-import { fitTextBlock, normalizeRoleText, roleTypography } from "./typography";
+import { fitTextBlock, getEmbossingFontRule, measureEmbossingText, normalizeRoleText, roleTypography } from "./typography";
 import {
   defaultEmbossingProductionRules,
   EMBOSSING_LAYOUT_VERSION,
@@ -35,6 +35,15 @@ function alignmentX(alignment: "left" | "center" | "right", rect: { x: number; w
   return rect.x + rect.width / 2 - widthMm / 2;
 }
 
+function fontSizeOverrideFor(input: GenerateEmbossingLayoutInput, role: EmbossingTextRole, customIndex?: number) {
+  if (role === "custom" && typeof customIndex === "number") {
+    const value = input.sourceContent.customFontSizeOverrides?.[customIndex];
+    return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  }
+  const value = input.sourceContent.fontSizeOverrides?.[role];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function buildTextElement(params: {
   role: EmbossingTextRole;
   text: string;
@@ -45,6 +54,7 @@ function buildTextElement(params: {
   fontStyle: "modern" | "classic";
   minFontSizePt: number;
   preferredFontSizePt?: number;
+  fixedFontSizePt?: number;
   warnings: string[];
   corrections: string[];
 }): EmbossingTextElement | null {
@@ -52,18 +62,44 @@ function buildTextElement(params: {
   if (!normalized) return null;
   const weight = params.role === "title" || params.role === "workType" ? 600 : 500;
   const maxWidthMm = params.rect.width * SAFE_TEXT_WIDTH_RATIO * roleTypography[params.role].maxWidthRatio;
-  const fit = fitTextBlock({
-    text: normalized,
-    role: params.role,
-    minFontSizePt: params.minFontSizePt,
-    preferredFontSizePt: params.preferredFontSizePt,
-    maxWidthMm,
-    fontStyle: params.fontStyle,
-    fontWeight: weight
-  });
-  if (!fit.ok) params.warnings.push(fit.message);
+  const fixedFontSizePt = params.fixedFontSizePt;
+  const fit = typeof fixedFontSizePt === "number"
+    ? (() => {
+        const measured = measureEmbossingText({
+          text: normalized,
+          role: params.role,
+          fontSizePt: fixedFontSizePt,
+          maxWidthMm,
+          fontStyle: params.fontStyle,
+          fontWeight: weight
+        });
+        const rule = getEmbossingFontRule(params.role);
+        if (fixedFontSizePt < rule.min) params.warnings.push(`${labelForRole(params.role)} ist kleiner als ${rule.min} pt.`);
+        if (fixedFontSizePt > rule.max) params.warnings.push(`${labelForRole(params.role)} ist größer als ${rule.max} pt.`);
+        if (!measured.fitsLineCount) params.warnings.push(`${labelForRole(params.role)} benötigt zu viele Zeilen für eine sichere Prägung.`);
+        if (!measured.fitsWidth) params.warnings.push(`${labelForRole(params.role)} ist zu breit für den Prägebereich.`);
+        return {
+          ok: measured.fitsWidth && measured.fitsLineCount && fixedFontSizePt >= rule.min && fixedFontSizePt <= rule.max,
+          lines: measured.lines,
+          fontSizePt: fixedFontSizePt,
+          letterSpacingMm: measured.letterSpacingMm,
+          widthMm: measured.widthMm,
+          lineHeightMm: measured.lineHeightMm,
+          message: undefined
+        };
+      })()
+    : fitTextBlock({
+        text: normalized,
+        role: params.role,
+        minFontSizePt: params.minFontSizePt,
+        preferredFontSizePt: params.preferredFontSizePt,
+        maxWidthMm,
+        fontStyle: params.fontStyle,
+        fontWeight: weight
+      });
+  if (!fit.ok && typeof fixedFontSizePt !== "number" && fit.message) params.warnings.push(fit.message);
   const preferred = params.preferredFontSizePt ?? roleTypography[params.role].preferredPt;
-  if (fit.ok && fit.fontSizePt < preferred) {
+  if (fit.ok && typeof fixedFontSizePt !== "number" && fit.fontSizePt < preferred) {
     params.corrections.push(`${labelForRole(params.role)} wurde von ${preferred.toFixed(1)} pt auf ${fit.fontSizePt.toFixed(1)} pt optimiert.`);
   }
   const heightMm = fit.lines.length * fit.lineHeightMm;
@@ -125,16 +161,16 @@ function buildStagedTextElements(params: {
 
   for (const role of roles) {
     if (role === "custom") {
-      for (const customText of (params.input.sourceContent.customLines ?? []).slice(0, rules.maxCustomLines)) {
+      for (const [customIndex, customText] of (params.input.sourceContent.customLines ?? []).slice(0, rules.maxCustomLines).entries()) {
         const preferredFontSizePt = roleTypography[role].preferredPt * params.preferredScale;
-        const element = buildTextElement({ role, text: customText, zone: params.zone, rect: params.rect, cursorY: 0, alignment: params.alignment, fontStyle: params.fontStyle, minFontSizePt: params.minFontSizePt, preferredFontSizePt, warnings: params.warnings, corrections: params.corrections });
+        const element = buildTextElement({ role, text: customText, zone: params.zone, rect: params.rect, cursorY: 0, alignment: params.alignment, fontStyle: params.fontStyle, minFontSizePt: params.minFontSizePt, preferredFontSizePt, fixedFontSizePt: fontSizeOverrideFor(params.input, role, customIndex), warnings: params.warnings, corrections: params.corrections });
         if (element) staged.push(element);
       }
       continue;
     }
     const text = textForRole(params.input, role);
     const preferredFontSizePt = roleTypography[role].preferredPt * params.preferredScale;
-    const element = buildTextElement({ role, text, zone: params.zone, rect: params.rect, cursorY: 0, alignment: params.alignment, fontStyle: params.fontStyle, minFontSizePt: params.minFontSizePt, preferredFontSizePt, warnings: params.warnings, corrections: params.corrections });
+    const element = buildTextElement({ role, text, zone: params.zone, rect: params.rect, cursorY: 0, alignment: params.alignment, fontStyle: params.fontStyle, minFontSizePt: params.minFontSizePt, preferredFontSizePt, fixedFontSizePt: fontSizeOverrideFor(params.input, role), warnings: params.warnings, corrections: params.corrections });
     if (element) staged.push(element);
   }
 

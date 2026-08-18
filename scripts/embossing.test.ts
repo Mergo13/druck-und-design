@@ -6,9 +6,9 @@ import { generateEmbossingLayout } from "@/lib/embossing/layout";
 import { renderEmbossingProductionFiles } from "@/lib/embossing/production-renderer";
 import { findOwnedEmbossingDesign } from "@/lib/embossing/server";
 import { defaultCoverGeometry, defaultEmbossingProductionRules, type EmbossingSourceContent } from "@/lib/embossing/types";
-import { elementBounds, safeRect } from "@/lib/embossing/geometry";
+import { coverZones, elementBounds, safeRect } from "@/lib/embossing/geometry";
 import { validateEmbossingLayout } from "@/lib/embossing/validation";
-import { textWidthMm } from "@/lib/embossing/typography";
+import { getEffectiveFontSizeRange, roleTypography, textWidthMm } from "@/lib/embossing/typography";
 import { prisma } from "@/lib/prisma";
 
 const source: EmbossingSourceContent = {
@@ -72,6 +72,20 @@ const safeTextWidth = safe.width * 0.92;
 for (const line of workType.lines) {
   assert.ok(textWidthMm(line, workType.fontSizePt, workType.fontStyle, workType.weight, workType.letterSpacingMm) <= safe.width * 0.62 + 0.01, "work type must not dominate cover width");
 }
+
+const defaultSizeLayout = generateEmbossingLayout({
+  coverGeometry: defaultCoverGeometry,
+  sourceContent: { ...source, title: "Digitale Transformation" },
+  template: "classic",
+  fontStyle: "modern",
+  productionRules: defaultEmbossingProductionRules
+});
+const defaultTitle = defaultSizeLayout.elements.find((element) => element.type === "text" && element.role === "title");
+const defaultWorkType = defaultSizeLayout.elements.find((element) => element.type === "text" && element.role === "workType");
+assert.ok(defaultTitle?.type === "text", "default title element exists");
+assert.ok(defaultWorkType?.type === "text", "default work type element exists");
+assert.equal(defaultTitle.fontSizePt, 26, "short title uses professional default font size");
+assert.equal(defaultWorkType.fontSizePt, 18, "work type uses professional default font size");
 for (const element of layout.elements) {
   if (element.type !== "text") continue;
   for (const line of element.lines) {
@@ -83,7 +97,7 @@ const longTitleLayout = generateEmbossingLayout({
   coverGeometry: defaultCoverGeometry,
   sourceContent: {
     ...source,
-    title: "Digitale Transformation in österreichischen Unternehmen und ihre Auswirkungen auf moderne Druckprozesse"
+    title: "Einfluss künstlicher Intelligenz auf moderne Unternehmen"
   },
   template: "classic",
   fontStyle: "modern",
@@ -93,6 +107,50 @@ const longTitle = longTitleLayout.elements.find((element) => element.type === "t
 assert.ok(longTitle?.type === "text", "long title element exists");
 assert.ok(longTitle.lines.length > 1 && longTitle.lines.length <= 3, "long title wraps into balanced allowed lines");
 assert.equal(validateEmbossingLayout(longTitleLayout, defaultEmbossingProductionRules).valid, true, "long title layout must pass preflight");
+
+const manualSizeLayout = generateEmbossingLayout({
+  coverGeometry: defaultCoverGeometry,
+  sourceContent: {
+    ...source,
+    title: "Digitale Transformation",
+    fontSizeOverrides: { title: 30, author: 18 }
+  },
+  template: "classic",
+  fontStyle: "modern",
+  productionRules: defaultEmbossingProductionRules
+});
+const manualTitle = manualSizeLayout.elements.find((element) => element.type === "text" && element.role === "title");
+const manualAuthor = manualSizeLayout.elements.find((element) => element.type === "text" && element.role === "author");
+assert.ok(manualTitle?.type === "text", "manual title element exists");
+assert.ok(manualAuthor?.type === "text", "manual author element exists");
+assert.equal(manualTitle.fontSizePt, 30, "manual title font size is preserved in resolved layout");
+assert.equal(manualAuthor.fontSizePt, 18, "manual author font size is preserved in resolved layout");
+assert.equal(validateEmbossingLayout(manualSizeLayout, defaultEmbossingProductionRules).valid, true, "valid manual font sizes pass production validation");
+
+const middleZone = coverZones(defaultCoverGeometry).middle;
+const longTitleRange = getEffectiveFontSizeRange({
+  text: "Digitale Transformation in österreichischen Unternehmen und ihre Auswirkungen auf moderne Druckprozesse",
+  role: "title",
+  maxWidthMm: middleZone.width * roleTypography.title.maxWidthRatio,
+  maxHeightMm: middleZone.height,
+  fontStyle: "modern",
+  fontWeight: 600
+});
+assert.ok(longTitleRange.max < 36, "long title receives a lower effective maximum than the design maximum");
+assert.ok(longTitleRange.recommendedMax <= longTitleRange.max, "recommended maximum never exceeds effective maximum");
+
+const invalidManualLayout = generateEmbossingLayout({
+  coverGeometry: defaultCoverGeometry,
+  sourceContent: {
+    ...source,
+    title: "Digitale Transformation in österreichischen Unternehmen und ihre Auswirkungen auf moderne Druckprozesse",
+    fontSizeOverrides: { title: 36 }
+  },
+  template: "classic",
+  fontStyle: "modern",
+  productionRules: defaultEmbossingProductionRules
+});
+assert.equal(validateEmbossingLayout(invalidManualLayout, defaultEmbossingProductionRules).valid, false, "oversized manual title is rejected by production validation");
 
 async function main() {
   const designId = `test-${randomUUID()}`;

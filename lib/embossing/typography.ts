@@ -5,6 +5,14 @@ const PT_TO_MM = 25.4 / 72;
 
 type FontStyle = "modern" | "classic";
 
+export type EmbossingFontRule = {
+  min: number;
+  recommendedMin: number;
+  recommendedMax: number;
+  max: number;
+  default: number;
+};
+
 export const embossingFontStyles = {
   modern: {
     label: "Modern",
@@ -22,6 +30,16 @@ export const embossingFontStyles = {
   }
 } as const;
 
+export const embossingFontRules: Record<EmbossingTextRole, EmbossingFontRule> = {
+  institution: { min: 10, recommendedMin: 14, recommendedMax: 18, max: 22, default: 16 },
+  workType: { min: 12, recommendedMin: 16, recommendedMax: 22, max: 26, default: 18 },
+  title: { min: 16, recommendedMin: 22, recommendedMax: 30, max: 36, default: 26 },
+  subtitle: { min: 10, recommendedMin: 14, recommendedMax: 18, max: 22, default: 16 },
+  author: { min: 10, recommendedMin: 14, recommendedMax: 18, max: 22, default: 16 },
+  year: { min: 10, recommendedMin: 12, recommendedMax: 16, max: 20, default: 14 },
+  custom: { min: 10, recommendedMin: 12, recommendedMax: 20, max: 26, default: 16 }
+};
+
 export const roleTypography: Record<EmbossingTextRole, {
   preferredPt: number;
   minPt: number;
@@ -32,14 +50,18 @@ export const roleTypography: Record<EmbossingTextRole, {
   spacingAfterMm: number;
   maxWidthRatio: number;
 }> = {
-  institution: { preferredPt: 9, minPt: 7, maxPt: 10, lineHeight: 1.26, uppercase: true, maxLines: 2, spacingAfterMm: 12, maxWidthRatio: 0.62 },
-  workType: { preferredPt: 13, minPt: 9, maxPt: 14, lineHeight: 1.2, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.62 },
-  title: { preferredPt: 12, minPt: 8, maxPt: 13, lineHeight: 1.24, uppercase: true, maxLines: 3, spacingAfterMm: 8, maxWidthRatio: 0.68 },
-  subtitle: { preferredPt: 10, minPt: 7.5, maxPt: 11, lineHeight: 1.24, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.64 },
-  author: { preferredPt: 10, minPt: 7.5, maxPt: 11, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.58 },
-  year: { preferredPt: 9, minPt: 7, maxPt: 10, lineHeight: 1.22, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.32 },
-  custom: { preferredPt: 9, minPt: 7, maxPt: 10, lineHeight: 1.22, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.62 }
+  institution: { preferredPt: embossingFontRules.institution.default, minPt: embossingFontRules.institution.min, maxPt: embossingFontRules.institution.max, lineHeight: 1.26, uppercase: true, maxLines: 2, spacingAfterMm: 12, maxWidthRatio: 0.62 },
+  workType: { preferredPt: embossingFontRules.workType.default, minPt: embossingFontRules.workType.min, maxPt: embossingFontRules.workType.max, lineHeight: 1.2, uppercase: true, maxLines: 1, spacingAfterMm: 12, maxWidthRatio: 0.62 },
+  title: { preferredPt: embossingFontRules.title.default, minPt: embossingFontRules.title.min, maxPt: embossingFontRules.title.max, lineHeight: 1.24, uppercase: true, maxLines: 3, spacingAfterMm: 8, maxWidthRatio: 0.68 },
+  subtitle: { preferredPt: embossingFontRules.subtitle.default, minPt: embossingFontRules.subtitle.min, maxPt: embossingFontRules.subtitle.max, lineHeight: 1.24, uppercase: false, maxLines: 2, spacingAfterMm: 7, maxWidthRatio: 0.64 },
+  author: { preferredPt: embossingFontRules.author.default, minPt: embossingFontRules.author.min, maxPt: embossingFontRules.author.max, lineHeight: 1.22, uppercase: false, maxLines: 2, spacingAfterMm: 8, maxWidthRatio: 0.58 },
+  year: { preferredPt: embossingFontRules.year.default, minPt: embossingFontRules.year.min, maxPt: embossingFontRules.year.max, lineHeight: 1.22, uppercase: false, maxLines: 1, spacingAfterMm: 0, maxWidthRatio: 0.32 },
+  custom: { preferredPt: embossingFontRules.custom.default, minPt: embossingFontRules.custom.min, maxPt: embossingFontRules.custom.max, lineHeight: 1.22, uppercase: false, maxLines: 1, spacingAfterMm: 5, maxWidthRatio: 0.62 }
 };
+
+export function getEmbossingFontRule(role: EmbossingTextRole) {
+  return embossingFontRules[role];
+}
 
 const standardFonts = {
   modern: {
@@ -141,6 +163,86 @@ export function wrapTextToWidth(params: {
 
   if (current) lines.push(current);
   return lines;
+}
+
+export function measureEmbossingText(params: {
+  text: string;
+  role: EmbossingTextRole;
+  fontSizePt: number;
+  maxWidthMm: number;
+  fontStyle: FontStyle;
+  fontWeight: number;
+  letterSpacingMm?: number;
+}) {
+  const letterSpacingMm = params.letterSpacingMm ?? 0;
+  const lines = wrapTextToWidth({
+    text: params.text,
+    fontSizePt: params.fontSizePt,
+    maxWidthMm: params.maxWidthMm,
+    fontStyle: params.fontStyle,
+    fontWeight: params.fontWeight,
+    letterSpacingMm
+  });
+  const widths = lines.map((line) => textWidthMm(line, params.fontSizePt, params.fontStyle, params.fontWeight, letterSpacingMm));
+  const lineHeight = lineHeightMm(params.fontSizePt, params.role);
+  return {
+    lines,
+    widthMm: Math.max(...widths, 0),
+    heightMm: lines.length * lineHeight,
+    lineHeightMm: lineHeight,
+    letterSpacingMm,
+    fitsWidth: widths.every((width) => width <= params.maxWidthMm + 0.01),
+    fitsLineCount: lines.length <= roleTypography[params.role].maxLines
+  };
+}
+
+export function calculateMaximumFontSizeThatFits(params: {
+  text: string;
+  role: EmbossingTextRole;
+  maxWidthMm: number;
+  maxHeightMm: number;
+  fontStyle: FontStyle;
+  fontWeight: number;
+}) {
+  const rule = getEmbossingFontRule(params.role);
+  const normalized = normalizeRoleText(params.text, params.role);
+  if (!normalized) return rule.max;
+  for (let fontSizePt = rule.max; fontSizePt >= rule.min; fontSizePt -= 1) {
+    const measured = measureEmbossingText({
+      text: normalized,
+      role: params.role,
+      fontSizePt,
+      maxWidthMm: params.maxWidthMm,
+      fontStyle: params.fontStyle,
+      fontWeight: params.fontWeight
+    });
+    if (measured.fitsWidth && measured.fitsLineCount && measured.heightMm <= params.maxHeightMm + 0.01) {
+      return fontSizePt;
+    }
+  }
+  return rule.min;
+}
+
+export function getEffectiveFontSizeRange(params: {
+  text: string;
+  role: EmbossingTextRole;
+  maxWidthMm: number;
+  maxHeightMm: number;
+  fontStyle: FontStyle;
+  fontWeight: number;
+}) {
+  const rule = getEmbossingFontRule(params.role);
+  const effectiveMax = Math.max(rule.min, Math.min(rule.max, calculateMaximumFontSizeThatFits(params)));
+  const recommendedMax = Math.min(rule.recommendedMax, effectiveMax);
+  const recommendedMin = Math.min(rule.recommendedMin, recommendedMax);
+  return {
+    min: rule.min,
+    max: effectiveMax,
+    designMax: rule.max,
+    default: Math.min(rule.default, effectiveMax),
+    recommendedMin,
+    recommendedMax
+  };
 }
 
 export function fitTextBlock(params: {

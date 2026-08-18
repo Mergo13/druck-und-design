@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, UploadCloud } from "lucide-react";
+import { CheckCircle2, Minus, Plus, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { coverZones } from "@/lib/embossing/geometry";
 import { generateEmbossingLayout } from "@/lib/embossing/layout";
-import { validateEmbossingLayout } from "@/lib/embossing/validation";
-import { defaultCoverGeometry, defaultEmbossingProductionRules, type EmbossingColor, type EmbossingSourceContent, type EmbossingTemplate } from "@/lib/embossing/types";
+import { getEffectiveFontSizeRange, getEmbossingFontRule, roleTypography } from "@/lib/embossing/typography";
+import { validateEmbossingElement, validateEmbossingLayout } from "@/lib/embossing/validation";
+import { defaultCoverGeometry, defaultEmbossingProductionRules, type EmbossingColor, type EmbossingResolvedLayout, type EmbossingSourceContent, type EmbossingTemplate, type EmbossingTextRole } from "@/lib/embossing/types";
 import { formatEuro } from "@/lib/utils";
 import { EmbossingCoverPreview } from "./embossing-cover-preview";
 
@@ -50,6 +52,7 @@ export function EmbossingConfigurator({
   const [finalizing, setFinalizing] = useState(false);
   const [message, setMessage] = useState("");
   const [advancedOffset, setAdvancedOffset] = useState(0);
+  const [selectedLine, setSelectedLine] = useState("title");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const uploadedCoverLineCount = Math.max(0, Math.round(Number(sourceContent.coverUpload?.lineCount ?? 0)));
 
@@ -65,7 +68,7 @@ export function EmbossingConfigurator({
 
   useEffect(() => {
     onFinalized(null);
-  }, [embossingColor, fontStyle, onFinalized, sourceContent, template]);
+  }, [advancedOffset, embossingColor, fontStyle, mode, onFinalized, sourceContent, template]);
 
   useEffect(() => {
     if (!open || !authenticated) return;
@@ -194,6 +197,24 @@ export function EmbossingConfigurator({
     setSourceContent((current) => ({ ...current, [key]: value }));
   }
 
+  function updateFontSize(role: EmbossingTextRole, value: number, customIndex?: number) {
+    const size = Math.round(value);
+    setSourceContent((current) => {
+      if (role === "custom" && typeof customIndex === "number") {
+        const customFontSizeOverrides = [...(current.customFontSizeOverrides ?? [])];
+        customFontSizeOverrides[customIndex] = size;
+        return { ...current, customFontSizeOverrides };
+      }
+      return {
+        ...current,
+        fontSizeOverrides: {
+          ...(current.fontSizeOverrides ?? {}),
+          [role]: size
+        }
+      };
+    });
+  }
+
   if (!open) {
     return (
       <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
@@ -227,13 +248,13 @@ export function EmbossingConfigurator({
             <Select label="Vorlage" value={template} onChange={(value) => setTemplate(value as EmbossingTemplate)} options={[["classic", "Klassisch"], ["modern", "Modern"], ["minimal", "Minimal"], ["logo", "Mit Logo"]]} />
             <Select label="Stil" value={fontStyle} onChange={(value) => setFontStyle(value as "modern" | "classic")} options={[["modern", "Modern"], ["classic", "Klassisch"]]} />
           </div>
-          <Field label="Hochschule / Schule" value={sourceContent.institution ?? ""} onChange={(value) => updateField("institution", value)} />
-          <Field label="Art der Arbeit" value={sourceContent.workType ?? ""} onChange={(value) => updateField("workType", value)} />
-          <Field label="Titel" value={sourceContent.title ?? ""} onChange={(value) => updateField("title", value)} />
-          <Field label="Untertitel" value={sourceContent.subtitle ?? ""} onChange={(value) => updateField("subtitle", value)} />
+          <TextLineEditor selected={selectedLine === "institution"} label="Hochschule / Schule" role="institution" value={sourceContent.institution ?? ""} sourceContent={sourceContent} layout={layout} fontStyle={fontStyle} onFocus={() => setSelectedLine("institution")} onChange={(value) => updateField("institution", value)} onFontSizeChange={(value) => updateFontSize("institution", value)} />
+          <TextLineEditor selected={selectedLine === "workType"} label="Art der Arbeit" role="workType" value={sourceContent.workType ?? ""} sourceContent={sourceContent} layout={layout} fontStyle={fontStyle} onFocus={() => setSelectedLine("workType")} onChange={(value) => updateField("workType", value)} onFontSizeChange={(value) => updateFontSize("workType", value)} />
+          <TextLineEditor selected={selectedLine === "title"} label="Titel" role="title" value={sourceContent.title ?? ""} sourceContent={sourceContent} layout={layout} fontStyle={fontStyle} onFocus={() => setSelectedLine("title")} onChange={(value) => updateField("title", value)} onFontSizeChange={(value) => updateFontSize("title", value)} />
+          <TextLineEditor selected={selectedLine === "subtitle"} label="Untertitel" role="subtitle" value={sourceContent.subtitle ?? ""} sourceContent={sourceContent} layout={layout} fontStyle={fontStyle} onFocus={() => setSelectedLine("subtitle")} onChange={(value) => updateField("subtitle", value)} onFontSizeChange={(value) => updateFontSize("subtitle", value)} />
           <div className="grid gap-2 sm:grid-cols-2">
-            <Field label="Name" value={sourceContent.author ?? ""} onChange={(value) => updateField("author", value)} />
-            <Field label="Jahr" value={sourceContent.year ?? ""} onChange={(value) => updateField("year", value)} />
+            <TextLineEditor selected={selectedLine === "author"} label="Name" role="author" value={sourceContent.author ?? ""} sourceContent={sourceContent} layout={layout} fontStyle={fontStyle} onFocus={() => setSelectedLine("author")} onChange={(value) => updateField("author", value)} onFontSizeChange={(value) => updateFontSize("author", value)} />
+            <TextLineEditor selected={selectedLine === "year"} label="Jahr" role="year" value={sourceContent.year ?? ""} sourceContent={sourceContent} layout={layout} fontStyle={fontStyle} onFocus={() => setSelectedLine("year")} onChange={(value) => updateField("year", value)} onFontSizeChange={(value) => updateFontSize("year", value)} />
           </div>
           <button
             type="button"
@@ -243,16 +264,30 @@ export function EmbossingConfigurator({
             + Eigene Zeile hinzufügen
           </button>
           {(sourceContent.customLines ?? []).map((line, index) => (
-            <Field
-              key={index}
-              label={`Eigene Zeile ${index + 1}`}
-              value={line}
-              onChange={(value) => setSourceContent((current) => {
-                const customLines = [...(current.customLines ?? [])];
-                customLines[index] = value;
-                return { ...current, customLines };
-              })}
-            />
+            <div key={index} className="grid gap-2">
+              <Field
+                label={`Eigene Zeile ${index + 1}`}
+                value={line}
+                onFocus={() => setSelectedLine(`custom-${index}`)}
+                onChange={(value) => setSourceContent((current) => {
+                  const customLines = [...(current.customLines ?? [])];
+                  customLines[index] = value;
+                  return { ...current, customLines };
+                })}
+              />
+              {selectedLine === `custom-${index}` ? (
+                <FontSizeControl
+                  label={`Eigene Zeile ${index + 1}`}
+                  role="custom"
+                  value={line}
+                  customIndex={index}
+                  sourceContent={sourceContent}
+                  layout={layout}
+                  fontStyle={fontStyle}
+                  onChange={(value) => updateFontSize("custom", value, index)}
+                />
+              ) : null}
+            </div>
           ))}
           <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-700">
             <UploadCloud className="h-4 w-4 text-amber-700" />
@@ -344,12 +379,151 @@ export function EmbossingConfigurator({
   );
 }
 
-function Field({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Field({ label, value, onChange, onFocus }: { label: string; value: string; onChange: (value: string) => void; onFocus?: () => void }) {
   return (
     <label className="grid gap-1 text-xs font-bold text-slate-700">
       {label}
-      <input className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" value={value} onChange={(event) => onChange(event.target.value)} />
+      <input className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm font-semibold outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100" value={value} onFocus={onFocus} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function TextLineEditor({
+  selected,
+  label,
+  role,
+  value,
+  sourceContent,
+  layout,
+  fontStyle,
+  onFocus,
+  onChange,
+  onFontSizeChange
+}: {
+  selected: boolean;
+  label: string;
+  role: EmbossingTextRole;
+  value: string;
+  sourceContent: EmbossingSourceContent;
+  layout: EmbossingResolvedLayout;
+  fontStyle: "modern" | "classic";
+  onFocus: () => void;
+  onChange: (value: string) => void;
+  onFontSizeChange: (value: number) => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <Field label={label} value={value} onFocus={onFocus} onChange={onChange} />
+      {selected ? (
+        <FontSizeControl
+          label={label}
+          role={role}
+          value={value}
+          sourceContent={sourceContent}
+          layout={layout}
+          fontStyle={fontStyle}
+          onChange={onFontSizeChange}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FontSizeControl({
+  label,
+  role,
+  value,
+  customIndex,
+  sourceContent,
+  layout,
+  fontStyle,
+  onChange
+}: {
+  label: string;
+  role: EmbossingTextRole;
+  value: string;
+  customIndex?: number;
+  sourceContent: EmbossingSourceContent;
+  layout: EmbossingResolvedLayout;
+  fontStyle: "modern" | "classic";
+  onChange: (value: number) => void;
+}) {
+  const matchingElements = layout.elements.filter((item) => item.type === "text" && item.role === role);
+  const element = matchingElements[role === "custom" ? customIndex ?? 0 : 0];
+  const rule = getEmbossingFontRule(role);
+  const zones = coverZones(defaultCoverGeometry);
+  const zone = role === "institution" ? "top" : role === "author" || role === "year" ? "bottom" : "middle";
+  const rect = zones[zone];
+  const maxWidthMm = rect.width * roleTypography[role].maxWidthRatio;
+  const weight = role === "title" || role === "workType" ? 600 : 500;
+  const maxHeightMm = element?.type === "text"
+    ? Math.max(element.lineHeightMm, rect.y + rect.height - element.yMm)
+    : rect.height;
+  const range = getEffectiveFontSizeRange({
+    text: value,
+    role,
+    maxWidthMm,
+    maxHeightMm,
+    fontStyle,
+    fontWeight: weight
+  });
+  const currentSize = typeof customIndex === "number"
+    ? sourceContent.customFontSizeOverrides?.[customIndex] ?? (element?.type === "text" ? element.fontSizePt : range.default)
+    : sourceContent.fontSizeOverrides?.[role] ?? (element?.type === "text" ? element.fontSizePt : range.default);
+  const current = Math.round(currentSize);
+  const recommendationText = range.recommendedMax < rule.recommendedMax
+    ? `Empfohlen für diesen Text: ${range.recommendedMin}-${range.recommendedMax} pt`
+    : `Empfohlen: ${range.recommendedMin}-${range.recommendedMax} pt`;
+  const isInvalid = current > range.max || current < range.min;
+  const isRecommended = !isInvalid && current >= range.recommendedMin && current <= range.recommendedMax;
+  const elementStatus = element?.type === "text" ? validateEmbossingElement(element, layout, defaultEmbossingProductionRules) : undefined;
+  const statusText = isInvalid
+    ? `Maximal ${range.max} pt für diesen Text.`
+    : isRecommended
+      ? "Optimale Schriftgröße"
+      : current > range.recommendedMax
+        ? "Produktionssicher, aber größer als empfohlen"
+        : "Produktionssicher, aber kleiner als empfohlen";
+
+  return (
+    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-black text-amber-950">Schriftgröße</p>
+        <p className={isInvalid ? "font-black text-red-700" : isRecommended ? "font-black text-emerald-700" : "font-black text-amber-800"}>
+          {current} pt · {isInvalid ? "Ungültig" : isRecommended ? "Empfohlen" : current > range.recommendedMax ? "Größer als empfohlen" : "Kleiner als empfohlen"}
+        </p>
+      </div>
+      <div className="mt-2 grid grid-cols-[36px_1fr_36px] items-center gap-2">
+        <Button type="button" variant="outline" size="icon" className="h-9 w-9" aria-label={`${label} kleiner`} disabled={current <= range.min} onClick={() => onChange(Math.max(range.min, current - 1))}>
+          <Minus className="h-4 w-4" />
+        </Button>
+        <div className="rounded-md border border-amber-200 bg-white px-3 py-2 text-center text-sm font-black text-slate-900">{current} pt</div>
+        <Button type="button" variant="outline" size="icon" className="h-9 w-9" aria-label={`${label} größer`} disabled={current >= range.max} onClick={() => onChange(Math.min(range.max, current + 1))}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      <input
+        aria-label={`Schriftgröße ${label}`}
+        className="mt-3 w-full accent-amber-700"
+        type="range"
+        min={range.min}
+        max={range.max}
+        step="1"
+        value={Math.min(current, range.max)}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <div className="mt-1 flex justify-between text-[11px] font-bold text-amber-900">
+        <span>{range.min} pt</span>
+        <span>{range.max} pt</span>
+      </div>
+      <p className="mt-2 font-semibold text-amber-950">{recommendationText}</p>
+      <div className="mt-2 grid gap-1">
+        <p className={isInvalid ? "text-red-700" : isRecommended ? "text-emerald-700" : "text-amber-800"}>{isInvalid ? "✕" : isRecommended ? "✓" : "!"} {statusText}</p>
+        {elementStatus ? (
+          <p className={elementStatus.valid ? "text-emerald-700" : "text-red-700"}>{elementStatus.valid ? "✓ Passt in den Prägebereich" : `✕ ${elementStatus.issues[0]}`}</p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

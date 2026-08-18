@@ -35,6 +35,8 @@ export type EmbossingSourceContent = {
   author?: string;
   year?: string;
   customLines?: string[];
+  fontSizeOverrides?: Partial<Record<EmbossingTextRole, number>>;
+  customFontSizeOverrides?: number[];
   use?: Partial<Record<EmbossingTextRole, boolean>>;
   logo?: {
     url: string;

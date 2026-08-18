@@ -42,6 +42,10 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
       .filter((element: any) => element.type === "text")
       .map((element: any) => element.lines.join("\n"))
       .join("\n\n");
+  const fontSizes = layout.elements
+    .filter((element: any) => element.type === "text")
+    .map((element: any) => `${element.role}:${Math.round(Number(element.fontSizePt))}pt`)
+    .join(", ");
 
   const updated = await (prisma as any).embossingDesign.update({
     where: { id: design.id },
@@ -65,6 +69,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
         template: updated.template,
         lineCount: updated.lineCount,
         resolvedText,
+        fontSizes,
         productionPdfUrl: updated.productionPdfUrl,
         previewUrl: updated.previewUrl
       }),

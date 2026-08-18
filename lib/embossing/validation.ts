@@ -1,6 +1,6 @@
 import { elementBounds, elementsOverlap, safeRect } from "./geometry";
-import { embossingFontStyles, textWidthMm } from "./typography";
-import { defaultEmbossingProductionRules, type EmbossingProductionRules, type EmbossingResolvedLayout } from "./types";
+import { embossingFontStyles, getEmbossingFontRule, roleTypography, textWidthMm } from "./typography";
+import { defaultEmbossingProductionRules, type EmbossingLayoutElement, type EmbossingProductionRules, type EmbossingResolvedLayout } from "./types";
 
 export type EmbossingPreflightCheck = {
   code: string;
@@ -8,6 +8,41 @@ export type EmbossingPreflightCheck = {
   passed: boolean;
   message?: string;
 };
+
+export function validateEmbossingElement(element: EmbossingLayoutElement, layout: EmbossingResolvedLayout, productionRules?: Partial<EmbossingProductionRules>) {
+  const rules = { ...defaultEmbossingProductionRules, ...productionRules };
+  const safe = safeRect(layout.coverGeometry);
+  const bounds = elementBounds(element);
+  const issues: string[] = [];
+
+  if (bounds.left < safe.x || bounds.top < safe.y || bounds.right > safe.right + 0.01 || bounds.bottom > safe.bottom + 0.01) {
+    issues.push("Element liegt außerhalb des sicheren Prägebereichs.");
+  }
+
+  if (element.type === "text") {
+    const fontRule = getEmbossingFontRule(element.role);
+    if (element.fontSizePt < Math.max(rules.minFontSizePt, fontRule.min)) {
+      issues.push(`Schrift ist kleiner als ${Math.max(rules.minFontSizePt, fontRule.min)} pt.`);
+    }
+    if (element.fontSizePt > fontRule.max) {
+      issues.push(`Schrift ist größer als ${fontRule.max} pt.`);
+    }
+    if (element.lines.length > roleTypography[element.role].maxLines) {
+      issues.push(`Text benötigt mehr als ${roleTypography[element.role].maxLines} Zeilen.`);
+    }
+    if (element.lines.some((line) => textWidthMm(line, element.fontSizePt, element.fontStyle, element.weight, element.letterSpacingMm) > element.widthMm + 0.01)) {
+      issues.push("Textbreite überschreitet den berechneten Prägebereich.");
+    }
+  }
+
+  const overlaps = layout.elements.some((other) => other !== element && elementsOverlap(element, other, 0));
+  if (overlaps) issues.push("Element überlappt mit einer anderen Prägung.");
+
+  return {
+    valid: issues.length === 0,
+    issues
+  };
+}
 
 export function validateEmbossingLayout(layout: EmbossingResolvedLayout, productionRules?: Partial<EmbossingProductionRules>) {
   const rules = { ...defaultEmbossingProductionRules, ...productionRules };
@@ -30,26 +65,38 @@ export function validateEmbossingLayout(layout: EmbossingResolvedLayout, product
 
   const fontSafe = layout.elements
     .filter((element) => element.type === "text")
-    .every((element) => element.fontSizePt >= rules.minFontSizePt);
+    .every((element) => {
+      const fontRule = getEmbossingFontRule(element.role);
+      return element.fontSizePt >= Math.max(rules.minFontSizePt, fontRule.min) && element.fontSizePt <= fontRule.max;
+    });
   checks.push({
     code: "font-size",
     label: "Schriftgrößen produktionssicher",
     passed: fontSafe,
-    message: fontSafe ? undefined : `Eine Schrift ist kleiner als ${rules.minFontSizePt} pt.`
+    message: fontSafe ? undefined : "Eine Schriftgröße liegt außerhalb des produktionssicheren Bereichs."
   });
 
-  const textWidthsValid = !layout.warnings.some((warning) => /zu lang|sichere Prägung/i.test(warning));
+  const textWidthsValid = !layout.warnings.some((warning) => /zu lang|zu breit|zu viele Zeilen|sichere Prägung/i.test(warning));
   const measuredTextInside = layout.elements
     .filter((element) => element.type === "text")
     .every((element) => element.lines.every((line) => {
       const lineWidth = textWidthMm(line, element.fontSizePt, element.fontStyle, element.weight, element.letterSpacingMm);
       return lineWidth <= element.widthMm + 0.01 && lineWidth <= safe.width * 0.92 + 0.01;
     }));
+  const textHeightsValid = layout.elements
+    .filter((element) => element.type === "text")
+    .every((element) => element.lines.length <= roleTypography[element.role].maxLines && element.heightMm <= safe.height + 0.01);
   checks.push({
     code: "text-width",
     label: "Textbreiten gültig",
     passed: textWidthsValid && measuredTextInside,
     message: textWidthsValid && measuredTextInside ? undefined : "Ein Text ist zu lang für eine sichere Prägung."
+  });
+  checks.push({
+    code: "text-height",
+    label: "Texthöhen gültig",
+    passed: textHeightsValid,
+    message: textHeightsValid ? undefined : "Ein Text ist zu hoch für eine sichere Prägung."
   });
 
   const noOverlap = layout.elements.every((element, index) => {

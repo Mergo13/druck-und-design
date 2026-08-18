@@ -4,6 +4,7 @@ export function embossingDesignConfigLines(params: {
   template: string;
   lineCount: number;
   resolvedText?: string;
+  fontSizes?: string;
   productionPdfUrl?: string | null;
   previewUrl?: string | null;
 }) {
@@ -13,6 +14,7 @@ export function embossingDesignConfigLines(params: {
     Vorlage: params.template,
     Prägezeilen: String(params.lineCount),
     PraegungText: params.resolvedText || "-",
+    PraegungSchriftgroessen: params.fontSizes || "-",
     ProduktionsPDF: params.productionPdfUrl || "-",
     PraegungVorschau: params.previewUrl || "-"
   };

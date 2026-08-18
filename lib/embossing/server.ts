@@ -5,6 +5,16 @@ import { generateEmbossingLayout } from "./layout";
 import { defaultCoverGeometry, defaultEmbossingProductionRules } from "./types";
 import type { EmbossingColor, EmbossingTemplate } from "./types";
 
+const roleFontSizeOverrideSchema = z.object({
+  institution: z.number().optional(),
+  workType: z.number().optional(),
+  title: z.number().optional(),
+  subtitle: z.number().optional(),
+  author: z.number().optional(),
+  year: z.number().optional(),
+  custom: z.number().optional()
+}).partial();
+
 export const embossingSourceSchema = z.object({
   institution: z.string().max(200).optional(),
   workType: z.string().max(80).optional(),
@@ -13,6 +23,8 @@ export const embossingSourceSchema = z.object({
   author: z.string().max(160).optional(),
   year: z.string().max(20).optional(),
   customLines: z.array(z.string().max(160)).max(defaultEmbossingProductionRules.maxCustomLines).optional(),
+  fontSizeOverrides: roleFontSizeOverrideSchema.optional(),
+  customFontSizeOverrides: z.array(z.number().min(1).max(80)).max(defaultEmbossingProductionRules.maxCustomLines).optional(),
   use: z.record(z.string(), z.boolean()).optional(),
   logo: z.object({
     url: z.string().max(500),
