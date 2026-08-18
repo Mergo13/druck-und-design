@@ -10,15 +10,36 @@ function safeQuantity(quantity: number) {
 
 export function calculateTierPrice(
   quantity: number,
-  tiers: Array<{ quantity: number; fromQuantity?: number; toQuantity?: number; price: number; unitPrice?: number }> | undefined
+  tiers: Array<{ quantity: number; fromQuantity?: number; toQuantity?: number; price: number; unitPrice?: number }> | undefined,
+  tierPriceMode: "unitPrice" | "totalPrice" = "unitPrice"
 ) {
   const qty = safeQuantity(quantity);
+  const isTotalPrice = tierPriceMode === "totalPrice";
   const valid = (tiers ?? [])
-    .map((tier) => ({
-      from: safeQuantity(Number(tier.fromQuantity || tier.quantity)),
-      to: tier.toQuantity ? safeQuantity(Number(tier.toQuantity)) : undefined,
-      unitPrice: Math.max(0, Number(tier.unitPrice ?? tier.price) || 0)
-    }))
+    .map((tier) => {
+      const from = safeQuantity(Number(tier.fromQuantity || tier.quantity));
+      const to = tier.toQuantity ? safeQuantity(Number(tier.toQuantity)) : undefined;
+      const rawPrice = Number(tier.price) || 0;
+      const rawUnitPrice = tier.unitPrice !== undefined ? Number(tier.unitPrice) : undefined;
+      let unitPrice: number;
+      let totalPrice: number;
+
+      if (isTotalPrice) {
+        totalPrice = Math.max(0, rawPrice);
+        unitPrice = from > 0 ? totalPrice / from : 0;
+      } else {
+        unitPrice = Math.max(0, rawUnitPrice ?? rawPrice);
+        totalPrice = money(qty * unitPrice);
+      }
+
+      return {
+        from,
+        to,
+        unitPrice,
+        price: isTotalPrice ? totalPrice : money(from * unitPrice),
+        rawTotalPrice: totalPrice
+      };
+    })
     .filter((tier) => tier.from > 0)
     .sort((a, b) => a.from - b.from);
   const tier = valid.find((entry) => qty >= entry.from && (entry.to === undefined || qty <= entry.to));
@@ -26,8 +47,8 @@ export function calculateTierPrice(
   return {
     quantity: qty,
     tier: { from: tier.from, to: tier.to },
-    unitPrice: money(tier.unitPrice),
-    totalPrice: money(qty * tier.unitPrice)
+    unitPrice: isTotalPrice ? tier.unitPrice : money(tier.unitPrice),
+    totalPrice: isTotalPrice ? money(tier.rawTotalPrice) : money(qty * tier.unitPrice)
   };
 }
 
@@ -58,53 +79,109 @@ export function calculateConfiguredProductPrice(
   const qty = safeQuantity(quantity);
   const baseQty = safeQuantity(pricingQuantities?.baseQuantity ?? qty);
   const propertyQty = safeQuantity(pricingQuantities?.propertyQuantity ?? qty);
-  const lines: Array<{ label: string; value: string; price: number }> = [];
-  const area = product.pricingType === "area" ? areaM2(product, selectedOptions) : 0;
-  const baseUnitPrice = product.pricingType === "tiered"
-    ? calculateTierPrice(baseQty, product.priceTiers).unitPrice
-    : 0;
-  const base = product.pricingType === "area"
-    ? money(area * Math.max(0, Number(product.basePrice) || 0) * baseQty)
-    : product.pricingType === "tiered"
-      ? money(baseUnitPrice * baseQty)
-      : money(Math.max(0, Number(product.basePrice) || 0) * baseQty);
-  if (product.pricingType === "area") {
-    lines.push({ label: "Format", value: `${selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100} x ${selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100} cm (${area.toLocaleString("de-DE")} m²)`, price: 0 });
+  const lines: Array<{
+    label: string;
+    value: string;
+    price: number;
+    type?: "base" | "factor" | "print" | "surcharge" | "flat";
+    factor?: number;
+    unitPrice?: number;
+    quantity?: number;
+  }> = [];
+  const isTotalPrice = product.tierPriceMode === "totalPrice";
+  let baseUnitPrice = 0;
+  let basePrintBase = 0;
+
+  if (product.pricingType === "tiered") {
+    const tier = calculateTierPrice(baseQty, product.priceTiers, product.tierPriceMode);
+    baseUnitPrice = tier.unitPrice;
+    basePrintBase = isTotalPrice ? tier.totalPrice : money(tier.unitPrice * baseQty);
+  } else if (product.pricingType === "area") {
+    const area = areaM2(product, selectedOptions);
+    baseUnitPrice = money(area * Math.max(0, Number(product.basePrice) || 0));
+    basePrintBase = money(baseUnitPrice * baseQty);
+    lines.push({
+      label: "Format",
+      value: `${selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100} x ${selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100} cm (${area.toLocaleString("de-DE")} m²)`,
+      price: 0,
+      type: "base"
+    });
+  } else {
+    baseUnitPrice = Math.max(0, Number(product.basePrice) || 0);
+    basePrintBase = money(baseUnitPrice * baseQty);
   }
+
   const properties = (product.pricingProperties ?? []).filter((property) => (property.values ?? []).some((value) => value.enabled !== false));
-  const surcharge = properties.reduce((sum, property) => {
+  let totalFactor = 1;
+  const factorLines: typeof lines = [];
+  const surchargeLines: typeof lines = [];
+  let surchargeTotal = 0;
+
+  for (const property of properties) {
     const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
     const selected = selectedOptions[`eigenschaft:${property.name}`];
     const selectedValue = selected || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
     const match = enabledValues.find((value) => value.value === selectedValue);
-    if (!match) return sum;
-    const quantityForValue = resolvePropertyPricingQuantity(match.production, pricingQuantities, propertyQty);
-    const propertyStepUnitPrice = Math.max(0, Number(property.stepPrice) || 0);
-    const valueUnitPrice = match.pricingMode === "tiered"
-      ? quantityForValue > 0 ? calculateTierPrice(quantityForValue, match.tierPrices).unitPrice : 0
-      : 0;
-    const valuePrice = match.pricingMode === "fixed"
-      ? money(Math.max(0, Number(match.fixedPrice) || 0) * quantityForValue)
-      : match.pricingMode === "flat"
-        ? Math.max(0, Number(match.fixedPrice) || 0)
-      : match.pricingMode === "multiplier"
-        ? money(base * Math.max(0, Number(match.multiplier ?? 1) || 1) - base)
-      : match.pricingMode === "tiered"
-        ? money(valueUnitPrice * quantityForValue)
+    if (!match) continue;
+
+    const displayValue = match.labelOverride || match.label || match.value;
+
+    if (match.pricingMode === "multiplier") {
+      const factor = Number(match.multiplier ?? 1);
+      const safeFactor = Number.isFinite(factor) && factor >= 0 ? factor : 1;
+      totalFactor *= safeFactor;
+      factorLines.push({
+        label: property.name,
+        value: displayValue,
+        price: 0,
+        type: "factor",
+        factor: safeFactor
+      });
+    } else {
+      const quantityForValue = resolvePropertyPricingQuantity(match.production, pricingQuantities, propertyQty);
+      const propertyStepUnitPrice = Math.max(0, Number(property.stepPrice) || 0);
+      const valueUnitPrice = match.pricingMode === "tiered"
+        ? (quantityForValue > 0 ? calculateTierPrice(quantityForValue, match.tierPrices).unitPrice : 0)
         : 0;
-    const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * quantityForValue;
-    const price = money(propertyStepPrice + valuePrice);
-    lines.push({ label: property.name, value: match.labelOverride || match.label || match.value, price });
-    return sum + price;
-  }, 0);
+      const valuePrice = match.pricingMode === "fixed"
+        ? money(Math.max(0, Number(match.fixedPrice) || 0) * quantityForValue)
+        : match.pricingMode === "flat"
+          ? Math.max(0, Number(match.fixedPrice) || 0)
+          : match.pricingMode === "tiered"
+            ? money(valueUnitPrice * quantityForValue)
+            : 0;
+      const propertyStepPrice = match.pricingMode === "flat" ? Math.max(0, Number(property.stepPrice) || 0) : propertyStepUnitPrice * quantityForValue;
+      const price = money(propertyStepPrice + valuePrice);
+      surchargeTotal += price;
+      surchargeLines.push({
+        label: property.name,
+        value: displayValue,
+        price,
+        type: match.pricingMode === "flat" ? "flat" : "surcharge",
+        unitPrice: match.pricingMode === "fixed" ? Number(match.fixedPrice) : valueUnitPrice || undefined,
+        quantity: quantityForValue
+      });
+    }
+  }
+
+  const printTotal = money(basePrintBase * totalFactor);
+  const printUnitPrice = baseQty > 0 ? money(printTotal / baseQty) : 0;
+  const finalTotal = money(printTotal + surchargeTotal);
+
+  lines.push(...factorLines, ...surchargeLines);
 
   return {
     quantity: qty,
     baseQuantity: baseQty,
     propertyQuantity: propertyQty,
-    basePrice: money(base),
+    basePrice: money(basePrintBase),
+    baseUnitPrice: money(baseUnitPrice),
+    printUnitPrice: money(printUnitPrice),
+    printTotal: money(printTotal),
+    totalFactor,
+    surchargeTotal: money(surchargeTotal),
     lines,
-    total: money(base + surcharge)
+    total: finalTotal
   };
 }
 
@@ -136,6 +213,14 @@ export function getProductStartingPriceLabel(product: ProductCatalogItem) {
     return `ab ${money(Math.max(0, Number(product.basePrice) || 0)).toLocaleString("de-DE", { style: "currency", currency: "EUR" })} / m²`;
   }
   if (product.pricingType === "tiered") {
+    if (product.tierPriceMode === "totalPrice") {
+      const totalPrices = (product.priceTiers ?? [])
+        .map((tier) => Number(tier.price))
+        .filter((price) => Number.isFinite(price) && price > 0);
+      if (!totalPrices.length) return "Preis auf Anfrage";
+      const lowest = Math.min(...totalPrices);
+      return `ab ${money(lowest).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}`;
+    }
     const unitPrices = (product.priceTiers ?? [])
       .map((tier) => Number(tier.unitPrice ?? tier.price))
       .filter((price) => Number.isFinite(price) && price >= 0);
@@ -162,22 +247,24 @@ export function validateProductPricing(product: ProductCatalogItem) {
     errors.push("Für Stundenpreis muss der Stundensatz größer als 0 sein.");
   }
   const tierQuantities = new Set<number>();
+  const isTotalPrice = product.tierPriceMode === "totalPrice";
   const normalizedTiers = tiers
     .map((tier) => ({
       from: Number(tier.fromQuantity ?? tier.quantity),
       to: tier.toQuantity === undefined ? undefined : Number(tier.toQuantity),
-      unitPrice: Number(tier.unitPrice ?? tier.price)
+      unitPrice: Number(tier.unitPrice ?? tier.price),
+      price: Number(tier.price)
     }))
     .sort((a, b) => a.from - b.from);
   for (const [index, tier] of normalizedTiers.entries()) {
     const quantity = tier.from;
     const toQuantity = tier.to;
-    const price = tier.unitPrice;
+    const price = isTotalPrice ? tier.price : tier.unitPrice;
     if (!Number.isFinite(quantity) || quantity <= 0) errors.push("Mengen müssen größer als 0 sein.");
     if (toQuantity !== undefined && toQuantity < quantity) errors.push(`Die Bis-Menge ${toQuantity} darf nicht kleiner als ${quantity} sein.`);
     if (tierQuantities.has(quantity)) errors.push(`Die Menge ${quantity} ist bereits vorhanden.`);
     tierQuantities.add(quantity);
-    if (!Number.isFinite(price) || price < 0) errors.push(`Für Staffel ab ${quantity} fehlt ein gültiger Preis pro Stück.`);
+    if (!Number.isFinite(price) || price < 0) errors.push(`Für Staffel ab ${quantity} fehlt ein gültiger ${isTotalPrice ? "Gesamtpreis" : "Preis pro Stück"}.`);
     const previous = normalizedTiers[index - 1];
     if (previous) {
       const previousTo = previous.to ?? previous.from;

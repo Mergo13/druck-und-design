@@ -55,7 +55,7 @@ import {
 import { Route } from "react-router-dom";
 import { useFormContext, useWatch } from "react-hook-form";
 import { calculateConfiguredProductPrice, calculateTierPrice, validateProductPricing } from "@/lib/print-workflow";
-import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
+import { productPropertyFromGlobal, resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import type { BindingSystem } from "@/lib/binding-resolution";
 import type { GlobalProperty, HomepageSettings, ProductCatalogItem, ProductIndustry, ProductPriceTier, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
@@ -1624,28 +1624,6 @@ function syncTierSurcharges(properties: ProductPricingProperty[], tiers: Product
       };
     })
   }));
-}
-
-function productPropertyFromGlobal(property: GlobalProperty, tiers: ProductPriceTier[]): ProductPricingProperty {
-  return {
-    propertyId: property.slug,
-    name: property.name,
-    required: true,
-    sortOrder: 0,
-    values: (property.values ?? [])
-      .filter((value) => value.active !== false)
-      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-      .map((value, index) => ({
-        propertyValueId: value.id,
-        value: value.value,
-        label: value.label,
-        enabled: false,
-        defaultSelected: index === 0,
-        sortOrder: index,
-        pricingMode: "global" as const,
-        tierPrices: tiers.map((tier) => ({ quantity: Number(tier.fromQuantity ?? tier.quantity), fromQuantity: Number(tier.fromQuantity ?? tier.quantity), toQuantity: tier.toQuantity, price: 0 }))
-      }))
-  };
 }
 
 function ProductDuplicateButton() {
@@ -4219,9 +4197,9 @@ format,Format,A3,A3,fixed,0.36,,,,true,20`,
   categories: `slug,name,description,visible,published,logo
 druck,Druck,Druckprodukte online konfigurieren,true,true,/uploads/categories/druck.webp
 werbetechnik,Werbetechnik,Beschriftung Schilder Folien und Montage,true,true,/uploads/categories/werbetechnik.webp`,
-  products: `slug,name,category,basePrice,pricingType,productStatus,short,description,seo,heroImage,deliveryText,priceTiers,defaultWidthCm,defaultHeightCm,minAreaM2,tags
-a4-farbkopien,A4 Farbkopien,druck,0.45,tiered,draft,Farbkopien in A4,A4 Farbkopien mit Staffelpreisen,Farbkopien Wels,/uploads/products/a4-farbkopien.webp,2-5 Werktage,1-99:0.45|100-199:0.39|200-299:0.35,,,,kopien|druck
-banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,1-999:29.90,100,100,0.25,banner|werbetechnik`
+  products: `slug,name,category,basePrice,pricingType,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minAreaM2,tags
+flyer,Flyer,druck,0.716,tiered,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,kopien|druck
+banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,0.25,banner|werbetechnik`
 };
 
 type CatalogCsvTarget = "properties" | "categories" | "products";
@@ -4276,7 +4254,7 @@ function CatalogCsvImportToolPage() {
     }
   }
 
-  function mapRow(row: Record<string, string>, importTarget: CatalogCsvTarget) {
+  function mapRow(row: Record<string, string>, importTarget: CatalogCsvTarget, globalProperties: GlobalProperty[] = []) {
     if (importTarget === "properties") {
       const name = csvCell(row, "name", "Name", "Eigenschaft", "label", "Label") || csvCell(row, "slug");
       const slug = row.slug || csvSlug(name);
@@ -4310,6 +4288,20 @@ function CatalogCsvImportToolPage() {
     const defaultHeightCm = csvCell(row, "defaultHeightCm", "hoeheCm", "höheCm");
     const pricingType = (csvCell(row, "pricingType", "preisart") || (defaultWidthCm || defaultHeightCm ? "area" : "")).toLowerCase();
     const priceTiers = csvPriceTiers(csvCell(row, "priceTiers", "staffelpreise"), basePrice);
+    const rawPricingProperties = csvCell(row, "pricingProperties", "pricing_properties", "eigenschaften", "properties");
+    const propertySlugs = csvList(rawPricingProperties);
+    const pricingProperties: ProductPricingProperty[] = [];
+    if (propertySlugs.length > 0) {
+      for (const propertySlug of propertySlugs) {
+        const globalProperty = globalProperties.find(
+          (item) => item.slug.toLowerCase() === propertySlug.toLowerCase() || item.name.toLowerCase() === propertySlug.toLowerCase()
+        );
+        if (!globalProperty) {
+          throw new Error(`Unbekannte globale Eigenschaft: ${propertySlug}`);
+        }
+        pricingProperties.push(productPropertyFromGlobal(globalProperty, priceTiers));
+      }
+    }
     return {
       slug: csvCell(row, "slug") || csvSlug(name),
       name,
@@ -4334,7 +4326,7 @@ function CatalogCsvImportToolPage() {
       deliveryText: csvCell(row, "deliveryText", "lieferzeit") || "2-5 Werktage",
       tags: csvList(csvCell(row, "tags")),
       variants: [],
-      pricingProperties: [],
+      pricingProperties,
       quantitySteps: priceTiers.map((tier) => tier.fromQuantity ?? tier.quantity),
       production: {
         baseProductionDays: csvNumber(csvCell(row, "baseProductionDays", "produktionstage"), 3),
@@ -4352,9 +4344,12 @@ function CatalogCsvImportToolPage() {
       const rows = parseCsvRows(csvText);
       if (!rows.length) throw new Error("CSV enthält keine Datenzeilen.");
       const importTarget = detectCatalogCsvTarget(rows, target);
+      const globalProperties = importTarget === "products"
+        ? await fetchJson<GlobalProperty[]>("/api/catalog/properties?scope=admin")
+        : [];
       const payloads = importTarget === "properties"
         ? csvPropertyPayloads(rows)
-        : rows.map((row) => mapRow(row, importTarget) as { slug?: string; name?: string });
+        : rows.map((row) => mapRow(row, importTarget, globalProperties) as { slug?: string; name?: string });
       let imported = 0;
       const skipped: string[] = [];
       for (const [index, payload] of payloads.entries()) {

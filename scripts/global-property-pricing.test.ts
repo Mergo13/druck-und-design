@@ -237,4 +237,241 @@ const documentQuantityPrice = calculateConfiguredProductPrice(documentQuantityPr
 });
 assert.equal(documentQuantityPrice.total, 25.65);
 
+// ---------------------------------------------------------------------------
+// Tests for CSV Product Import with pricingProperties and Flyer Verification
+// ---------------------------------------------------------------------------
+import { productPropertyFromGlobal } from "@/lib/product-property-pricing";
+
+const globalPropertiesList: GlobalProperty[] = [
+  {
+    slug: "format",
+    name: "Format",
+    active: true,
+    sortOrder: 1,
+    values: [
+      { id: "format-a6", value: "A6", active: true, sortOrder: 0, pricingMode: "multiplier", multiplier: 1.0 },
+      { id: "format-a5", value: "A5", active: true, sortOrder: 1, pricingMode: "multiplier", multiplier: 1.5 },
+      { id: "format-a4", value: "A4", active: true, sortOrder: 2, pricingMode: "multiplier", multiplier: 2.0 }
+    ]
+  },
+  {
+    slug: "druckart",
+    name: "Druckart",
+    active: true,
+    sortOrder: 2,
+    values: [
+      { id: "druckart-digital", value: "Digitaldruck", active: true, sortOrder: 0, pricingMode: "multiplier", multiplier: 1.0 },
+      { id: "druckart-offset", value: "Offsetdruck", active: true, sortOrder: 1, pricingMode: "multiplier", multiplier: 1.2 }
+    ]
+  },
+  {
+    slug: "druckseiten",
+    name: "Druckseiten",
+    active: true,
+    sortOrder: 3,
+    values: [
+      { id: "druckseiten-1-seitig", value: "1-seitig", active: true, sortOrder: 0, pricingMode: "multiplier", multiplier: 1.0 },
+      { id: "druckseiten-2-seitig", value: "2-seitig", active: true, sortOrder: 1, pricingMode: "multiplier", multiplier: 1.4 }
+    ]
+  },
+  {
+    slug: "papier",
+    name: "Papier",
+    active: true,
+    sortOrder: 4,
+    values: [
+      { id: "papier-135g", value: "135g Bilderdruck", active: true, sortOrder: 0, pricingMode: "included" },
+      { id: "papier-250g", value: "250g Bilderdruck", active: true, sortOrder: 1, pricingMode: "fixed", fixedPrice: 0.05 },
+      {
+        id: "papier-300g",
+        value: "300g Bilderdruck",
+        active: true,
+        sortOrder: 2,
+        pricingMode: "tiered",
+        tierPrices: [
+          { quantity: 25, fromQuantity: 25, toQuantity: 49, price: 0.10, unitPrice: 0.10 },
+          { quantity: 50, fromQuantity: 50, toQuantity: 99, price: 0.08, unitPrice: 0.08 }
+        ]
+      }
+    ]
+  },
+  {
+    slug: "veredelung",
+    name: "Veredelung",
+    active: true,
+    sortOrder: 5,
+    values: [
+      { id: "veredelung-ohne", value: "Ohne", active: true, sortOrder: 0, pricingMode: "included" },
+      { id: "veredelung-mattlack", value: "Mattlack", active: true, sortOrder: 1, pricingMode: "fixed", fixedPrice: 0.15 },
+      { id: "veredelung-glanzlack", value: "Glanzlack", active: true, sortOrder: 2, pricingMode: "flat", fixedPrice: 20 }
+    ]
+  }
+];
+
+// Helper to simulate CSV import mapping function
+function simulateCsvProductImport(csvRow: { priceTiers?: string; pricingProperties?: string; basePrice?: string }, globals: GlobalProperty[]) {
+  const basePrice = Number(csvRow.basePrice ?? 0);
+  const tiers = (csvRow.priceTiers ?? "").split("|").map((entry) => {
+    const [range, price] = entry.split(":");
+    const [from, to] = range.split("-");
+    const fromQuantity = Number(from);
+    const toQuantity = to ? Number(to) : undefined;
+    const unitPrice = Number(price);
+    return { quantity: fromQuantity, fromQuantity, toQuantity, unitPrice, price: unitPrice };
+  }).filter((t) => t.quantity > 0);
+
+  const rawPricingProperties = csvRow.pricingProperties ?? "";
+  const propertySlugs = rawPricingProperties.split("|").map((s) => s.trim()).filter(Boolean);
+  const pricingProperties = [];
+
+  if (propertySlugs.length > 0) {
+    for (const propertySlug of propertySlugs) {
+      const globalProperty = globals.find(
+        (item) => item.slug.toLowerCase() === propertySlug.toLowerCase() || item.name.toLowerCase() === propertySlug.toLowerCase()
+      );
+      if (!globalProperty) {
+        throw new Error(`Unbekannte globale Eigenschaft: ${propertySlug}`);
+      }
+      pricingProperties.push(productPropertyFromGlobal(globalProperty, tiers));
+    }
+  }
+
+  return {
+    slug: "flyer",
+    name: "Flyer",
+    category: "druck",
+    basePrice,
+    pricingType: "tiered" as const,
+    priceTiers: tiers,
+    pricingProperties
+  } as ProductCatalogItem;
+}
+
+// 1. Verify unknown global property error
+assert.throws(
+  () => simulateCsvProductImport({ pricingProperties: "format|druckxyz" }, globalPropertiesList),
+  /Unbekannte globale Eigenschaft: druckxyz/
+);
+
+// 2. Backward compatibility: CSV without pricingProperties
+const backwardCompatibleProduct = simulateCsvProductImport(
+  { basePrice: "0.50", priceTiers: "25-49:0.50|50-99:0.40" },
+  globalPropertiesList
+);
+assert.equal(backwardCompatibleProduct.pricingProperties?.length, 0);
+
+// 3. Import Flyer with format|druckart|druckseiten|papier|veredelung
+const importedFlyer = simulateCsvProductImport(
+  {
+    basePrice: "0.716",
+    priceTiers: "25-49:0.716|50-99:0.438",
+    pricingProperties: "format|druckart|druckseiten|papier|veredelung"
+  },
+  globalPropertiesList
+);
+
+// Confirm all 5 Eigenschaften are attached
+assert.equal(importedFlyer.pricingProperties?.length, 5);
+assert.deepEqual(
+  importedFlyer.pricingProperties?.map((p) => p.propertyId),
+  ["format", "druckart", "druckseiten", "papier", "veredelung"]
+);
+
+// Confirm every value has pricingMode: "global"
+for (const prop of importedFlyer.pricingProperties ?? []) {
+  for (const val of prop.values) {
+    assert.equal(val.pricingMode, "global");
+  }
+}
+
+// Resolve global property pricing
+const resolvedFlyer = resolveGlobalPropertyPricing(importedFlyer, globalPropertiesList);
+
+// Test 1: Base Tier 25-49 (unit price rounded to 0.72) with all defaults (A6 mult 1.0, Digital mult 1.0, 1-seitig mult 1.0, 135g included, Ohne included)
+const basePriceResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 25 * 0.72 = 18.00
+assert.equal(basePriceResult.total, 18);
+
+// Test 2: Format Multiplier (A5 = 1.5)
+const formatMultResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A5",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 18.00 * 1.5 = 27.00
+assert.equal(formatMultResult.total, 27);
+
+// Test 3: Druckart Multiplier (Offset = 1.2) + Format Multiplier (A5 = 1.5)
+const druckartMultResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A5",
+  "eigenschaft:Druckart": "Offsetdruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 18.00 * 1.5 * 1.2 = 32.40
+assert.equal(druckartMultResult.total, 32.4);
+
+// Test 4: Druckseiten Multiplier (2-seitig = 1.4) + Format A5 (1.5) + Offset (1.2)
+const druckseitenMultResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A5",
+  "eigenschaft:Druckart": "Offsetdruck",
+  "eigenschaft:Druckseiten": "2-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 18.00 * 1.5 * 1.2 * 1.4 = 45.36
+assert.equal(druckseitenMultResult.total, 45.36);
+
+// Test 5: Papier Fixed Surcharge (250g = +0.05 / Stk)
+const papierFixedResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "250g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 18.00 + (25 * 0.05) = 19.25
+assert.equal(papierFixedResult.total, 19.25);
+
+// Test 6: Papier Tiered Surcharge (300g at quantity 50 = +0.08 / Stk, tier base = 50 * 0.44 = 22.00)
+const papierTieredResult = calculateConfiguredProductPrice(resolvedFlyer, 50, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "300g Bilderdruck",
+  "eigenschaft:Veredelung": "Ohne"
+});
+// 22.00 + (50 * 0.08) = 26.00
+assert.equal(papierTieredResult.total, 26);
+
+// Test 7: Veredelung Surcharge (Mattlack fixed +0.15 / Stk, Glanzlack flat +20 EUR)
+const veredelungFixedResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Mattlack"
+});
+// 18.00 + (25 * 0.15) = 21.75
+assert.equal(veredelungFixedResult.total, 21.75);
+
+const veredelungFlatResult = calculateConfiguredProductPrice(resolvedFlyer, 25, {
+  "eigenschaft:Format": "A6",
+  "eigenschaft:Druckart": "Digitaldruck",
+  "eigenschaft:Druckseiten": "1-seitig",
+  "eigenschaft:Papier": "135g Bilderdruck",
+  "eigenschaft:Veredelung": "Glanzlack"
+});
+// 18.00 + 20 = 38.00
+assert.equal(veredelungFlatResult.total, 38);
+
 console.log("global-property-pricing tests passed");

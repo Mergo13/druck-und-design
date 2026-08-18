@@ -198,6 +198,7 @@ export type ProductCatalogItem = {
   rating: number;
   basePrice: number;
   pricingType?: "fixed" | "tiered" | "area" | "hourly";
+  tierPriceMode?: "unitPrice" | "totalPrice";
   areaPricing?: {
     defaultWidthCm?: number;
     defaultHeightCm?: number;
