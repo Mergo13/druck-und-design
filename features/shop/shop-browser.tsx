@@ -53,6 +53,7 @@ export function ShopBrowser({ initialCategory, initialQuery, categories, product
           {filtered.map((product, idx) => (
             <motion.div
               key={product.slug}
+              className="h-full"
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24, delay: Math.min(idx * 0.02, 0.2) }}

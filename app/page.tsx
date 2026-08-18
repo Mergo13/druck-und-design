@@ -12,6 +12,7 @@ import { ScrollZoomHero } from "@/components/home/scroll-zoom-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { getPublicCategories, getPublicIndustries, getPublicProducts } from "@/lib/catalog-repository";
 import { StructuredData } from "@/components/structured-data";
+import { ProductCard } from "@/components/product/product-card";
 import { localBusinessJsonLd } from "@/lib/seo";
 import { getSiteImageMap } from "@/lib/site-images";
 import { getHomepageSettings } from "@/lib/homepage-settings";
@@ -101,7 +102,7 @@ export default async function HomePage() {
           </div>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {bestsellerProducts.map((product) => (
-              <HomepageProductCard key={product.slug} product={product} />
+              <ProductCard key={product.slug} product={product} />
             ))}
           </div>
           <Link href="/produkte" className="mt-6 inline-flex items-center gap-2 text-sm font-black text-brand-blue hover:text-brand-ink">
@@ -286,38 +287,6 @@ export default async function HomePage() {
 
       <ClientsMarquee logos={homepageLogos} />
     </>
-  );
-}
-
-function HomepageProductCard({ product }: { product: ProductCatalogItem }) {
-  const purchaseMode = product.purchaseMode ?? "online";
-  const heroImage = product.heroImage || "/uploads/products/abschlussarbeiten.webp";
-  const unoptimizedImage = heroImage.startsWith("/uploads/");
-  const cta = purchaseMode === "request"
-    ? { href: "/kontakt", label: "Angebot anfragen" }
-    : purchaseMode === "disabled"
-      ? null
-      : { href: `/produkt/${product.slug}`, label: "Jetzt konfigurieren" };
-
-  return (
-    <Card className="group h-full overflow-hidden border border-slate-200 bg-white shadow-[0_12px_32px_rgba(17,34,68,.07)] transition hover:-translate-y-1 hover:border-brand-blue/30 hover:shadow-[0_22px_48px_rgba(17,85,204,.12)]">
-      <div className="relative aspect-[4/3] overflow-hidden bg-brand-mist">
-        <Image src={heroImage} alt={product.name} fill unoptimized={unoptimizedImage} className="object-cover transition duration-700 group-hover:scale-105" sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw" />
-      </div>
-      <CardContent className="p-5">
-        <h3 className="text-lg font-black text-brand-ink">{product.name}</h3>
-        <p className="mt-2 line-clamp-3 min-h-[4.5rem] text-sm leading-6 text-muted-foreground">{product.short}</p>
-        <div className="mt-4 space-y-1">
-          <p className="text-base font-black text-brand-blue">{getProductStartingPriceLabel(product)}</p>
-          <p className="text-xs font-bold text-slate-500">{product.deliveryText || `${product.production?.baseProductionDays ?? 3} Werktage`}</p>
-        </div>
-        {cta ? (
-          <Button asChild className="mt-5 w-full">
-            <Link href={cta.href}>{cta.label}</Link>
-          </Button>
-        ) : null}
-      </CardContent>
-    </Card>
   );
 }
 
