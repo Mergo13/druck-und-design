@@ -473,7 +473,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </div>
           ) : null}
           {authenticated && tierBreakdown ? <p className="text-xs font-semibold text-muted-foreground">{tierBreakdown.quantity} Stück × {formatEuro(tierBreakdown.unitPrice)} / Stück = {formatEuro(tierBreakdown.totalPrice)}</p> : null}
-          {authenticated ? <p className="text-xs font-semibold text-muted-foreground">Ab {formatEuro(product.basePrice)}</p> : null}
+
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
           <CalendarCheck className="ml-auto h-4 w-4 text-primary" />
