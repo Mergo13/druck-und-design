@@ -17,7 +17,7 @@ import MailIcon from "@mui/icons-material/Mail";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import TuneIcon from "@mui/icons-material/Tune";
-import { Alert, Box, Button, Card, CardContent, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Checkbox, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
@@ -25,6 +25,7 @@ import {
   ArrayInput,
   BooleanField,
   BooleanInput,
+  BulkDeleteButton,
   Create,
   DataProvider,
   Datagrid,
@@ -254,6 +255,17 @@ function normalizeCatalogRecordForAdmin(record: AdminRecord): AdminRecord {
 const catalogApiUrl = "/api/catalog";
 const catalogResources = new Set(["products", "categories", "properties", "industries"]);
 const searchFilters = [<TextInput key="q" source="q" label="Suche" alwaysOn />];
+
+function CatalogBulkDeleteActions({ label, confirmContent }: { label: string; confirmContent: string }) {
+  return (
+    <BulkDeleteButton
+      mutationMode="pessimistic"
+      label={`${label} löschen`}
+      confirmTitle={`${label} löschen?`}
+      confirmContent={confirmContent}
+    />
+  );
+}
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options);
@@ -804,10 +816,19 @@ function productSortValue(product: ProductAdminRecord) {
 function ProductGroupedList() {
   const { data = [], isPending } = useListContext<ProductAdminRecord>();
   const redirect = useRedirect();
+  const notify = useNotify();
+  const refresh = useRefresh();
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const { data: categories = [] } = useGetList<CategoryAdminRecord>("categories", {
     pagination: { page: 1, perPage: 200 },
     sort: { field: "sortOrder", order: "ASC" }
   });
+  const allProductIds = useMemo(() => data.map((product) => String(product.id ?? product.slug)), [data]);
+  const selectedProductIdSet = useMemo(() => new Set(selectedProductIds), [selectedProductIds]);
+  const selectedVisibleCount = allProductIds.filter((id) => selectedProductIdSet.has(id)).length;
+  const allVisibleSelected = allProductIds.length > 0 && selectedVisibleCount === allProductIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
 
   const groups = useMemo(() => {
     const categoryMap = new Map(
@@ -842,6 +863,37 @@ function ProductGroupedList() {
       }));
   }, [categories, data]);
 
+  function toggleProduct(productId: string, checked: boolean) {
+    setSelectedProductIds((current) => checked
+      ? Array.from(new Set([...current, productId]))
+      : current.filter((id) => id !== productId)
+    );
+  }
+
+  function toggleVisibleProducts(checked: boolean) {
+    setSelectedProductIds((current) => {
+      if (checked) return Array.from(new Set([...current, ...allProductIds]));
+      const visibleIds = new Set(allProductIds);
+      return current.filter((id) => !visibleIds.has(id));
+    });
+  }
+
+  async function deleteSelectedProducts() {
+    if (!selectedProductIds.length) return;
+    if (!window.confirm(`${selectedProductIds.length} Produkte wirklich löschen?\n\nDiese Aktion kann nicht rückgängig gemacht werden.`)) return;
+    setBulkDeleting(true);
+    try {
+      await Promise.all(selectedProductIds.map((id) => fetchJson(`${catalogApiUrl}/products/${encodeURIComponent(id)}`, { method: "DELETE" })));
+      notify(`${selectedProductIds.length} Produkte gelöscht.`, { type: "success" });
+      setSelectedProductIds([]);
+      refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Produkte konnten nicht gelöscht werden.", { type: "error" });
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   if (isPending) {
     return <Typography variant="body2" color="text.secondary">Produkte werden geladen...</Typography>;
   }
@@ -856,6 +908,33 @@ function ProductGroupedList() {
           Nach Kategorien gruppiert, damit Produkte schneller gefunden werden. Die Suche oben filtert weiterhin ueber Name, Slug und ID.
         </Typography>
       </Box>
+      <Card variant="outlined" sx={{ borderRadius: 2, borderColor: adminColors.border }}>
+        <CardContent sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap", py: 1.25 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Checkbox
+              size="small"
+              checked={allVisibleSelected}
+              indeterminate={someVisibleSelected}
+              disabled={!allProductIds.length || bulkDeleting}
+              onChange={(event) => toggleVisibleProducts(event.target.checked)}
+              slotProps={{ input: { "aria-label": "Alle sichtbaren Produkte auswählen" } }}
+            />
+            <Typography variant="body2" sx={{ fontWeight: 850, color: adminColors.ink }}>
+              {selectedProductIds.length ? `${selectedProductIds.length} ausgewählt` : "Sichtbare Produkte auswählen"}
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            color="error"
+            variant="contained"
+            startIcon={<DeleteOutlineIcon />}
+            disabled={!selectedProductIds.length || bulkDeleting}
+            onClick={() => void deleteSelectedProducts()}
+          >
+            {bulkDeleting ? "Löscht..." : "Ausgewählte löschen"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {groups.length ? groups.map((group) => (
         <Card key={group.slug} variant="outlined" sx={{ borderRadius: 2, borderColor: adminColors.border, overflow: "hidden" }}>
@@ -882,6 +961,7 @@ function ProductGroupedList() {
             <Box sx={{ display: "grid" }}>
               {group.products.map((product) => {
                 const productId = String(product.id ?? product.slug);
+                const selected = selectedProductIdSet.has(productId);
                 return (
                 <Box
                   key={productId}
@@ -896,7 +976,7 @@ function ProductGroupedList() {
                   }}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", md: "minmax(260px, 1.6fr) 130px 130px 110px auto" },
+                    gridTemplateColumns: { xs: "auto 1fr", md: "42px minmax(260px, 1.6fr) 130px 130px 110px auto" },
                     gap: { xs: 1, md: 1.5 },
                     alignItems: "center",
                     px: 2,
@@ -909,6 +989,15 @@ function ProductGroupedList() {
                     "&:focus-visible": { outline: `2px solid ${adminColors.blue}`, outlineOffset: -2, boxShadow: "inset 0 0 0 2px #fff" }
                   }}
                 >
+                  <Box onClick={(event) => event.stopPropagation()} sx={{ display: "flex", alignItems: "center" }}>
+                    <Checkbox
+                      size="small"
+                      checked={selected}
+                      disabled={bulkDeleting}
+                      onChange={(event) => toggleProduct(productId, event.target.checked)}
+                      slotProps={{ input: { "aria-label": `${product.name} auswählen` } }}
+                    />
+                  </Box>
                   <Box sx={{ minWidth: 0 }}>
                     <Typography variant="body2" sx={{ fontWeight: 900, color: adminColors.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {product.name}
@@ -3001,7 +3090,10 @@ function PropertyList() {
         </Typography>
       </Box>
       <PropertyCsvPanel />
-      <Datagrid rowClick="edit" bulkActionButtons={false} sx={{
+      <Datagrid
+        rowClick="edit"
+        bulkActionButtons={<CatalogBulkDeleteActions label="Eigenschaften" confirmContent="Wenn Eigenschaften bereits verwendet werden, werden sie deaktiviert statt hart gelöscht." />}
+        sx={{
         overflow: "hidden",
         border: `1px solid ${adminColors.border}`,
         borderRadius: 2,
@@ -3301,7 +3393,10 @@ function ProductCategoryPropertiesControl() {
 function CategoryList() {
   return (
     <List filters={searchFilters} sort={{ field: "name", order: "ASC" }}>
-      <Datagrid rowClick="edit" bulkActionButtons={false}>
+      <Datagrid
+        rowClick="edit"
+        bulkActionButtons={<CatalogBulkDeleteActions label="Kategorien" confirmContent="Kategorien können nur gelöscht werden, wenn keine Produkte zugeordnet sind." />}
+      >
         <TextField source="slug" />
         <TextField source="name" />
         <TextField source="description" />
