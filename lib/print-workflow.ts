@@ -61,9 +61,25 @@ export function calculateTierPrice(
   };
 }
 
+function areaDimension(value: unknown, fallback: number, min?: number, max?: number) {
+  const numeric = Number(value || fallback);
+  const positive = Number.isFinite(numeric) ? Math.max(0, numeric) : fallback;
+  const minValue = Number(min);
+  const maxValue = Number(max);
+  const lowerBounded = Number.isFinite(minValue) && minValue > 0 ? Math.max(positive, minValue) : positive;
+  return Number.isFinite(maxValue) && maxValue > 0 ? Math.min(lowerBounded, maxValue) : lowerBounded;
+}
+
+function areaDimensions(product: ProductCatalogItem, selectedOptions: Record<string, string>) {
+  const pricing = product.areaPricing;
+  return {
+    widthCm: areaDimension(selectedOptions.areaWidthCm, pricing?.defaultWidthCm || 100, pricing?.minWidthCm, pricing?.maxWidthCm),
+    heightCm: areaDimension(selectedOptions.areaHeightCm, pricing?.defaultHeightCm || 100, pricing?.minHeightCm, pricing?.maxHeightCm)
+  };
+}
+
 function areaM2(product: ProductCatalogItem, selectedOptions: Record<string, string>) {
-  const widthCm = Number(selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100);
-  const heightCm = Number(selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100);
+  const { widthCm, heightCm } = areaDimensions(product, selectedOptions);
   const rawArea = Math.max(0, widthCm) * Math.max(0, heightCm) / 10000;
   return money(Math.max(rawArea, Number(product.areaPricing?.minAreaM2 || 0)));
 }
@@ -82,6 +98,7 @@ export function calculateConfiguredProductPrice(
     colorPages?: number;
     frontCovers?: number;
     backCovers?: number;
+    printedCoverSides?: number;
     perOrder?: number;
   }
 ) {
@@ -107,11 +124,12 @@ export function calculateConfiguredProductPrice(
     basePrintBase = isTotalPrice ? tier.totalPrice : money(tier.unitPrice * baseQty);
   } else if (product.pricingType === "area") {
     const area = areaM2(product, selectedOptions);
+    const dimensions = areaDimensions(product, selectedOptions);
     baseUnitPrice = money(area * Math.max(0, Number(product.basePrice) || 0));
     basePrintBase = money(baseUnitPrice * baseQty);
     lines.push({
       label: "Format",
-      value: `${selectedOptions.areaWidthCm || product.areaPricing?.defaultWidthCm || 100} x ${selectedOptions.areaHeightCm || product.areaPricing?.defaultHeightCm || 100} cm (${area.toLocaleString("de-DE")} m²)`,
+      value: `${dimensions.widthCm} x ${dimensions.heightCm} cm (${area.toLocaleString("de-DE")} m²)`,
       price: 0,
       type: "base"
     });
@@ -206,10 +224,11 @@ function resolvePropertyPricingQuantity(
       : source === "sheets" ? pricingQuantities?.sheets
         : source === "black_white_pages" ? pricingQuantities?.blackWhitePages
           : source === "color_pages" ? pricingQuantities?.colorPages
-            : source === "front_covers" ? pricingQuantities?.frontCovers
-              : source === "back_covers" ? pricingQuantities?.backCovers
-                : source === "per_order" ? pricingQuantities?.perOrder
-                  : fallbackQuantity;
+              : source === "front_covers" ? pricingQuantities?.frontCovers
+                : source === "back_covers" ? pricingQuantities?.backCovers
+                  : source === "printed_cover_sides" ? pricingQuantities?.printedCoverSides
+                    : source === "per_order" ? pricingQuantities?.perOrder
+                      : fallbackQuantity;
   const numeric = Number(value ?? fallbackQuantity);
   return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : fallbackQuantity;
 }

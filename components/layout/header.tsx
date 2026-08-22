@@ -32,6 +32,7 @@ export function Header({ logoSrc = "/brand/logo-dud.png" }: { logoSrc?: string }
   const [searchOpen, setSearchOpen] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [cartPulse, setCartPulse] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [flyItems, setFlyItems] = useState<Array<{ id: string; x: number; y: number; tx: number; ty: number }>>([]);
   const searchBoxRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -120,6 +121,15 @@ export function Header({ logoSrc = "/brand/logo-dud.png" }: { logoSrc?: string }
     };
     window.addEventListener("dud-fly-to-cart", onFlyToCart as EventListener);
     return () => window.removeEventListener("dud-fly-to-cart", onFlyToCart as EventListener);
+  }, []);
+
+  useEffect(() => {
+    const onCartDrawerState = (event: Event) => {
+      const custom = event as CustomEvent<{ open?: boolean }>;
+      setCartDrawerOpen(Boolean(custom.detail?.open));
+    };
+    window.addEventListener("dud-cart-drawer-state", onCartDrawerState as EventListener);
+    return () => window.removeEventListener("dud-cart-drawer-state", onCartDrawerState as EventListener);
   }, []);
 
   const saveRecentSearch = (term: string) => {
@@ -270,17 +280,33 @@ export function Header({ logoSrc = "/brand/logo-dud.png" }: { logoSrc?: string }
             {!isAdmin && (
               <>
                 <Link href="/konto" className="hidden h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-brand-blue/30 hover:bg-brand-mist hover:text-brand-blue sm:flex"><User className="h-4.5 w-4.5" /></Link>
-                <Link href="/warenkorb" className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-brand-blue/30 hover:bg-brand-mist hover:text-brand-blue">
-                  <motion.span
+                <Button
+                  asChild
+                  variant="outline"
+                  size="icon"
+                  className="border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800"
+                >
+                  <Link
                     id="global-cart-button"
-                    animate={cartPulse ? { scale: [1, 1.14, 1] } : { scale: 1 }}
-                    transition={{ duration: 0.35, ease: "easeOut" }}
-                    className="inline-flex"
+                    href="/warenkorb"
+                    aria-label={cartCount > 0 ? `Warenkorb öffnen, ${cartCount} Artikel` : "Warenkorb öffnen"}
+                    aria-expanded={cartDrawerOpen}
+                    onClick={(event) => {
+                      if (pathname === "/warenkorb") {
+                        event.preventDefault();
+                        window.dispatchEvent(new Event("dud-toggle-cart-drawer"));
+                      }
+                    }}
                   >
-                    <ShoppingCart className="h-4.5 w-4.5" />
-                  </motion.span>
-                  {cartCount > 0 ? <span className="absolute -right-1 -top-1 rounded-full bg-brand-blue px-1.5 text-[10px] font-bold text-white">{cartCount}</span> : null}
-                </Link>
+                    <motion.span
+                      animate={cartPulse ? { scale: [1, 1.14, 1] } : { scale: 1 }}
+                      transition={{ duration: 0.35, ease: "easeOut" }}
+                      className="inline-flex"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                    </motion.span>
+                  </Link>
+                </Button>
               </>
             )}
             <Button variant="ghost" size="icon" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Menü schließen" : "Menü öffnen"} className="text-brand-ink hover:bg-brand-mist hover:text-brand-blue md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
@@ -319,14 +345,6 @@ export function Header({ logoSrc = "/brand/logo-dud.png" }: { logoSrc?: string }
               ))}
               {!isAdmin && (
                 <>
-                  <Link
-                    href="/warenkorb"
-                    onClick={() => setMobileOpen(false)}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold tracking-[0.01em] text-brand-ink shadow-sm transition hover:border-brand-blue/30 hover:bg-brand-mist"
-                  >
-                    Warenkorb
-                    <ShoppingCart className="h-4 w-4 text-brand-blue" />
-                  </Link>
                   <Link
                     href="/konto"
                     onClick={() => setMobileOpen(false)}

@@ -25,7 +25,6 @@ import {
   ArrayInput,
   BooleanField,
   BooleanInput,
-  BulkDeleteButton,
   Create,
   DataProvider,
   Datagrid,
@@ -51,6 +50,7 @@ import {
   useListContext,
   useNotify,
   useRefresh,
+  useResourceContext,
   useRecordContext
 } from "react-admin";
 import { Route } from "react-router-dom";
@@ -256,14 +256,65 @@ const catalogApiUrl = "/api/catalog";
 const catalogResources = new Set(["products", "categories", "properties", "industries"]);
 const searchFilters = [<TextInput key="q" source="q" label="Suche" alwaysOn />];
 
-function CatalogBulkDeleteActions({ label, confirmContent }: { label: string; confirmContent: string }) {
+function CatalogBulkActionsToolbar({ label, confirmContent }: { label: string; confirmContent: string }) {
+  const resource = useResourceContext();
+  const { selectedIds = [], onUnselectItems } = useListContext();
+  const notify = useNotify();
+  const refresh = useRefresh();
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteSelected() {
+    if (!resource || !selectedIds.length) return;
+    if (!window.confirm(`${selectedIds.length} ${label} wirklich löschen?\n\n${confirmContent}`)) return;
+    setDeleting(true);
+    try {
+      await dataProvider.deleteMany(resource, { ids: selectedIds.map(String) });
+      notify(`${selectedIds.length} ${label} gelöscht.`, { type: "success" });
+      onUnselectItems();
+      refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : `${label} konnten nicht gelöscht werden.`, { type: "error" });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  if (!selectedIds.length) return null;
+
   return (
-    <BulkDeleteButton
-      mutationMode="pessimistic"
-      label={`${label} löschen`}
-      confirmTitle={`${label} löschen?`}
-      confirmContent={confirmContent}
-    />
+    <Box
+      sx={{
+        mb: 1,
+        p: 1.25,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 1.5,
+        flexWrap: "wrap",
+        border: `1px solid ${adminColors.border}`,
+        borderRadius: 2,
+        bgcolor: "#fff7ed"
+      }}
+    >
+      <Typography variant="body2" sx={{ fontWeight: 900, color: adminColors.ink }}>
+        {selectedIds.length} ausgewählt
+      </Typography>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Button size="small" variant="outlined" disabled={deleting} onClick={() => onUnselectItems()}>
+          Auswahl aufheben
+        </Button>
+        <Button
+          size="small"
+          color="error"
+          variant="contained"
+          startIcon={<DeleteOutlineIcon />}
+          disabled={deleting}
+          onClick={() => void deleteSelected()}
+        >
+          {deleting ? "Löscht..." : `${label} löschen`}
+        </Button>
+      </Box>
+    </Box>
   );
 }
 
@@ -1765,6 +1816,8 @@ function ProductPricingManager() {
   const priceTiers = (useWatch({ name: "priceTiers" }) as ProductPriceTier[] | undefined) ?? [];
   const pricingProperties = (useWatch({ name: "pricingProperties" }) as ProductPricingProperty[] | undefined) ?? [];
   const priceHistory = (useWatch({ name: "priceHistory" }) as ProductCatalogItem["priceHistory"] | undefined) ?? [];
+  const productBindingConfig = (useWatch({ name: "productBindingConfig" }) as ProductCatalogItem["productBindingConfig"] | undefined) ?? {};
+  const usesBindingProductionLogic = (productBindingConfig.enabledSystems ?? []).length > 0;
   const [previewQuantity, setPreviewQuantity] = useState<number>(() => Number(priceTiers[0]?.quantity ?? 1));
   const [previewConfig, setPreviewConfig] = useState<Record<string, string>>({});
   const [csvText, setCsvText] = useState("");
@@ -2012,6 +2065,18 @@ function ProductPricingManager() {
             <Grid size={{ xs: 12, md: 4 }}>
               <NumberInput source="areaPricing.minAreaM2" label="Mindestfläche (m²)" min={0} step={0.01} fullWidth />
             </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="areaPricing.minWidthCm" label="Min. Breite (cm)" min={0} step={0.1} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="areaPricing.maxWidthCm" label="Max. Breite (cm)" min={0} step={0.1} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="areaPricing.minHeightCm" label="Min. Höhe (cm)" min={0} step={0.1} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="areaPricing.maxHeightCm" label="Max. Höhe (cm)" min={0} step={0.1} fullWidth />
+            </Grid>
           </Grid>
         ) : null}
           </CardContent>
@@ -2215,6 +2280,7 @@ function ProductPricingManager() {
                             <MenuItem value="color_pages">Farbseiten gesamt</MenuItem>
                             <MenuItem value="front_covers">Deckblatt vorne</MenuItem>
                             <MenuItem value="back_covers">Rückseite / Rückkarton</MenuItem>
+                            <MenuItem value="printed_cover_sides">Bedruckte Umschlagseiten</MenuItem>
                             <MenuItem value="per_order">Einmal pro Auftrag</MenuItem>
                           </MuiTextField>
                           <MuiTextField size="small" label={value.pricingMode === "global" ? inheritedValuePrice(property, value) : value.pricingMode === "flat" ? "Festpreis (€)" : "Aufpreis / Stk. (€)"} type="number" disabled={value.pricingMode !== "fixed" && value.pricingMode !== "flat"} value={value.fixedPrice ?? 0} onChange={(event) => {
@@ -2243,6 +2309,7 @@ function ProductPricingManager() {
                             }}>Deaktivieren</Button>
                           </Box>
                         </Box>
+                        {usesBindingProductionLogic ? (
                         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, minmax(140px, 1fr))" }, gap: 1, borderTop: "1px dashed #cbd5e1", pt: 1 }}>
                           <MuiTextField
                             size="small"
@@ -2323,6 +2390,7 @@ function ProductPricingManager() {
                             <MenuItem value="auto">Farbe/SW laut PDF</MenuItem>
                           </MuiTextField>
                         </Box>
+                        ) : null}
                         {value.pricingMode === "tiered" ? (
                           <Box sx={{ overflowX: "auto", borderTop: "1px solid #e2e8f0", pt: 1 }}>
                             <Box sx={{ display: "grid", gridTemplateColumns: `repeat(${tierRows.length}, minmax(92px, 1fr))`, gap: 0.75, minWidth: Math.max(360, tierRows.length * 96) }}>
@@ -2678,7 +2746,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pdfAnalysisMode: "disabled", productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pdfAnalysisMode: "disabled", productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minWidthCm: 1, maxWidthCm: 0, minHeightCm: 1, maxHeightCm: 0, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductFormFields />
       </SimpleForm>
     </Create>
@@ -3092,7 +3160,8 @@ function PropertyList() {
       <PropertyCsvPanel />
       <Datagrid
         rowClick="edit"
-        bulkActionButtons={<CatalogBulkDeleteActions label="Eigenschaften" confirmContent="Wenn Eigenschaften bereits verwendet werden, werden sie deaktiviert statt hart gelöscht." />}
+        bulkActionButtons={<span />}
+        bulkActionsToolbar={<CatalogBulkActionsToolbar label="Eigenschaften" confirmContent="Wenn Eigenschaften bereits verwendet werden, werden sie deaktiviert statt hart gelöscht." />}
         sx={{
         overflow: "hidden",
         border: `1px solid ${adminColors.border}`,
@@ -3293,13 +3362,40 @@ function ProductIndustryCheckboxes() {
     pagination: { page: 1, perPage: 100 },
     sort: { field: "sortOrder", order: "ASC" }
   });
+  const visibleIndustrySlugs = data.map((industry) => String(industry.slug ?? industry.id));
+  const selectedVisibleCount = visibleIndustrySlugs.filter((slug) => selected.includes(slug)).length;
+  const allVisibleSelected = visibleIndustrySlugs.length > 0 && selectedVisibleCount === visibleIndustrySlugs.length;
+
+  function selectAllVisibleIndustries() {
+    setValue("industrySlugs", Array.from(new Set([...selected, ...visibleIndustrySlugs])), { shouldDirty: true });
+  }
+
+  function clearVisibleIndustries() {
+    const visible = new Set(visibleIndustrySlugs);
+    setValue("industrySlugs", selected.filter((slug) => !visible.has(slug)), { shouldDirty: true });
+  }
 
   if (isPending) return <Typography variant="body2" color="text.secondary">Branchen werden geladen...</Typography>;
 
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#e2e8f0", bgcolor: "#f8fafc" }}>
       <CardContent sx={{ display: "grid", gap: 1 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>Branchen</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>Branchen</Typography>
+            <Typography variant="caption" sx={{ display: "block", color: "#64748b", fontWeight: 700 }}>
+              {selected.length} ausgewählt
+            </Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap" }}>
+            <Button size="small" variant="outlined" disabled={allVisibleSelected || !visibleIndustrySlugs.length} onClick={selectAllVisibleIndustries}>
+              Alle auswählen
+            </Button>
+            <Button size="small" variant="outlined" disabled={!selectedVisibleCount} onClick={clearVisibleIndustries}>
+              Auswahl löschen
+            </Button>
+          </Box>
+        </Box>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 0.75 }}>
           {data.map((industry) => {
             const slug = String(industry.slug ?? industry.id);
@@ -3395,7 +3491,8 @@ function CategoryList() {
     <List filters={searchFilters} sort={{ field: "name", order: "ASC" }}>
       <Datagrid
         rowClick="edit"
-        bulkActionButtons={<CatalogBulkDeleteActions label="Kategorien" confirmContent="Kategorien können nur gelöscht werden, wenn keine Produkte zugeordnet sind." />}
+        bulkActionButtons={<span />}
+        bulkActionsToolbar={<CatalogBulkActionsToolbar label="Kategorien" confirmContent="Kategorien können nur gelöscht werden, wenn keine Produkte zugeordnet sind." />}
       >
         <TextField source="slug" />
         <TextField source="name" />
@@ -4292,9 +4389,9 @@ format,Format,A3,A3,fixed,0.36,,,,true,20`,
   categories: `slug,name,description,visible,published,logo
 druck,Druck,Druckprodukte online konfigurieren,true,true,/uploads/categories/druck.webp
 werbetechnik,Werbetechnik,Beschriftung Schilder Folien und Montage,true,true,/uploads/categories/werbetechnik.webp`,
-  products: `slug,name,category,basePrice,pricingType,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minAreaM2,tags
-flyer,Flyer,druck,0.716,tiered,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,kopien|druck
-banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,0.25,banner|werbetechnik`
+  products: `slug,name,category,basePrice,pricingType,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minWidthCm,maxWidthCm,minHeightCm,maxHeightCm,minAreaM2,tags
+flyer,Flyer,druck,0.716,tiered,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,,,,,,kopien|druck
+banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,30,500,30,300,0.25,banner|werbetechnik`
 };
 
 type CatalogCsvTarget = "properties" | "categories" | "products";
@@ -4381,6 +4478,10 @@ function CatalogCsvImportToolPage() {
     const basePrice = csvNumber(csvCell(row, "basePrice", "preis"), 0);
     const defaultWidthCm = csvCell(row, "defaultWidthCm", "breiteCm");
     const defaultHeightCm = csvCell(row, "defaultHeightCm", "hoeheCm", "höheCm");
+    const minWidthCm = csvCell(row, "minWidthCm", "minBreiteCm", "mindestbreite");
+    const maxWidthCm = csvCell(row, "maxWidthCm", "maxBreiteCm", "maximalbreite");
+    const minHeightCm = csvCell(row, "minHeightCm", "minHoeheCm", "minHöheCm", "mindesthoehe", "mindesthöhe");
+    const maxHeightCm = csvCell(row, "maxHeightCm", "maxHoeheCm", "maxHöheCm", "maximalhoehe", "maximalhöhe");
     const pricingType = (csvCell(row, "pricingType", "preisart") || (defaultWidthCm || defaultHeightCm ? "area" : "")).toLowerCase();
     const priceTiers = csvPriceTiers(csvCell(row, "priceTiers", "staffelpreise"), basePrice);
     const rawPricingProperties = csvCell(row, "pricingProperties", "pricing_properties", "eigenschaften", "properties");
@@ -4415,6 +4516,10 @@ function CatalogCsvImportToolPage() {
       areaPricing: pricingType === "area" ? {
         defaultWidthCm: csvNumber(defaultWidthCm, 100),
         defaultHeightCm: csvNumber(defaultHeightCm, 100),
+        minWidthCm: csvNumber(minWidthCm, 1),
+        maxWidthCm: csvNumber(maxWidthCm, 0),
+        minHeightCm: csvNumber(minHeightCm, 1),
+        maxHeightCm: csvNumber(maxHeightCm, 0),
         minAreaM2: csvNumber(csvCell(row, "minAreaM2", "mindestflaeche", "mindestfläche"), 0)
       } : undefined,
       priceTiers,

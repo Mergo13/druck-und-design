@@ -106,12 +106,16 @@
     },
     {
       "id": "thesis-hardcover",
-      "slug": "thesis-hardcover",
-      "label": "Thesis Hardcover",
+      "slug": "abschlussarbeit-hardcover",
+      "label": "Hardcover für Abschlussarbeiten",
       "type": "clamp-hardcover",
-      "resolutionStrategy": "reference-paper-capacity",
-      "format": "A4",
-      "safetyMarginMm": 0,
+      "resolutionStrategy": "physical-thickness",
+      "formatConfig": {
+        "A4": {
+          "supported": true
+        }
+      },
+      "safetyMarginMm": 0.3,
       "colors": [
         "schwarz",
         "blau",
@@ -124,9 +128,10 @@
           "id": "thesis-aa",
           "bindingSystemId": "thesis-hardcover",
           "value": "AA",
-          "label": "Größe AA - 5 mm",
+          "label": "Größe AA – 5 mm",
           "sizeCode": "AA",
           "spineWidthMm": 5,
+          "maxBlockThicknessMm": 4,
           "referenceCapacity": {
             "minSheets": 1,
             "maxSheets": 40,
@@ -141,9 +146,10 @@
           "id": "thesis-a",
           "bindingSystemId": "thesis-hardcover",
           "value": "A",
-          "label": "Größe A - 10 mm",
+          "label": "Größe A – 10 mm",
           "sizeCode": "A",
           "spineWidthMm": 10,
+          "maxBlockThicknessMm": 8,
           "referenceCapacity": {
             "minSheets": 41,
             "maxSheets": 80,
@@ -158,9 +164,10 @@
           "id": "thesis-b",
           "bindingSystemId": "thesis-hardcover",
           "value": "B",
-          "label": "Größe B - 13 mm",
+          "label": "Größe B – 13 mm",
           "sizeCode": "B",
           "spineWidthMm": 13,
+          "maxBlockThicknessMm": 12,
           "referenceCapacity": {
             "minSheets": 81,
             "maxSheets": 120,
@@ -175,9 +182,10 @@
           "id": "thesis-c",
           "bindingSystemId": "thesis-hardcover",
           "value": "C",
-          "label": "Größe C - 16 mm",
+          "label": "Größe C – 16 mm",
           "sizeCode": "C",
           "spineWidthMm": 16,
+          "maxBlockThicknessMm": 15,
           "referenceCapacity": {
             "minSheets": 121,
             "maxSheets": 150,
@@ -192,9 +200,10 @@
           "id": "thesis-d",
           "bindingSystemId": "thesis-hardcover",
           "value": "D",
-          "label": "Größe D - 20 mm",
+          "label": "Größe D – 20 mm",
           "sizeCode": "D",
           "spineWidthMm": 20,
+          "maxBlockThicknessMm": 19,
           "referenceCapacity": {
             "minSheets": 151,
             "maxSheets": 190,
@@ -209,9 +218,10 @@
           "id": "thesis-e",
           "bindingSystemId": "thesis-hardcover",
           "value": "E",
-          "label": "Größe E - 24 mm",
+          "label": "Größe E – 24 mm",
           "sizeCode": "E",
           "spineWidthMm": 24,
+          "maxBlockThicknessMm": 23,
           "referenceCapacity": {
             "minSheets": 191,
             "maxSheets": 230,
@@ -226,9 +236,10 @@
           "id": "thesis-f",
           "bindingSystemId": "thesis-hardcover",
           "value": "F",
-          "label": "Größe F - 28 mm",
+          "label": "Größe F – 28 mm",
           "sizeCode": "F",
           "spineWidthMm": 28,
+          "maxBlockThicknessMm": 26.5,
           "referenceCapacity": {
             "minSheets": 231,
             "maxSheets": 265,
@@ -243,9 +254,10 @@
           "id": "thesis-g",
           "bindingSystemId": "thesis-hardcover",
           "value": "G",
-          "label": "Größe G - 32 mm",
+          "label": "Größe G – 32 mm",
           "sizeCode": "G",
           "spineWidthMm": 32,
+          "maxBlockThicknessMm": 30,
           "referenceCapacity": {
             "minSheets": 266,
             "maxSheets": 300,
@@ -325,5 +337,5 @@
       "active": true
     }
   ],
-  "updatedAt": "2026-08-17T00:00:00.000Z"
+  "updatedAt": "2026-08-20T17:17:32.619Z"
 }

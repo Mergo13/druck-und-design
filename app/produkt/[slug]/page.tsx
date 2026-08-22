@@ -121,7 +121,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
         </div>
         <div className="lg:sticky lg:top-24">
-          <ProductConfigurator product={product} authenticated={authenticated} studentVerified={studentVerified} studentDiscountPercent={studentDiscountPercent} />
+          <ProductConfigurator product={product} authenticated={authenticated} studentVerified={studentVerified} studentDiscountPercent={studentDiscountPercent} globalProperties={globalProperties} />
         </div>
       </div>
     </section>

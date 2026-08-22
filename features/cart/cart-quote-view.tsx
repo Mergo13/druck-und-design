@@ -5,7 +5,6 @@ import {
   Truck,
   MapPin,
   CheckCircle2,
-  ShoppingCart,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -106,6 +105,16 @@ export function CartQuoteView() {
       else if (payload.user?.company) setCustomerName(payload.user.company);
     })();
   }, []);
+
+  useEffect(() => {
+    const onToggleCartDrawer = () => setCartDrawerOpen((open) => !open);
+    window.addEventListener("dud-toggle-cart-drawer", onToggleCartDrawer);
+    return () => window.removeEventListener("dud-toggle-cart-drawer", onToggleCartDrawer);
+  }, []);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("dud-cart-drawer-state", { detail: { open: cartDrawerOpen } }));
+  }, [cartDrawerOpen]);
 
   const hasItems = useMemo(() => cart.length > 0, [cart]);
   const studentVerified = isVerifiedStudent(profile);
@@ -388,10 +397,6 @@ export function CartQuoteView() {
           <h1 className="mt-1 text-4xl font-black text-slate-950">Checkout</h1>
           <p className="mt-1 text-sm text-slate-500">Einfach prüfen, Lieferung wählen und Bestellung abschließen.</p>
         </div>
-        <Button variant="outline" className="gap-2 border-slate-200 bg-white text-slate-800 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800" onClick={() => setCartDrawerOpen(true)}>
-          <ShoppingCart className="h-4 w-4" />
-          Warenkorb ({cart.length})
-        </Button>
       </div>
 
       {!hasItems ? <p className="mt-5 text-muted-foreground">Keine Produkte im Warenkorb.</p> : null}

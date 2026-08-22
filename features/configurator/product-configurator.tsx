@@ -7,20 +7,121 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BindingConfigurationSummary } from "@/features/configurator/binding-configuration-summary";
 import { resolveBindingConfigurationForProduct, type BindingSystem, type BindingVariant } from "@/lib/binding-resolution";
-import { deriveProductDocumentProduction, pricingQuantitiesForProductDocument, type PrintColorMode } from "@/lib/document-production";
+import { defaultBrochureCoverMapping, deriveProductDocumentProduction, pricingQuantitiesForProductDocument, type BrochureCoverSlot, type PrintColorMode } from "@/lib/document-production";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { applyStudentDiscount } from "@/lib/student-discount";
 import type { PdfAnalysis } from "@/lib/student-print-config";
 import { formatEuro } from "@/lib/utils";
-import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
+import type { GlobalProperty, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty } from "@/types/print-platform";
 import { EmbossingConfigurator } from "@/features/embossing/embossing-configurator";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
 const fixedQuantitySteps = [1, 10, 100, 1000, 2500, 5000, 10000];
+const brochureCoverSlots: BrochureCoverSlot[] = ["U1", "U2", "U3", "U4"];
+const brochureFallbackFormats = [
+  { value: "pdf", label: "PDF-Format übernehmen" },
+  { value: "a5-portrait", label: "DIN A5 Hochformat - 148 x 210 mm", widthMm: 148, heightMm: 210 },
+  { value: "a5-landscape", label: "DIN A5 Querformat - 210 x 148 mm", widthMm: 210, heightMm: 148 },
+  { value: "a4-portrait", label: "DIN A4 Hochformat - 210 x 297 mm", widthMm: 210, heightMm: 297 },
+  { value: "a4-landscape", label: "DIN A4 Querformat - 297 x 210 mm", widthMm: 297, heightMm: 210 }
+];
 
-export function ProductConfigurator({ product, authenticated, studentVerified = false, studentDiscountPercent = 20 }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number }) {
+function clampAreaDimension(value: string | undefined, fallback: number, min?: number, max?: number) {
+  const parsed = Number(value || fallback);
+  const minValue = Number(min);
+  const maxValue = Number(max);
+  const lower = Number.isFinite(minValue) && minValue > 0 ? minValue : 1;
+  const upper = Number.isFinite(maxValue) && maxValue > 0 ? maxValue : undefined;
+  const numeric = Number.isFinite(parsed) ? parsed : fallback;
+  const lowerBounded = Math.max(numeric, lower);
+  return upper === undefined ? lowerBounded : Math.min(lowerBounded, upper);
+}
+
+function normalizeAreaConfig(product: ProductCatalogItem, config: Record<string, string>) {
+  if (product.pricingType !== "area") return config;
+  return {
+    ...config,
+    areaWidthCm: String(clampAreaDimension(config.areaWidthCm, product.areaPricing?.defaultWidthCm ?? 100, product.areaPricing?.minWidthCm, product.areaPricing?.maxWidthCm)),
+    areaHeightCm: String(clampAreaDimension(config.areaHeightCm, product.areaPricing?.defaultHeightCm ?? 100, product.areaPricing?.minHeightCm, product.areaPricing?.maxHeightCm))
+  };
+}
+
+function formatCm(value: number) {
+  return value.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function brochureProperty(product: ProductCatalogItem, globalProperties: GlobalProperty[], slug: string, fallbackName: string) {
+  const global = globalProperties.find((property) => property.slug === slug);
+  const names = new Set([slug, fallbackName, global?.name].filter(Boolean).map((entry) => slugify(String(entry))));
+  return (product.pricingProperties ?? []).find((property) => {
+    const id = property.propertyId ? slugify(property.propertyId) : "";
+    return id === slug || names.has(slugify(property.name));
+  }) ?? null;
+}
+
+function selectedPropertyValue(config: Record<string, string>, property: ProductPricingProperty | null, fallback = "") {
+  if (!property) return fallback;
+  const enabled = (property.values ?? []).filter((value) => value.enabled !== false);
+  return config[`eigenschaft:${property.name}`] || enabled.find((value) => value.defaultSelected)?.value || enabled[0]?.value || fallback;
+}
+
+function brochureOptionMeansSeparate(value: string) {
+  return /separat|separate|mit|yes|true/i.test(value);
+}
+
+function detectedFormatLabel(analysis: PdfAnalysis | null) {
+  if (!analysis?.widthMm || !analysis.heightMm) return analysis?.dominantFormat ?? "PDF-Format übernehmen";
+  const orientation = analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : "Format";
+  return `${analysis.dominantFormat ?? "PDF"} ${orientation} - ${analysis.widthMm} x ${analysis.heightMm} mm`;
+}
+
+function selectedBrochureFormatDimensions(value: string) {
+  const fallback = brochureFallbackFormats.find((format) => format.value === value && format.widthMm && format.heightMm);
+  if (fallback) return fallback;
+  const match = value.replace(",", ".").match(/(\d+(?:\.\d+)?)\s*(?:x|×)\s*(\d+(?:\.\d+)?)/i);
+  if (!match) return undefined;
+  return { value, label: value, widthMm: Number(match[1]), heightMm: Number(match[2]) };
+}
+
+function withBrochureDefaults(config: Record<string, string>, analysis: PdfAnalysis | null, product: ProductCatalogItem, globalProperties: GlobalProperty[]) {
+  const formatProperty = brochureProperty(product, globalProperties, "broschuere-format", "Broschüre Format");
+  const coverProperty = brochureProperty(product, globalProperties, "umschlag-option", "Umschlag");
+  const bindingProperty = brochureProperty(product, globalProperties, "broschuere-bindung", "Broschüre Bindung");
+  const pageCount = analysis?.pages ?? (Number(config.pdfAnalysisPageCount || config.seitenanzahl || config["PDF-Seiten"] || 0) || 0);
+  const defaultMapping = defaultBrochureCoverMapping(pageCount);
+  const coverValue = config.brochureSeparateCover ?? selectedPropertyValue(config, coverProperty, "no-cover");
+  const bindingValue = selectedPropertyValue(config, bindingProperty, config["brochureFallback:Bindung"] ?? "");
+  return {
+    ...config,
+    brochureConfig: "true",
+    seitenanzahl: String(pageCount || config.seitenanzahl || ""),
+    Seitenanzahl: String(pageCount || config.Seitenanzahl || ""),
+    "PDF-Seiten": String(pageCount || config["PDF-Seiten"] || ""),
+    "Seiten pro Exemplar": String(pageCount || config["Seiten pro Exemplar"] || ""),
+    brochureProductionFormat: config.brochureProductionFormat ?? selectedPropertyValue(config, formatProperty, "pdf"),
+    brochureSeparateCover: brochureOptionMeansSeparate(coverValue) ? "yes" : "no",
+    brochureBinding: bindingValue,
+    brochureInnerColorMode: config.brochureInnerColorMode ?? "auto",
+    brochureCoverColorMode: config.brochureCoverColorMode ?? "auto",
+    brochureCoverU1: config.brochureCoverU1 ?? defaultMapping.U1,
+    brochureCoverU2: config.brochureCoverU2 ?? defaultMapping.U2,
+    brochureCoverU3: config.brochureCoverU3 ?? defaultMapping.U3,
+    brochureCoverU4: config.brochureCoverU4 ?? defaultMapping.U4
+  };
+}
+
+export function ProductConfigurator({ product, authenticated, studentVerified = false, studentDiscountPercent = 20, globalProperties = [] }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number; globalProperties?: GlobalProperty[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const firstVariant = product.variants[0];
@@ -80,22 +181,31 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     previewUrl?: string;
     productionPdfUrl?: string;
   } | null>(null);
+  const isBrochure = product.slug === "broschueren";
   const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
-  const pdfAnalysisMode = product.pdfAnalysisMode ?? "disabled";
+  const configForPricing = useMemo(() => isBrochure ? withBrochureDefaults(config, pdfAnalysis, product, globalProperties) : config, [config, globalProperties, isBrochure, pdfAnalysis, product]);
+  const pdfAnalysisMode = product.pdfAnalysisMode ?? (isBrochure ? "required" : "disabled");
   const pdfAnalysisEnabled = pdfAnalysisMode !== "disabled";
   const pdfAnalysisRequired = pdfAnalysisMode === "required";
   const pdfAnalysisBlocking = pdfAnalysisRequired && !pdfAnalysis?.valid;
-  const documentProduction = deriveProductDocumentProduction(product, categoryProperties, config, currentQuantity);
-  const pricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, config, currentQuantity) : undefined;
+  const normalizedConfig = useMemo(() => normalizeAreaConfig(product, configForPricing), [configForPricing, product]);
+  const documentProduction = deriveProductDocumentProduction(product, categoryProperties, normalizedConfig, currentQuantity);
+  const pricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, normalizedConfig, currentQuantity) : undefined;
   const printColorMode = documentProduction.printColorMode;
   const bindingResolution = useMemo(() => resolveBindingConfigurationForProduct({
     product,
     categoryProperties,
-    config,
+    config: normalizedConfig,
     quantity: currentQuantity,
     bindingSystems: bindingConfig?.bindingSystems,
     bindingVariants: bindingConfig?.bindingVariants
-  }), [bindingConfig, categoryProperties, config, currentQuantity, product]);
+  }), [bindingConfig, categoryProperties, currentQuantity, normalizedConfig, product]);
+  const minAreaWidthCm = product.areaPricing?.minWidthCm && product.areaPricing.minWidthCm > 0 ? product.areaPricing.minWidthCm : 1;
+  const minAreaHeightCm = product.areaPricing?.minHeightCm && product.areaPricing.minHeightCm > 0 ? product.areaPricing.minHeightCm : 1;
+  const areaBelowMinimum = product.pricingType === "area" && (
+    Number(config.areaWidthCm) < minAreaWidthCm ||
+    Number(config.areaHeightCm) < minAreaHeightCm
+  );
 
   useEffect(() => {
     return () => {
@@ -156,31 +266,54 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
   }, [categoryProperties, product.enabledCategoryProperties]);
   const hasConfiguredPrintColorProperty = useMemo(() => {
+    if (isBrochure) return true;
     const names = [
       ...(product.pricingProperties ?? []).map((property) => property.name),
       ...enabledProperties.map((property) => property.name),
       ...productOptions.map((option) => option.label)
     ].join(" ");
     return /druckart|farbmodus|farbe.*sw|schwarz.*weiß|schwarz.*weiss|color/i.test(names);
-  }, [enabledProperties, product.pricingProperties, productOptions]);
+  }, [enabledProperties, isBrochure, product.pricingProperties, productOptions]);
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
     if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-      return calculateConfiguredProductPrice(product, quantity, config, pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, config, quantity) : undefined).total;
+      return calculateConfiguredProductPrice(product, quantity, normalizedConfig, pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, normalizedConfig, quantity) : undefined).total;
     }
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
-  }, [categoryProperties, config, currentQuantity, enabledProperties, firstVariant, pdfAnalysisEnabled, product]);
+  }, [categoryProperties, config, currentQuantity, enabledProperties, firstVariant, normalizedConfig, pdfAnalysisEnabled, product]);
   const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
-    ...config,
+    ...normalizedConfig,
     ...(finalizedEmbossing?.cartConfig ?? {}),
-    resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
-  }, pricingQuantities), [config, currentQuantity, finalizedEmbossing, pricingQuantities, product]);
+    resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : normalizedConfig.resolvedEmbossingLineCount
+  }, pricingQuantities), [currentQuantity, finalizedEmbossing, normalizedConfig, pricingQuantities, product]);
   const embossingSelection = useMemo(() => resolveEmbossingSelection(config), [config]);
   const embossingActive = Boolean(embossingSelection && !/keine|ohne/i.test(embossingSelection.value));
   const embossingColor = embossingColorFromValue(embossingSelection?.value);
+  const brochureProperties = useMemo(() => ({
+    format: brochureProperty(product, globalProperties, "broschuere-format", "Broschüre Format"),
+    coverOption: brochureProperty(product, globalProperties, "umschlag-option", "Umschlag"),
+    coverMaterial: brochureProperty(product, globalProperties, "umschlag-material", "Umschlag Material"),
+    coverFinishing: brochureProperty(product, globalProperties, "umschlag-veredelung", "Umschlag Veredelung"),
+    innerMaterial: brochureProperty(product, globalProperties, "innenteil-material", "Innenteil Material"),
+    binding: brochureProperty(product, globalProperties, "broschuere-bindung", "Broschüre Bindung"),
+    corners: brochureProperty(product, globalProperties, "broschuere-ecken", "Broschüre Ecken")
+  }), [globalProperties, product]);
+  const brochureSeparateCover = isBrochure && "separateCover" in documentProduction ? documentProduction.separateCover : false;
+  const brochureCoverMapping = isBrochure && "coverMapping" in documentProduction ? documentProduction.coverMapping : defaultBrochureCoverMapping(pdfAnalysis?.pages ?? 0);
+  const brochureBlankProductionPages = isBrochure && "blankProductionPages" in documentProduction ? documentProduction.blankProductionPages : 0;
+  const selectedFormat = normalizedConfig.brochureProductionFormat ?? "pdf";
+  const brochureFormatKey = brochureProperties.format ? `eigenschaft:${brochureProperties.format.name}` : "";
+  const brochureCoverOptionKey = brochureProperties.coverOption ? `eigenschaft:${brochureProperties.coverOption.name}` : "";
+  const selectedFormatDimensions = selectedBrochureFormatDimensions(selectedFormat);
+  const productionFormatMismatch = Boolean(isBrochure && pdfAnalysis?.widthMm && pdfAnalysis.heightMm && selectedFormatDimensions && (
+    Math.abs(selectedFormatDimensions.widthMm! - pdfAnalysis.widthMm) > 2 ||
+    Math.abs(selectedFormatDimensions.heightMm! - pdfAnalysis.heightMm) > 2
+  ));
+  const productionFormatConfirmed = normalizedConfig.brochureFormatScalingConfirmed === "true" || !productionFormatMismatch;
+  const configuratorBlocking = pdfAnalysisBlocking || (isBrochure && !productionFormatConfirmed);
   const embossingOptionPrice = useMemo(() => {
     const line = priceSnapshot.lines.find((entry) => /prägung|praegung/i.test(entry.label));
     return line?.price ?? 0;
@@ -222,6 +355,18 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       pdfAnalysisBwPages: analysis.bwPages.join(","),
       printColorMode: current.printColorMode ?? (analysis.colorPages.length > 0 ? "auto" : "black_white")
     }));
+  }
+
+  function commitAreaDimension(field: "areaWidthCm" | "areaHeightCm") {
+    if (product.pricingType !== "area") return;
+    const isWidth = field === "areaWidthCm";
+    const value = clampAreaDimension(
+      config[field],
+      isWidth ? product.areaPricing?.defaultWidthCm ?? 100 : product.areaPricing?.defaultHeightCm ?? 100,
+      isWidth ? product.areaPricing?.minWidthCm : product.areaPricing?.minHeightCm,
+      isWidth ? product.areaPricing?.maxWidthCm : product.areaPricing?.maxHeightCm
+    );
+    setConfig((current) => ({ ...current, [field]: String(value) }));
   }
 
   async function readFilePreview(file: File) {
@@ -310,6 +455,10 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       setCartMessage("Bitte schließen Sie die Prägegestaltung ab, bevor Sie das Produkt in den Warenkorb legen.");
       return false;
     }
+    if (isBrochure && !productionFormatConfirmed) {
+      setCartMessage("Bitte bestätigen Sie die proportionale Skalierung oder wählen Sie das PDF-Format.");
+      return false;
+    }
     const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{
       slug: string;
       name: string;
@@ -339,9 +488,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
 
     const merged = [...existing];
     const authoritativeConfig: Record<string, string> = {
-      ...config,
+      ...normalizedConfig,
       ...(finalizedEmbossing?.cartConfig ?? {}),
-      resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : config.resolvedEmbossingLineCount
+      resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : normalizedConfig.resolvedEmbossingLineCount
     };
     const authoritativeBindingResolution = resolveBindingConfigurationForProduct({
       product,
@@ -398,6 +547,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       : formatEuro(priceSnapshot.basePrice);
     const selectedConfig = Object.fromEntries([
       ["Menge", String(currentQuantity)],
+      ...(isBrochure ? [
+        ["Auflage", String(currentQuantity)],
+        ["Produktionsformat", selectedFormat === "pdf" ? detectedFormatLabel(pdfAnalysis) : selectedFormat],
+        ["PDF-Seiten", String(pdfAnalysis?.pages ?? ("pdfPagesPerCopy" in documentProduction ? documentProduction.pdfPagesPerCopy : documentProduction.pagesPerCopy))],
+        ["Umschlag", brochureSeparateCover ? "Separater Umschlag" : "Kein separater Umschlag"],
+        ...(brochureSeparateCover ? brochureCoverSlots.map((slot) => [`${slot}`, brochureCoverMapping[slot] === "blank" ? "Leer" : `PDF Seite ${brochureCoverMapping[slot]}`] as [string, string]) : []),
+        ["Innenteil", `${documentProduction.pagesPerCopy} Seiten`],
+        ["Automatisch ergänzte Leerseiten", String(brochureBlankProductionPages)]
+      ] as Array<[string, string]> : []),
       ...(pdfAnalysisEnabled && documentProduction.pagesPerCopy > 0 ? [
         ["Seiten pro Exemplar", String(documentProduction.pagesPerCopy)],
         ["Druckseiten gesamt", String(documentProduction.totalPrintedPages)],
@@ -458,6 +616,37 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     return true;
   }
 
+  function renderBrochurePropertySelect(property: ProductPricingProperty | null, label: string, fallbackOptions: Array<{ value: string; label: string }>, hidden = false) {
+    if (hidden) return null;
+    const options = property
+      ? (property.values ?? []).filter((value) => value.enabled !== false).map((value) => ({
+        value: value.value,
+        label: value.labelOverride || value.label || value.value
+      }))
+      : fallbackOptions;
+    if (!options.length) return null;
+    const key = property ? `eigenschaft:${property.name}` : `brochureFallback:${label}`;
+    const value = property ? (config[key] ?? options[0]?.value ?? "") : (config[key] ?? options[0]?.value ?? "");
+    return (
+      <label className="grid gap-2" key={key}>
+        <span className="text-sm font-bold">{label}</span>
+        <select
+          suppressHydrationWarning
+          value={value}
+          onChange={(event) => {
+            if (property) setConfig({ ...config, [key]: event.target.value });
+            else setConfig({ ...config, [key]: event.target.value });
+          }}
+          className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   return (
     <aside className="sticky top-24 rounded-lg border bg-white p-5 shadow-premium lg:block">
       <div className="flex items-start justify-between gap-4">
@@ -513,10 +702,14 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             ) : null}
             {pdfAnalysis ? (
               <div className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
-                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {documentProduction.pagesPerCopy} Seiten erkannt</p>
-                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.dominantFormat ?? "Format erkannt"}</p>
+                <p className="break-all text-xs text-slate-500">{pdfAnalysis.fileName}</p>
+                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.pages} PDF-Seiten erkannt</p>
+                <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.widthMm && pdfAnalysis.heightMm ? `${pdfAnalysis.widthMm} x ${pdfAnalysis.heightMm} mm` : pdfAnalysis.dominantFormat ?? "Format erkannt"}</p>
                 <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.orientation === "landscape" ? "Querformat" : pdfAnalysis.orientation === "portrait" ? "Hochformat" : "Ausrichtung erkannt"}</p>
-                <p className="pt-1 text-xs text-slate-500">Automatisch aus PDF erkannt</p>
+                <p className="pt-1 text-xs text-slate-500">{pdfAnalysis.colorPages.length} Farbe · {pdfAnalysis.bwPages.length} Schwarz-Weiß · automatisch aus PDF erkannt</p>
+                {pdfAnalysis.warnings.map((warning, index) => (
+                  <p key={`${warning.type}-${index}`} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">{warning.message}</p>
+                ))}
               </div>
             ) : null}
             <label className="mt-3 grid gap-2">
@@ -595,6 +788,118 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </select>
           )}
         </label>
+        {isBrochure ? (
+          <div className="grid gap-4 rounded-md border border-slate-200 bg-white p-3">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Broschüre</p>
+            <label className="grid gap-2">
+              <span className="text-sm font-bold">Format</span>
+              <select
+                suppressHydrationWarning
+                value={selectedFormat}
+                onChange={(event) => setConfig({
+                  ...config,
+                  brochureProductionFormat: event.target.value,
+                  ...(brochureFormatKey ? { [brochureFormatKey]: event.target.value } : {}),
+                  brochureFormatScalingConfirmed: "false"
+                })}
+                className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="pdf">{detectedFormatLabel(pdfAnalysis)}</option>
+                {(brochureProperties.format?.values?.filter((value) => value.enabled !== false).map((value) => ({ value: value.value, label: value.labelOverride || value.label || value.value })) ?? brochureFallbackFormats.slice(1)).map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {productionFormatMismatch ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                Das gewählte Produktionsformat weicht vom erkannten PDF-Format ab. Wir skalieren proportional, wenn Sie dies bestätigen.
+                <div className="mt-2 flex gap-2">
+                  <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setConfig({ ...config, brochureFormatScalingConfirmed: "true" })}>Skalierung bestätigen</Button>
+                  <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setConfig({ ...config, brochureProductionFormat: "pdf", brochureFormatScalingConfirmed: "false" })}>PDF-Format</Button>
+                </div>
+              </div>
+            ) : null}
+            <label className="grid gap-2">
+              <span className="text-sm font-bold">Umschlag</span>
+              <select
+                suppressHydrationWarning
+                value={brochureCoverOptionKey ? config[brochureCoverOptionKey] ?? (normalizedConfig.brochureSeparateCover === "yes" ? "yes" : "no") : normalizedConfig.brochureSeparateCover === "yes" ? "yes" : "no"}
+                onChange={(event) => setConfig({
+                  ...config,
+                  brochureSeparateCover: brochureOptionMeansSeparate(event.target.value) ? "yes" : "no",
+                  ...(brochureCoverOptionKey ? { [brochureCoverOptionKey]: event.target.value } : {})
+                })}
+                className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              >
+                {(brochureProperties.coverOption?.values?.filter((value) => value.enabled !== false).map((value) => ({ value: value.value, label: value.labelOverride || value.label || value.value })) ?? [
+                  { value: "no", label: "Kein separater Umschlag" },
+                  { value: "yes", label: "Separater Umschlag" }
+                ]).map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+            {brochureSeparateCover ? (
+              <>
+                <details className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <summary className="cursor-pointer text-sm font-bold text-slate-800">Seitenzuordnung ändern</summary>
+                  <div className="mt-3 grid gap-2">
+                    {[
+                      ["U1", "U1 Außenseite vorne"],
+                      ["U2", "U2 Innenseite vorne"],
+                      ["U3", "U3 Innenseite hinten"],
+                      ["U4", "U4 Außenseite hinten"]
+                    ].map(([slot, label]) => (
+                      <label className="grid gap-1" key={slot}>
+                        <span className="text-xs font-bold text-slate-600">{label}</span>
+                        <select
+                          suppressHydrationWarning
+                          value={brochureCoverMapping[slot as BrochureCoverSlot]}
+                          onChange={(event) => setConfig({ ...config, [`brochureCover${slot}`]: event.target.value })}
+                          className="h-10 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                        >
+                          <option value="blank">Leer</option>
+                          {Array.from({ length: pdfAnalysis?.pages ?? 0 }, (_, index) => String(index + 1)).map((page) => (
+                            <option key={page} value={page}>PDF Seite {page}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+                {renderBrochurePropertySelect(brochureProperties.coverMaterial, "Umschlagmaterial", [{ value: "standard", label: "Standard" }])}
+                {renderBrochurePropertySelect(brochureProperties.coverFinishing, "Umschlagveredelung", [{ value: "keine", label: "Keine Veredelung" }])}
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold">Umschlag-Farbe</span>
+                  <select suppressHydrationWarning value={config.brochureCoverColorMode ?? "auto"} onChange={(event) => setConfig({ ...config, brochureCoverColorMode: event.target.value })} className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring">
+                    <option value="auto">Automatisch aus PDF</option>
+                    <option value="full_color">Farbe</option>
+                    <option value="black_white">Schwarz-Weiß</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {renderBrochurePropertySelect(brochureProperties.innerMaterial, "Innenteilmaterial", [{ value: "standard", label: "Standard" }])}
+            <label className="grid gap-2">
+              <span className="text-sm font-bold">Innenteil-Farbe</span>
+              <select suppressHydrationWarning value={normalizedConfig.brochureInnerColorMode ?? "auto"} onChange={(event) => setConfig({ ...config, brochureInnerColorMode: event.target.value, printColorMode: event.target.value })} className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring">
+                <option value="auto">Automatisch aus PDF</option>
+                <option value="full_color">Alles Farbe</option>
+                <option value="black_white">Alles Schwarz-Weiß</option>
+              </select>
+            </label>
+            {renderBrochurePropertySelect(brochureProperties.binding, "Bindung", [{ value: "rueckstichheftung", label: "Rückstichheftung" }, { value: "klebebindung", label: "Klebebindung" }])}
+            {renderBrochurePropertySelect(brochureProperties.corners, "Ecken", [{ value: "keine", label: "Keine abgerundeten Ecken" }, { value: "abgerundet", label: "Abgerundete Ecken" }])}
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700">
+              Innenteil: {documentProduction.pagesPerCopy} Seiten
+            </div>
+            {brochureBlankProductionPages > 0 ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                Für Rückstichheftung ergänzen wir rechnerisch {brochureBlankProductionPages} leere Produktionsseite{brochureBlankProductionPages === 1 ? "" : "n"}, damit die Seitenzahl durch 4 teilbar ist.
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {product.pricingType === "area" ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-2">
@@ -602,10 +907,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
               <input
                 suppressHydrationWarning
                 type="number"
-                min="1"
+                min={minAreaWidthCm}
+                max={product.areaPricing?.maxWidthCm && product.areaPricing.maxWidthCm > 0 ? product.areaPricing.maxWidthCm : undefined}
                 step="0.1"
                 value={config.areaWidthCm ?? ""}
                 onChange={(event) => setConfig({ ...config, areaWidthCm: event.target.value })}
+                onBlur={() => commitAreaDimension("areaWidthCm")}
                 className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
@@ -614,16 +921,23 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
               <input
                 suppressHydrationWarning
                 type="number"
-                min="1"
+                min={minAreaHeightCm}
+                max={product.areaPricing?.maxHeightCm && product.areaPricing.maxHeightCm > 0 ? product.areaPricing.maxHeightCm : undefined}
                 step="0.1"
                 value={config.areaHeightCm ?? ""}
                 onChange={(event) => setConfig({ ...config, areaHeightCm: event.target.value })}
+                onBlur={() => commitAreaDimension("areaHeightCm")}
                 className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
               />
             </label>
+            {areaBelowMinimum ? (
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900 sm:col-span-2">
+                Die Mindestgröße für dieses Produkt beträgt {formatCm(minAreaWidthCm)} cm Breite × {formatCm(minAreaHeightCm)} cm Höhe. Kleinere Werte werden automatisch auf diese Mindestgröße korrigiert.
+              </div>
+            ) : null}
           </div>
         ) : null}
-        {(product.pricingProperties ?? []).map((property) => {
+        {(isBrochure ? [] : product.pricingProperties ?? []).map((property) => {
           const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
           if (!enabledValues.length) return null;
           return (
@@ -697,8 +1011,19 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         <div className="mt-5 rounded-md border border-slate-200 bg-white p-3 text-sm">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Deine Konfiguration</p>
           <div className="mt-3 grid gap-2 text-slate-700">
-            <SummaryLine label="PDF" value={`${documentProduction.pagesPerCopy} Seiten`} />
+            <SummaryLine label="PDF" value={`${isBrochure && "pdfPagesPerCopy" in documentProduction ? documentProduction.pdfPagesPerCopy : documentProduction.pagesPerCopy} Seiten`} />
             <SummaryLine label="Auflage" value={`${documentProduction.quantity} ${documentProduction.quantity === 1 ? "Exemplar" : "Exemplare"}`} />
+            {isBrochure ? (
+              <>
+                <SummaryLine label="Produktionsformat" value={selectedFormat === "pdf" ? "PDF-Format übernehmen" : selectedFormat} />
+                <SummaryLine label="Umschlag" value={brochureSeparateCover ? "Separater Umschlag" : "Kein separater Umschlag"} />
+                {brochureSeparateCover ? brochureCoverSlots.map((slot) => (
+                  <SummaryLine key={slot} label={slot} value={brochureCoverMapping[slot] === "blank" ? "Leer" : `PDF Seite ${brochureCoverMapping[slot]}`} />
+                )) : null}
+                <SummaryLine label="Innenteil" value={`${documentProduction.pagesPerCopy} Seiten`} />
+                {brochureBlankProductionPages > 0 ? <SummaryLine label="Leerseiten" value={`${brochureBlankProductionPages} automatisch`} /> : null}
+              </>
+            ) : null}
             <SummaryLine label="Druckart" value={printColorModeLabel(documentProduction.printColorMode)} />
             {documentProduction.printColorMode === "auto" ? (
               <>
@@ -798,7 +1123,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           Bitte laden Sie zuerst eine gültige PDF hoch. Danach können Sie das Produkt in den Warenkorb legen.
         </p>
       ) : null}
-      {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart} disabled={pdfAnalysisBlocking || isAnalyzingPdf}>
+      {isBrochure && !productionFormatConfirmed ? (
+        <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+          Bitte bestätigen Sie die proportionale Skalierung oder wechseln Sie zurück zum PDF-Format.
+        </p>
+      ) : null}
+      {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart} disabled={configuratorBlocking || isAnalyzingPdf}>
         In den Warenkorb
       </Button> : <Button asChild className="mt-6 w-full" size="lg"><a href="/login">Anmelden und Preise sehen</a></Button>}
       {authenticated ? <Button
@@ -806,7 +1136,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         size="lg"
         variant="outline"
         type="button"
-        disabled={pdfAnalysisBlocking || isAnalyzingPdf}
+        disabled={configuratorBlocking || isAnalyzingPdf}
         onClick={() => {
           void (async () => {
             const ok = await addToCart();

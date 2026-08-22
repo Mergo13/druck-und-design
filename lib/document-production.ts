@@ -2,6 +2,9 @@ import type { ProductCatalogItem, ProductCategoryProperty, ProductPropertyValue 
 
 export type PrintSideMode = "simplex" | "duplex";
 export type PrintColorMode = "black_white" | "full_color" | "auto";
+export type BrochureCoverSlot = "U1" | "U2" | "U3" | "U4";
+
+const brochureCoverSlots: BrochureCoverSlot[] = ["U1", "U2", "U3", "U4"];
 
 export function numericConfigValue(config: Record<string, string>, keys: string[]) {
   for (const key of keys) {
@@ -45,6 +48,7 @@ function numericListCount(config: Record<string, string>, keys: string[]) {
 }
 
 export function deriveDocumentProduction(config: Record<string, string>, quantity: number) {
+  if (config.brochureConfig === "true") return deriveBrochureProduction(config, quantity);
   const safeQuantity = Number.isFinite(quantity) ? Math.max(1, Math.round(quantity)) : 1;
   const pagesPerCopy = numericConfigValue(config, ["seitenanzahl", "Seitenanzahl", "Seiten pro Exemplar", "PDF-Seiten", "manualPageCount"]);
   const printSides = resolvePrintSides(config);
@@ -92,9 +96,98 @@ export function pricingQuantitiesForDocument(config: Record<string, string>, qua
       colorPages: production.totalColorPages,
       frontCovers: production.quantity,
       backCovers: production.quantity,
+      printedCoverSides: production.quantity * 2,
       perOrder: 1
     }
     : undefined;
+}
+
+function positiveInteger(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0;
+}
+
+function pageRange(totalPages: number) {
+  return Array.from({ length: Math.max(0, totalPages) }, (_, index) => index + 1);
+}
+
+function isBlankCoverValue(value: string | undefined) {
+  return !value || /blank|leer|null|none/i.test(value);
+}
+
+export function defaultBrochureCoverMapping(totalPages: number) {
+  return {
+    U1: totalPages >= 1 ? "1" : "blank",
+    U2: totalPages >= 2 ? "2" : "blank",
+    U3: totalPages >= 4 ? String(totalPages - 1) : "blank",
+    U4: totalPages >= 3 ? String(totalPages) : "blank"
+  } satisfies Record<BrochureCoverSlot, string>;
+}
+
+export function deriveBrochureProduction(config: Record<string, string>, quantity: number) {
+  const safeQuantity = Number.isFinite(quantity) ? Math.max(1, Math.round(quantity)) : 1;
+  const totalPages = numericConfigValue(config, ["pdfAnalysisPageCount", "seitenanzahl", "Seitenanzahl", "Seiten pro Exemplar", "PDF-Seiten"]);
+  const separateCover = /separat|separate|yes|true|mit/i.test(config.brochureSeparateCover ?? config["eigenschaft:Umschlag"] ?? "");
+  const defaults = defaultBrochureCoverMapping(totalPages);
+  const coverMapping = Object.fromEntries(brochureCoverSlots.map((slot) => {
+    const raw = config[`brochureCover${slot}`] ?? defaults[slot];
+    const page = positiveInteger(raw);
+    return [slot, separateCover && page > 0 && page <= totalPages ? String(page) : "blank"];
+  })) as Record<BrochureCoverSlot, string>;
+  const mappedCoverPages = new Set(
+    separateCover
+      ? brochureCoverSlots.map((slot) => positiveInteger(coverMapping[slot])).filter((page) => page > 0 && page <= totalPages)
+      : []
+  );
+  const innerPages = separateCover
+    ? pageRange(totalPages).filter((page) => !mappedCoverPages.has(page))
+    : pageRange(totalPages);
+  const innerPageCount = innerPages.length;
+  const printColorMode = resolvePrintColorMode({ ...config, printColorMode: config.brochureInnerColorMode ?? config.printColorMode });
+  const analyzedColorPages = new Set((config.pdfAnalysisColorPages ?? "").match(/\d+/g)?.map(Number) ?? []);
+  const analyzedBwPages = new Set((config.pdfAnalysisBwPages ?? "").match(/\d+/g)?.map(Number) ?? []);
+  const innerColorPagesPerCopy = printColorMode === "full_color"
+    ? innerPageCount
+    : printColorMode === "auto"
+      ? innerPages.filter((page) => analyzedColorPages.has(page)).length
+      : 0;
+  const innerBlackWhitePagesPerCopy = printColorMode === "full_color"
+    ? 0
+    : printColorMode === "auto"
+      ? analyzedBwPages.size
+        ? innerPages.filter((page) => analyzedBwPages.has(page)).length
+        : Math.max(0, innerPageCount - innerColorPagesPerCopy)
+      : innerPageCount;
+  const printedCoverSidesPerCopy = separateCover
+    ? brochureCoverSlots.filter((slot) => !isBlankCoverValue(coverMapping[slot])).length
+    : 0;
+  const sheetsPerCopy = innerPageCount > 0 ? Math.ceil(innerPageCount / 2) : 0;
+  const producedPageCount = innerPageCount + (separateCover ? 4 : 0);
+  const saddleStitch = /rückstich|rueckstich|heft/i.test(config["eigenschaft:Broschüre Bindung"] ?? config["eigenschaft:Bindung"] ?? config.brochureBinding ?? "");
+  const blankProductionPages = saddleStitch && producedPageCount > 0 ? (4 - (producedPageCount % 4)) % 4 : 0;
+
+  return {
+    pagesPerCopy: innerPageCount,
+    pdfPagesPerCopy: totalPages,
+    quantity: safeQuantity,
+    printSides: "duplex" as const,
+    printColorMode,
+    separateCover,
+    coverMapping,
+    innerPages,
+    innerPagesPerCopy: innerPageCount,
+    producedPageCount,
+    blankProductionPages,
+    printedCoverSidesPerCopy,
+    totalPrintedCoverSides: printedCoverSidesPerCopy * safeQuantity,
+    totalPrintedPages: innerPageCount * safeQuantity,
+    colorPagesPerCopy: innerColorPagesPerCopy,
+    blackWhitePagesPerCopy: innerBlackWhitePagesPerCopy,
+    totalColorPages: innerColorPagesPerCopy * safeQuantity,
+    totalBlackWhitePages: innerBlackWhitePagesPerCopy * safeQuantity,
+    sheetsPerCopy,
+    totalSheets: sheetsPerCopy * safeQuantity
+  };
 }
 
 export function deriveProductDocumentProduction(
@@ -125,6 +218,7 @@ export function pricingQuantitiesForProductDocument(
       colorPages: production.totalColorPages,
       frontCovers: production.quantity,
       backCovers: production.quantity,
+      printedCoverSides: "totalPrintedCoverSides" in production ? production.totalPrintedCoverSides : production.quantity * 2,
       perOrder: 1
     }
     : undefined;

@@ -104,7 +104,7 @@ export type ProductPropertyProductionMetadata = {
   bindingSeries?: string;
   bindingColor?: string;
   format?: string;
-  pricingQuantitySource?: "copies" | "printed_pages" | "sheets" | "black_white_pages" | "color_pages" | "front_covers" | "back_covers" | "per_order";
+  pricingQuantitySource?: "copies" | "printed_pages" | "sheets" | "black_white_pages" | "color_pages" | "front_covers" | "back_covers" | "printed_cover_sides" | "per_order";
   printColorMode?: "black_white" | "full_color" | "auto";
 };
 
@@ -202,6 +202,10 @@ export type ProductCatalogItem = {
   areaPricing?: {
     defaultWidthCm?: number;
     defaultHeightCm?: number;
+    minWidthCm?: number;
+    maxWidthCm?: number;
+    minHeightCm?: number;
+    maxHeightCm?: number;
     minAreaM2?: number;
   };
   productStatus?: "draft" | "active" | "inactive";

@@ -1,5 +1,5 @@
 import { strict as assert } from "assert";
-import { deriveDocumentProduction, pricingQuantitiesForDocument } from "@/lib/document-production";
+import { deriveBrochureProduction, deriveDocumentProduction, pricingQuantitiesForDocument } from "@/lib/document-production";
 
 const duplexConfig = {
   seitenanzahl: "26",
@@ -23,6 +23,7 @@ assert.deepEqual(pricingQuantitiesForDocument(duplexConfig, 3), {
   colorPages: 0,
   frontCovers: 3,
   backCovers: 3,
+  printedCoverSides: 6,
   perOrder: 1
 });
 
@@ -59,5 +60,59 @@ assert.equal(mixed.colorPagesPerCopy, 4);
 assert.equal(mixed.blackWhitePagesPerCopy, 14);
 assert.equal(mixed.totalColorPages, 20);
 assert.equal(mixed.totalBlackWhitePages, 70);
+
+const brochureNoCover = deriveDocumentProduction({
+  brochureConfig: "true",
+  "PDF-Seiten": "48",
+  brochureSeparateCover: "no",
+  brochureBinding: "klebebindung"
+}, 50);
+assert.equal(brochureNoCover.pagesPerCopy, 48);
+assert.equal(brochureNoCover.quantity, 50);
+assert.equal(brochureNoCover.totalPrintedPages, 2400);
+
+const brochureSeparateCover = deriveBrochureProduction({
+  brochureConfig: "true",
+  "PDF-Seiten": "48",
+  brochureSeparateCover: "yes",
+  brochureBinding: "klebebindung"
+}, 50);
+assert.equal(brochureSeparateCover.coverMapping.U1, "1");
+assert.equal(brochureSeparateCover.coverMapping.U2, "2");
+assert.equal(brochureSeparateCover.coverMapping.U3, "47");
+assert.equal(brochureSeparateCover.coverMapping.U4, "48");
+assert.equal(brochureSeparateCover.pagesPerCopy, 44);
+assert.equal(brochureSeparateCover.printedCoverSidesPerCopy, 4);
+
+const brochureBlankInsideCover = deriveBrochureProduction({
+  brochureConfig: "true",
+  "PDF-Seiten": "48",
+  brochureSeparateCover: "yes",
+  brochureCoverU1: "1",
+  brochureCoverU2: "blank",
+  brochureCoverU3: "blank",
+  brochureCoverU4: "48",
+  brochureBinding: "klebebindung"
+}, 50);
+assert.equal(brochureBlankInsideCover.pagesPerCopy, 46);
+assert.equal(brochureBlankInsideCover.printedCoverSidesPerCopy, 2);
+assert.deepEqual(pricingQuantitiesForDocument({
+  brochureConfig: "true",
+  "PDF-Seiten": "48",
+  brochureSeparateCover: "yes",
+  brochureCoverU1: "1",
+  brochureCoverU2: "blank",
+  brochureCoverU3: "blank",
+  brochureCoverU4: "48",
+  brochureBinding: "klebebindung"
+}, 50)?.printedCoverSides, 100);
+
+const brochureRuckstichPadding = deriveBrochureProduction({
+  brochureConfig: "true",
+  "PDF-Seiten": "50",
+  brochureSeparateCover: "no",
+  brochureBinding: "Rückstichheftung"
+}, 50);
+assert.equal(brochureRuckstichPadding.blankProductionPages, 2);
 
 console.log("document-production tests passed");

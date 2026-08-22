@@ -160,6 +160,10 @@ export const moduleCreateSchemas = {
     areaPricing: z.object({
       defaultWidthCm: z.number().optional(),
       defaultHeightCm: z.number().optional(),
+      minWidthCm: z.number().optional(),
+      maxWidthCm: z.number().optional(),
+      minHeightCm: z.number().optional(),
+      maxHeightCm: z.number().optional(),
       minAreaM2: z.number().optional()
     }).optional(),
     priceTiers: z.array(z.object({
