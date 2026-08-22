@@ -110,12 +110,50 @@ export type ProductPropertyProductionMetadata = {
 
 export type PdfAnalysisMode = "disabled" | "optional" | "required";
 
+export type ProductConfiguratorProfile =
+  | "standard"
+  | "simple-print"
+  | "front-back"
+  | "brochure"
+  | "document"
+  | "thesis"
+  | "poster"
+  | "plan"
+  | "werbetechnik"
+  | "custom";
+
+export type ProductPdfConfig = {
+  previewMode?: "none" | "first-page" | "front-back" | "thumbnails" | "page-list";
+  formatCheck?: boolean;
+  allowFormatOverride?: boolean;
+  showColorAnalysis?: boolean;
+  allowPageMapping?: boolean;
+  bindingCheck?: boolean;
+  minPages?: number;
+  pageMultiple?: number;
+};
+
+export type PropertyDisplayConfig = {
+  control?: "select" | "buttons" | "cards" | "radio" | "swatches";
+  section?: "general" | "format" | "print" | "material" | "cover" | "finishing" | "binding";
+  advanced?: boolean;
+  helpText?: string;
+};
+
+export type PropertyVisibilityRule = {
+  propertyId: string;
+  operator: "equals" | "not_equals";
+  value: string;
+};
+
 export type ProductPricingProperty = {
   propertyId?: string;
   name: string;
   required?: boolean;
   sortOrder?: number;
   stepPrice?: number;
+  display?: PropertyDisplayConfig;
+  visibility?: PropertyVisibilityRule;
   values: ProductPropertyValue[];
 };
 
@@ -215,7 +253,9 @@ export type ProductCatalogItem = {
   isStudentShop?: boolean;
   studentShopSortOrder?: number;
   studentDiscountEligible?: boolean;
+  configuratorProfile?: ProductConfiguratorProfile;
   pdfAnalysisMode?: PdfAnalysisMode;
+  pdfConfig?: ProductPdfConfig;
   productBindingConfig?: {
     enabledSystems?: string[];
     bindingSizeSelectionMode?: "automatic" | "manual" | "automatic-with-override";

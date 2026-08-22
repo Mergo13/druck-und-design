@@ -15,11 +15,11 @@ export async function GET(_request: Request, context: RouteContext) {
   return NextResponse.json(property);
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
   await ensureAdminBootstrap();
   const permission = await requireModulePermission("products", "delete");
   if (!permission.ok) return NextResponse.json({ message: permission.message }, { status: permission.status });
   const { slug } = await context.params;
-  await deleteGlobalProperty(slug);
-  return NextResponse.json({ ok: true });
+  const removeFromProducts = new URL(request.url).searchParams.get("removeFromProducts") === "true";
+  return NextResponse.json({ ok: true, result: await deleteGlobalProperty(slug, removeFromProducts) });
 }

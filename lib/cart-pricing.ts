@@ -2,8 +2,9 @@ import { promises as fs } from "fs";
 import path from "path";
 import { PDFDocument } from "pdf-lib";
 import { getCategories, getGlobalProperties, getPublicProductBySlug } from "@/lib/catalog-repository";
-import { pricingQuantitiesForProductDocument } from "@/lib/document-production";
+import { deriveProductDocumentProduction, pricingQuantitiesForProductDocument } from "@/lib/document-production";
 import { resolveBindingConfigurationForProduct, type BindingResolutionResult } from "@/lib/binding-resolution";
+import { isBrochureProduct } from "@/lib/product-configurator-profile";
 import { getProductionBindingConfig } from "@/lib/production-binding-config";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
@@ -175,6 +176,15 @@ export async function priceCartItems(params: {
     const productQuantity = configuredQuantity(pricingConfig);
     const lineQuantity = safeLineQuantity(item.quantity);
     const categoryProperties = categoriesBySlug.get(product.category)?.properties ?? [];
+    const documentProduction = deriveProductDocumentProduction(product, categoryProperties, pricingConfig, productQuantity);
+    if (isBrochureProduct(product) && "validation" in documentProduction) {
+      if (!documentProduction.validation.valid) {
+        throw new Error(`${product.name}: ${documentProduction.validation.errors[0] ?? "Die Broschüren-Seitenzuordnung ist ungültig."}`);
+      }
+      pricingConfig.brochureProductionPageCount = "productionPageCount" in documentProduction ? String(documentProduction.productionPageCount) : "";
+      pricingConfig.brochureBlankProductionPages = "blankProductionPages" in documentProduction ? String(documentProduction.blankProductionPages) : "";
+      pricingConfig.brochureInnerPageCount = String(documentProduction.pagesPerCopy);
+    }
     const bindingResolution = resolveBindingConfigurationForProduct({
       product,
       categoryProperties,

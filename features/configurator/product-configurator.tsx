@@ -6,14 +6,18 @@ import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { BindingConfigurationSummary } from "@/features/configurator/binding-configuration-summary";
+import { PdfPageThumbnail } from "@/features/configurator/pdf/pdf-page-thumbnail";
+import { PdfPreviewPanel } from "@/features/configurator/pdf/pdf-preview-panel";
 import { resolveBindingConfigurationForProduct, type BindingSystem, type BindingVariant } from "@/lib/binding-resolution";
 import { defaultBrochureCoverMapping, deriveProductDocumentProduction, pricingQuantitiesForProductDocument, type BrochureCoverSlot, type PrintColorMode } from "@/lib/document-production";
+import { usePdfSession } from "@/lib/pdf/pdf-session";
+import { isBrochureProduct, resolvePdfAnalysisMode, resolveProductPdfConfig } from "@/lib/product-configurator-profile";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
 import { applyStudentDiscount } from "@/lib/student-discount";
 import type { PdfAnalysis } from "@/lib/student-print-config";
 import { formatEuro } from "@/lib/utils";
-import type { GlobalProperty, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty } from "@/types/print-platform";
+import type { GlobalProperty, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 import { EmbossingConfigurator } from "@/features/embossing/embossing-configurator";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".svg", ".eps"];
@@ -121,6 +125,18 @@ function withBrochureDefaults(config: Record<string, string>, analysis: PdfAnaly
   };
 }
 
+function propertyVisible(property: ProductPricingProperty, config: Record<string, string>) {
+  if (!property.visibility?.propertyId) return true;
+  const actual = config[`eigenschaft:${property.visibility.propertyId}`] ?? config[property.visibility.propertyId] ?? "";
+  return property.visibility.operator === "not_equals"
+    ? actual !== property.visibility.value
+    : actual === property.visibility.value;
+}
+
+function sortedPricingProperties(product: ProductCatalogItem) {
+  return (product.pricingProperties ?? []).slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+}
+
 export function ProductConfigurator({ product, authenticated, studentVerified = false, studentDiscountPercent = 20, globalProperties = [] }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number; globalProperties?: GlobalProperty[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -144,6 +160,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     }));
   }, [product.priceTiers, product.pricingType, product.quantitySteps]);
 
+  const pricingProperties = useMemo(() => sortedPricingProperties(product), [product]);
   const [config, setConfig] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     if (firstVariant) {
@@ -158,7 +175,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       initial.areaWidthCm = String(product.areaPricing?.defaultWidthCm ?? 100);
       initial.areaHeightCm = String(product.areaPricing?.defaultHeightCm ?? 100);
     }
-    for (const property of product.pricingProperties ?? []) {
+    for (const property of sortedPricingProperties(product)) {
       const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
       initial[`eigenschaft:${property.name}`] = enabledValues.find((value) => value.defaultSelected)?.value ?? enabledValues[0]?.value ?? "";
     }
@@ -181,10 +198,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     previewUrl?: string;
     productionPdfUrl?: string;
   } | null>(null);
-  const isBrochure = product.slug === "broschueren";
+  const isBrochure = isBrochureProduct(product);
   const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
   const configForPricing = useMemo(() => isBrochure ? withBrochureDefaults(config, pdfAnalysis, product, globalProperties) : config, [config, globalProperties, isBrochure, pdfAnalysis, product]);
-  const pdfAnalysisMode = product.pdfAnalysisMode ?? (isBrochure ? "required" : "disabled");
+  const pdfConfig = useMemo(() => resolveProductPdfConfig(product), [product]);
+  const pdfSession = usePdfSession(uploadedFile);
+  const pdfAnalysisMode = resolvePdfAnalysisMode(product);
   const pdfAnalysisEnabled = pdfAnalysisMode !== "disabled";
   const pdfAnalysisRequired = pdfAnalysisMode === "required";
   const pdfAnalysisBlocking = pdfAnalysisRequired && !pdfAnalysis?.valid;
@@ -268,12 +287,12 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const hasConfiguredPrintColorProperty = useMemo(() => {
     if (isBrochure) return true;
     const names = [
-      ...(product.pricingProperties ?? []).map((property) => property.name),
+      ...pricingProperties.map((property) => property.name),
       ...enabledProperties.map((property) => property.name),
       ...productOptions.map((option) => option.label)
     ].join(" ");
     return /druckart|farbmodus|farbe.*sw|schwarz.*weiß|schwarz.*weiss|color/i.test(names);
-  }, [enabledProperties, isBrochure, product.pricingProperties, productOptions]);
+  }, [enabledProperties, isBrochure, pricingProperties, productOptions]);
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
     if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
@@ -304,6 +323,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const brochureSeparateCover = isBrochure && "separateCover" in documentProduction ? documentProduction.separateCover : false;
   const brochureCoverMapping = isBrochure && "coverMapping" in documentProduction ? documentProduction.coverMapping : defaultBrochureCoverMapping(pdfAnalysis?.pages ?? 0);
   const brochureBlankProductionPages = isBrochure && "blankProductionPages" in documentProduction ? documentProduction.blankProductionPages : 0;
+  const brochureValidation = isBrochure && "validation" in documentProduction ? documentProduction.validation : { valid: true, errors: [], warnings: [] };
   const selectedFormat = normalizedConfig.brochureProductionFormat ?? "pdf";
   const brochureFormatKey = brochureProperties.format ? `eigenschaft:${brochureProperties.format.name}` : "";
   const brochureCoverOptionKey = brochureProperties.coverOption ? `eigenschaft:${brochureProperties.coverOption.name}` : "";
@@ -313,7 +333,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     Math.abs(selectedFormatDimensions.heightMm! - pdfAnalysis.heightMm) > 2
   ));
   const productionFormatConfirmed = normalizedConfig.brochureFormatScalingConfirmed === "true" || !productionFormatMismatch;
-  const configuratorBlocking = pdfAnalysisBlocking || (isBrochure && !productionFormatConfirmed);
+  const brochureTotalPages = isBrochure && "pdfPagesPerCopy" in documentProduction ? documentProduction.pdfPagesPerCopy : documentProduction.pagesPerCopy;
+  const brochureProductionPageCount = isBrochure && "productionPageCount" in documentProduction ? documentProduction.productionPageCount : brochureTotalPages;
+  const brochurePageMinimumInvalid = isBrochure && brochureTotalPages > 0 && brochureTotalPages < (pdfConfig.minPages ?? 4);
+  const brochureProductionInvalid = isBrochure && !brochureValidation.valid;
+  const configuratorBlocking = pdfAnalysisBlocking || brochurePageMinimumInvalid || brochureProductionInvalid || (isBrochure && !productionFormatConfirmed);
+  const pdfPageSizesConsistent = !pdfAnalysis?.pageSizes?.length || pdfAnalysis.pageSizes.every((page) => (
+    Math.abs(page.widthMm - pdfAnalysis.pageSizes[0].widthMm) <= 2 &&
+    Math.abs(page.heightMm - pdfAnalysis.pageSizes[0].heightMm) <= 2
+  ));
   const embossingOptionPrice = useMemo(() => {
     const line = priceSnapshot.lines.find((entry) => /prägung|praegung/i.test(entry.label));
     return line?.price ?? 0;
@@ -459,6 +487,10 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       setCartMessage("Bitte bestätigen Sie die proportionale Skalierung oder wählen Sie das PDF-Format.");
       return false;
     }
+    if (isBrochure && !brochureValidation.valid) {
+      setCartMessage(brochureValidation.errors[0] ?? "Bitte prüfen Sie die Broschüren-Seitenzuordnung.");
+      return false;
+    }
     const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<{
       slug: string;
       name: string;
@@ -526,6 +558,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       authoritativeConfig.pdfAnalysisColorPages = pdfAnalysis.colorPages.join(",");
       authoritativeConfig.pdfAnalysisBwPages = pdfAnalysis.bwPages.join(",");
     }
+    if (isBrochure) {
+      authoritativeConfig.brochureProductionPageCount = String(brochureProductionPageCount);
+      authoritativeConfig.brochureBlankProductionPages = String(brochureBlankProductionPages);
+      authoritativeConfig.brochureInnerPageCount = String(documentProduction.pagesPerCopy);
+      authoritativeConfig.brochurePrintedCoverSides = "printedCoverSidesPerCopy" in documentProduction ? String(documentProduction.printedCoverSidesPerCopy) : "0";
+      for (const slot of brochureCoverSlots) {
+        authoritativeConfig[`brochureResolved${slot}`] = brochureCoverMapping[slot];
+      }
+    }
     const authoritativePricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, authoritativeConfig, currentQuantity) : undefined;
     const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
     const authoritativeDiscount = applyStudentDiscount({
@@ -554,6 +595,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         ["Umschlag", brochureSeparateCover ? "Separater Umschlag" : "Kein separater Umschlag"],
         ...(brochureSeparateCover ? brochureCoverSlots.map((slot) => [`${slot}`, brochureCoverMapping[slot] === "blank" ? "Leer" : `PDF Seite ${brochureCoverMapping[slot]}`] as [string, string]) : []),
         ["Innenteil", `${documentProduction.pagesPerCopy} Seiten`],
+        ["Produktionsseiten", String(brochureProductionPageCount)],
         ["Automatisch ergänzte Leerseiten", String(brochureBlankProductionPages)]
       ] as Array<[string, string]> : []),
       ...(pdfAnalysisEnabled && documentProduction.pagesPerCopy > 0 ? [
@@ -647,11 +689,86 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     );
   }
 
+  function renderPropertyControl(property: ProductPricingProperty) {
+    if (!propertyVisible(property, config)) return null;
+    const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
+    if (!enabledValues.length) return null;
+    const key = `eigenschaft:${property.name}`;
+    const value = config[key] ?? enabledValues.find((entry) => entry.defaultSelected)?.value ?? enabledValues[0]?.value ?? "";
+    const setValue = (nextValue: string) => setConfig({ ...config, [key]: nextValue });
+    const control = property.display?.control ?? "select";
+    const labelFor = (option: ProductPropertyValue) => option.labelOverride || option.label || option.value;
+    const shortChoices = enabledValues.length <= 8 && enabledValues.every((option) => labelFor(option).length <= 28);
+    const choiceButton = (option: ProductPropertyValue, card = false) => {
+      const selected = value === option.value;
+      return (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setValue(option.value)}
+          className={selected
+            ? card
+              ? "rounded-md border border-brand-blue bg-brand-mist p-3 text-left text-sm font-bold text-brand-blue"
+              : "rounded-md border border-brand-blue bg-brand-mist px-3 py-2 text-sm font-bold text-brand-blue"
+            : card
+              ? "rounded-md border border-slate-200 bg-white p-3 text-left text-sm font-bold text-slate-700 hover:border-brand-blue"
+              : "rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:border-brand-blue"}
+        >
+          {labelFor(option)}
+        </button>
+      );
+    };
+
+    return (
+      <div className="grid gap-2" key={`product-property-${property.name}`}>
+        <span className="text-sm font-bold">{property.name}</span>
+        {property.display?.helpText ? <span className="text-xs font-semibold text-slate-500">{property.display.helpText}</span> : null}
+        {control === "buttons" && shortChoices ? (
+          <div className="flex flex-wrap gap-2">{enabledValues.map((option) => choiceButton(option))}</div>
+        ) : control === "cards" && shortChoices ? (
+          <div className="grid grid-cols-2 gap-2">{enabledValues.map((option) => choiceButton(option, true))}</div>
+        ) : control === "radio" && shortChoices ? (
+          <div className="grid gap-2">{enabledValues.map((option) => (
+            <label key={option.value} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">
+              <input type="radio" checked={value === option.value} onChange={() => setValue(option.value)} />
+              {labelFor(option)}
+            </label>
+          ))}</div>
+        ) : (
+          <select
+            suppressHydrationWarning
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+          >
+            {enabledValues.map((option) => (
+              <option key={option.value} value={option.value}>
+                {labelFor(option)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    );
+  }
+
+  const visibleStandardProperties = isBrochure ? [] : pricingProperties.filter((property) => !property.display?.advanced);
+  const visibleAdvancedProperties = isBrochure ? [] : pricingProperties.filter((property) => property.display?.advanced);
+  const selectedSummary = [
+    ...pricingProperties.map((property) => {
+      const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
+      const selected = config[`eigenschaft:${property.name}`] || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
+      const match = enabledValues.find((value) => value.value === selected);
+      return match ? { label: property.name, value: match.labelOverride || match.label || match.value } : null;
+    }).filter(Boolean) as Array<{ label: string; value: string }>,
+    { label: "Auflage", value: currentQuantity.toLocaleString("de-DE") }
+  ];
+
   return (
     <aside className="sticky top-24 rounded-lg border bg-white p-5 shadow-premium lg:block">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-primary">Live-Konfigurator</p>
+          <p className="text-sm font-semibold text-primary">Ihr Produkt</p>
           <h2 className="text-2xl font-black">{authenticated ? formatEuro(displayedTotal) : "Preis nach Anmeldung"}</h2>
           <p className="text-sm text-muted-foreground">Konfiguration mit optionalem Datei-Upload</p>
           {authenticated && studentDiscountAmount > 0 ? (
@@ -669,6 +786,19 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           {formatProductDeliveryText(product.deliveryText, config.lieferzeit)}
         </div>
       </div>
+      {selectedSummary.length ? (
+        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Zusammenfassung</p>
+          <div className="mt-2 grid gap-1 text-sm">
+            {selectedSummary.slice(0, 7).map((entry) => (
+              <div key={`${entry.label}-${entry.value}`} className="flex justify-between gap-3">
+                <span className="text-slate-500">{entry.label}</span>
+                <span className="text-right font-bold text-slate-900">{entry.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="mt-6 grid gap-4">
         {productOptions.map(({ label, key, options }) => (
           <label className="grid gap-2" key={label}>
@@ -706,7 +836,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
                 <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.pages} PDF-Seiten erkannt</p>
                 <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.widthMm && pdfAnalysis.heightMm ? `${pdfAnalysis.widthMm} x ${pdfAnalysis.heightMm} mm` : pdfAnalysis.dominantFormat ?? "Format erkannt"}</p>
                 <p className="flex items-center gap-2 text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {pdfAnalysis.orientation === "landscape" ? "Querformat" : pdfAnalysis.orientation === "portrait" ? "Hochformat" : "Ausrichtung erkannt"}</p>
-                <p className="pt-1 text-xs text-slate-500">{pdfAnalysis.colorPages.length} Farbe · {pdfAnalysis.bwPages.length} Schwarz-Weiß · automatisch aus PDF erkannt</p>
+                {pdfConfig.showColorAnalysis ? (
+                  <p className="pt-1 text-xs text-slate-500">{pdfAnalysis.colorPages.length} Farbe · {pdfAnalysis.bwPages.length} Schwarz-Weiß · Analysewerte für die Preisberechnung. Bei Bedarf bitte Druckart manuell prüfen.</p>
+                ) : null}
                 {pdfAnalysis.warnings.map((warning, index) => (
                   <p key={`${warning.type}-${index}`} className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">{warning.message}</p>
                 ))}
@@ -740,6 +872,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </label>
           </div>
         ) : null}
+        {pdfAnalysisEnabled ? <PdfPreviewPanel session={pdfSession} pdfConfig={pdfConfig} totalPages={pdfAnalysis?.pages ?? pdfSession.document?.numPages ?? 0} /> : null}
         {pdfAnalysisEnabled && !hasConfiguredPrintColorProperty ? (
           <div className="rounded-md border border-slate-200 bg-white p-3">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Druckart</p>
@@ -841,6 +974,34 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </label>
             {brochureSeparateCover ? (
               <>
+                {pdfSession.status === "ready" ? (
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Umschlag</p>
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      {brochureCoverSlots.map((slot) => {
+                        const mapped = brochureCoverMapping[slot];
+                        const pageNumber = Number(mapped);
+                        const label = slot === "U1" ? "U1 - Außenseite vorne" : slot === "U2" ? "U2 - Innenseite vorne" : slot === "U3" ? "U3 - Innenseite hinten" : "U4 - Außenseite hinten";
+                        return Number.isFinite(pageNumber) && pageNumber > 0 ? (
+                          <PdfPageThumbnail key={slot} pageNumber={pageNumber} getThumbnail={pdfSession.getThumbnail} label={label} />
+                        ) : (
+                          <div key={slot} className="overflow-hidden rounded-md border border-dashed bg-white opacity-60">
+                            <div className="flex aspect-[3/4] items-center justify-center bg-slate-100 text-xs font-bold text-slate-400">Leer</div>
+                            <div className="border-t px-2 py-1 text-center text-[11px] font-bold text-slate-600">{label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Innenteil</p>
+                    <p className="mt-1 text-sm font-bold text-slate-800">{documentProduction.pagesPerCopy} Seiten</p>
+                    {"innerPages" in documentProduction ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {documentProduction.innerPages.slice(0, 40).map((page) => <span key={page} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600">{page}</span>)}
+                        {documentProduction.innerPages.length > 40 ? <span className="px-2 py-1 text-xs font-bold text-slate-500">...</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <details className="rounded-md border border-slate-200 bg-slate-50 p-3">
                   <summary className="cursor-pointer text-sm font-bold text-slate-800">Seitenzuordnung ändern</summary>
                   <div className="mt-3 grid gap-2">
@@ -893,9 +1054,52 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm font-semibold text-slate-700">
               Innenteil: {documentProduction.pagesPerCopy} Seiten
             </div>
+            {pdfAnalysis?.valid ? (
+              <div className="rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Dateiprüfung</p>
+                <div className="mt-2 grid gap-1 font-semibold">
+                  <p>✓ PDF erkannt</p>
+                  <p>✓ {brochureTotalPages} Seiten</p>
+                  <p>✓ {detectedFormatLabel(pdfAnalysis)}</p>
+                  <p>{pdfPageSizesConsistent ? "✓" : "⚠"} Seitengrößen {pdfPageSizesConsistent ? "einheitlich" : "abweichend"}</p>
+                  {brochureBlankProductionPages > 0 ? (
+                    <p className="text-amber-800">⚠ Für die Rückstichheftung wird ein Seitenumfang in 4er-Schritten benötigt.</p>
+                  ) : (
+                    <p>✓ Seitenzahl für Rückstich geeignet</p>
+                  )}
+                </div>
+                {brochureSeparateCover ? (
+                  <div className="mt-3 grid gap-1">
+                    <p className="font-black">Umschlag</p>
+                    {brochureCoverSlots.map((slot) => (
+                      <p key={slot}>{slot}: {brochureCoverMapping[slot] === "blank" ? "Leer" : `Seite ${brochureCoverMapping[slot]}`}</p>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="mt-3 grid gap-1">
+                  <p className="font-black">Innenteil</p>
+                  <p>{documentProduction.pagesPerCopy} Seiten</p>
+                </div>
+                <div className="mt-3 grid gap-1">
+                  <p className="font-black">Produktionsumfang</p>
+                  <p>{brochureProductionPageCount} Seiten</p>
+                  <p>{brochureBlankProductionPages} zusätzliche Leerseiten</p>
+                </div>
+              </div>
+            ) : null}
+            {brochurePageMinimumInvalid ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900">
+                Broschüren benötigen mindestens {pdfConfig.minPages ?? 4} PDF-Seiten.
+              </div>
+            ) : null}
+            {brochureValidation.errors.map((error) => (
+              <div key={error} className="rounded-md border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900">
+                {error}
+              </div>
+            ))}
             {brochureBlankProductionPages > 0 ? (
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
-                Für Rückstichheftung ergänzen wir rechnerisch {brochureBlankProductionPages} leere Produktionsseite{brochureBlankProductionPages === 1 ? "" : "n"}, damit die Seitenzahl durch 4 teilbar ist.
+                Für die Rückstichheftung werden {brochureBlankProductionPages} zusätzliche Leerseite{brochureBlankProductionPages === 1 ? "" : "n"} benötigt. Wir ergänzen diese automatisch in der Produktionskonfiguration, ohne die hochgeladene PDF zu verändern.
               </div>
             ) : null}
           </div>
@@ -937,27 +1141,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             ) : null}
           </div>
         ) : null}
-        {(isBrochure ? [] : product.pricingProperties ?? []).map((property) => {
-          const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
-          if (!enabledValues.length) return null;
-          return (
-          <label className="grid gap-2" key={`product-property-${property.name}`}>
-            <span className="text-sm font-bold">{property.name}</span>
-            <select
-              suppressHydrationWarning
-              value={config[`eigenschaft:${property.name}`] ?? enabledValues.find((value) => value.defaultSelected)?.value ?? enabledValues[0]?.value ?? ""}
-              onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
-              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            >
-              {enabledValues.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.labelOverride || option.label || option.value}
-                </option>
-              ))}
-            </select>
-          </label>
-          );
-        })}
+        {visibleStandardProperties.map((property) => renderPropertyControl(property))}
+        {visibleAdvancedProperties.length ? (
+          <details className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <summary className="cursor-pointer text-sm font-bold text-slate-800">Weitere Optionen</summary>
+            <div className="mt-3 grid gap-4">
+              {visibleAdvancedProperties.map((property) => renderPropertyControl(property))}
+            </div>
+          </details>
+        ) : null}
         {enabledProperties.map((property) => (
           <label className="grid gap-2" key={`category-property-${property.name}`}>
             <span className="text-sm font-bold">{property.name}</span>
@@ -1126,6 +1318,11 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       {isBrochure && !productionFormatConfirmed ? (
         <p className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
           Bitte bestätigen Sie die proportionale Skalierung oder wechseln Sie zurück zum PDF-Format.
+        </p>
+      ) : null}
+      {brochurePageMinimumInvalid ? (
+        <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-xs font-semibold text-red-900">
+          Bitte laden Sie eine Broschüren-PDF mit gültiger Seitenanzahl hoch.
         </p>
       ) : null}
       {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart} disabled={configuratorBlocking || isAnalyzingPdf}>

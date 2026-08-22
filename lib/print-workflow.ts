@@ -264,6 +264,24 @@ export function getProductStartingPriceLabel(product: ProductCatalogItem) {
 
 export function validateProductPricing(product: ProductCatalogItem) {
   const errors: string[] = [];
+  const validProfiles = new Set(["standard", "simple-print", "front-back", "brochure", "document", "thesis", "poster", "plan", "werbetechnik", "custom"]);
+  const validPreviewModes = new Set(["none", "first-page", "front-back", "thumbnails", "page-list"]);
+  if (product.configuratorProfile && !validProfiles.has(product.configuratorProfile)) {
+    errors.push("Das Konfigurator-Profil ist ungültig.");
+  }
+  if (product.pdfConfig?.previewMode && !validPreviewModes.has(product.pdfConfig.previewMode)) {
+    errors.push("Der PDF-Vorschaumodus ist ungültig.");
+  }
+  if (product.pdfConfig?.minPages !== undefined && Number(product.pdfConfig.minPages) < 0) {
+    errors.push("Mindestseiten dürfen nicht negativ sein.");
+  }
+  if (product.pdfConfig?.pageMultiple !== undefined && Number(product.pdfConfig.pageMultiple) < 0) {
+    errors.push("Seitenvielfaches darf nicht negativ sein.");
+  }
+  if (product.productStatus === "active") {
+    if (!product.category) errors.push("Kategorie fehlt.");
+    if (!product.deliveryText?.trim()) errors.push("Lieferzeit fehlt.");
+  }
   const tiers = product.priceTiers ?? [];
   if (product.pricingType === "tiered" && tiers.length === 0) {
     errors.push("Für Staffelpreis muss mindestens eine Menge angelegt sein.");

@@ -3,6 +3,11 @@ import type { ProductCatalogItem, ProductCategoryProperty, ProductPropertyValue 
 export type PrintSideMode = "simplex" | "duplex";
 export type PrintColorMode = "black_white" | "full_color" | "auto";
 export type BrochureCoverSlot = "U1" | "U2" | "U3" | "U4";
+export type BrochureProductionValidation = {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+};
 
 const brochureCoverSlots: BrochureCoverSlot[] = ["U1", "U2", "U3", "U4"];
 
@@ -129,11 +134,26 @@ export function deriveBrochureProduction(config: Record<string, string>, quantit
   const totalPages = numericConfigValue(config, ["pdfAnalysisPageCount", "seitenanzahl", "Seitenanzahl", "Seiten pro Exemplar", "PDF-Seiten"]);
   const separateCover = /separat|separate|yes|true|mit/i.test(config.brochureSeparateCover ?? config["eigenschaft:Umschlag"] ?? "");
   const defaults = defaultBrochureCoverMapping(totalPages);
+  const validationErrors: string[] = [];
+  const validationWarnings: string[] = [];
+  if (totalPages > 0 && totalPages < 4) {
+    validationErrors.push("Broschüren benötigen mindestens 4 PDF-Seiten.");
+  }
   const coverMapping = Object.fromEntries(brochureCoverSlots.map((slot) => {
     const raw = config[`brochureCover${slot}`] ?? defaults[slot];
     const page = positiveInteger(raw);
+    if (separateCover && raw && !isBlankCoverValue(raw) && (page < 1 || page > totalPages)) {
+      validationErrors.push(`${slot} verweist auf eine ungültige PDF-Seite.`);
+    }
     return [slot, separateCover && page > 0 && page <= totalPages ? String(page) : "blank"];
   })) as Record<BrochureCoverSlot, string>;
+  const mappedPages = brochureCoverSlots
+    .map((slot) => positiveInteger(coverMapping[slot]))
+    .filter((page) => page > 0);
+  const duplicateMappedPages = mappedPages.filter((page, index) => mappedPages.indexOf(page) !== index);
+  if (duplicateMappedPages.length) {
+    validationErrors.push("Umschlagseiten dürfen nicht doppelt derselben PDF-Seite zugeordnet werden.");
+  }
   const mappedCoverPages = new Set(
     separateCover
       ? brochureCoverSlots.map((slot) => positiveInteger(coverMapping[slot])).filter((page) => page > 0 && page <= totalPages)
@@ -165,6 +185,14 @@ export function deriveBrochureProduction(config: Record<string, string>, quantit
   const producedPageCount = innerPageCount + (separateCover ? 4 : 0);
   const saddleStitch = /rückstich|rueckstich|heft/i.test(config["eigenschaft:Broschüre Bindung"] ?? config["eigenschaft:Bindung"] ?? config.brochureBinding ?? "");
   const blankProductionPages = saddleStitch && producedPageCount > 0 ? (4 - (producedPageCount % 4)) % 4 : 0;
+  if (blankProductionPages > 0) {
+    validationWarnings.push(`Für die Rückstichheftung werden ${blankProductionPages} zusätzliche Leerseite${blankProductionPages === 1 ? "" : "n"} benötigt.`);
+  }
+  const validation: BrochureProductionValidation = {
+    valid: validationErrors.length === 0,
+    errors: validationErrors,
+    warnings: validationWarnings
+  };
 
   return {
     pagesPerCopy: innerPageCount,
@@ -178,6 +206,7 @@ export function deriveBrochureProduction(config: Record<string, string>, quantit
     innerPagesPerCopy: innerPageCount,
     producedPageCount,
     blankProductionPages,
+    productionPageCount: producedPageCount + blankProductionPages,
     printedCoverSidesPerCopy,
     totalPrintedCoverSides: printedCoverSidesPerCopy * safeQuantity,
     totalPrintedPages: innerPageCount * safeQuantity,
@@ -186,7 +215,8 @@ export function deriveBrochureProduction(config: Record<string, string>, quantit
     totalColorPages: innerColorPagesPerCopy * safeQuantity,
     totalBlackWhitePages: innerBlackWhitePagesPerCopy * safeQuantity,
     sheetsPerCopy,
-    totalSheets: sheetsPerCopy * safeQuantity
+    totalSheets: sheetsPerCopy * safeQuantity,
+    validation
   };
 }
 

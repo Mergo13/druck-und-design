@@ -3,6 +3,7 @@ import path from "path";
 import generateRetailData from "data-generator-retail";
 import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
+import { applyConfiguratorProfileDefaults } from "@/lib/product-configurator-profile";
 import type { Order, UserAccount } from "@/types";
 import type { GlobalProperty, ProductCatalogItem, ProductCategory, ProductIndustry, ProductPropertyTierPrice } from "@/types/print-platform";
 
@@ -583,6 +584,24 @@ export async function upsertGlobalProperty(property: GlobalProperty, originalSlu
       }
       await tx.catalogProperty.delete({ where: { slug: targetSlug } });
     }
+    const linkedProducts = await tx.catalogProduct.findMany({ select: { slug: true, data: true } });
+    const validValueIds = new Set(nextProperty.values.map((value) => value.id));
+    for (const row of linkedProducts) {
+      const product = row.data as ProductCatalogItem;
+      const nextProperties = (product.pricingProperties ?? []).map((assigned) => {
+        if ((assigned.propertyId || slugifyProperty(assigned.name)) !== slug) return assigned;
+        return {
+          ...assigned,
+          values: (assigned.values ?? []).filter((value) => !value.propertyValueId || validValueIds.has(value.propertyValueId))
+        };
+      });
+      if (JSON.stringify(nextProperties) !== JSON.stringify(product.pricingProperties ?? [])) {
+        await tx.catalogProduct.update({
+          where: { slug: row.slug },
+          data: { data: asJson({ ...product, pricingProperties: nextProperties }) }
+        });
+      }
+    }
     await tx.catalogProperty.upsert({
       where: { slug },
       update: {
@@ -603,18 +622,31 @@ export async function upsertGlobalProperty(property: GlobalProperty, originalSlu
   return nextProperty;
 }
 
-export async function deleteGlobalProperty(slug: string) {
+export async function deleteGlobalProperty(slug: string, removeFromProducts = false) {
   await ensureCatalogSeeded();
-  const products = await prisma.catalogProduct.findMany({ select: { data: true } });
-  const isUsed = products.some((row) => {
+  const products = await prisma.catalogProduct.findMany({ select: { slug: true, data: true } });
+  const affected = products.filter((row) => {
     const product = row.data as ProductCatalogItem;
     return (product.pricingProperties ?? []).some((property) => (property.propertyId || slugifyProperty(property.name)) === slug);
   });
-  if (isUsed) {
+  if (affected.length && !removeFromProducts) {
     await prisma.catalogProperty.update({ where: { slug }, data: { active: false } });
-    return;
+    return { deleted: false, deactivated: true, affectedProducts: affected.map((row) => (row.data as ProductCatalogItem).name) };
   }
-  await prisma.catalogProperty.delete({ where: { slug } });
+  await prisma.$transaction(async (tx) => {
+    if (affected.length) {
+      for (const row of affected) {
+        const product = row.data as ProductCatalogItem;
+        const pricingProperties = (product.pricingProperties ?? []).filter((property) => (property.propertyId || slugifyProperty(property.name)) !== slug);
+        await tx.catalogProduct.update({
+          where: { slug: row.slug },
+          data: { data: asJson({ ...product, pricingProperties }) }
+        });
+      }
+    }
+    await tx.catalogProperty.delete({ where: { slug } });
+  });
+  return { deleted: true, deactivated: false, affectedProducts: affected.map((row) => (row.data as ProductCatalogItem).name) };
 }
 
 export async function getPublicCategories() {
@@ -815,12 +847,11 @@ export async function upsertProduct(product: ProductCatalogItem) {
   const visible = productStatus === "active";
   const published = productStatus === "active";
   const nextProduct = {
-    ...product,
+    ...applyConfiguratorProfileDefaults(product),
     productStatus,
     visible,
     published,
     studentDiscountEligible: product.studentDiscountEligible ?? true,
-    pdfAnalysisMode: product.pdfAnalysisMode ?? "disabled",
     productBindingConfig: product.productBindingConfig ?? { enabledSystems: [], bindingSizeSelectionMode: "automatic" },
     industrySlugs: product.industrySlugs ?? []
   };

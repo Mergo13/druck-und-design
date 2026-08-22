@@ -57,6 +57,9 @@ import { Route } from "react-router-dom";
 import { useFormContext, useWatch } from "react-hook-form";
 import { calculateConfiguredProductPrice, calculateTierPrice, validateProductPricing } from "@/lib/print-workflow";
 import { productPropertyFromGlobal, resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
+import { configuratorProfileLabels, pdfPreviewModeLabels, resolveConfiguratorProfile } from "@/lib/product-configurator-profile";
+import { applyPropertyDisplayCsvRows, hasFullProductCsvColumns, mergeProductConfigFromCsv, productConfigFromCsvRow, productSlugFromConfigCsvRow } from "@/lib/catalog-csv-config";
+import { deriveProductDocumentProduction, pricingQuantitiesForProductDocument } from "@/lib/document-production";
 import type { BindingSystem } from "@/lib/binding-resolution";
 import type { GlobalProperty, HomepageSettings, ProductCatalogItem, ProductIndustry, ProductPriceTier, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
@@ -203,6 +206,18 @@ const adminTheme = createTheme({
     }
   }
 });
+
+const pricingQuantitySourceLabels = {
+  copies: "Pro Stück",
+  printed_pages: "Pro Druckseite",
+  sheets: "Pro Blatt",
+  black_white_pages: "Pro S/W-Seite",
+  color_pages: "Pro Farbseite",
+  front_covers: "Pro vorderem Umschlag",
+  back_covers: "Pro hinterem Umschlag",
+  printed_cover_sides: "Pro bedruckter Umschlagseite",
+  per_order: "Einmal pro Auftrag"
+} as const;
 
 function AdminImagePreview({ src, alt, sx, children }: { src?: string; alt: string; sx?: object; children?: ReactNode }) {
   const value = String(src ?? "").trim();
@@ -1910,11 +1925,24 @@ function ProductPricingManager() {
     return "Global: inklusive";
   }
 
-  const preview = calculateConfiguredProductPrice(currentProduct(), previewQuantity || Number(tierRows[0]?.quantity ?? 1), previewConfig);
+  const previewProduct = currentProduct();
+  const previewQty = previewQuantity || Number(tierRows[0]?.quantity ?? 1);
+  const previewProductionConfig = resolveConfiguratorProfile(previewProduct) === "brochure"
+    ? {
+      ...previewConfig,
+      brochureConfig: "true",
+      brochureSeparateCover: previewConfig.brochureSeparateCover ?? "yes",
+      "PDF-Seiten": previewConfig["PDF-Seiten"] ?? "12",
+      brochureBinding: previewConfig.brochureBinding ?? "Rückstichheftung"
+    }
+    : previewConfig;
+  const previewProduction = deriveProductDocumentProduction(previewProduct, [], previewProductionConfig, previewQty);
+  const previewQuantities = pricingQuantitiesForProductDocument(previewProduct, [], previewProductionConfig, previewQty);
+  const preview = calculateConfiguredProductPrice(previewProduct, previewQty, previewConfig, previewQuantities);
   const previewTier = pricingType === "tiered"
     ? (() => {
       try {
-        return calculateTierPrice(previewQuantity || Number(tierRows[0]?.quantity ?? 1), tierRows);
+        return calculateTierPrice(previewQty, tierRows);
       } catch {
         return null;
       }
@@ -2184,7 +2212,7 @@ function ProductPricingManager() {
                   disabled={attached}
                   onClick={() => updateProperties([...pricingProperties, productPropertyFromGlobal(property, tierRows)])}
                 >
-                  {attached ? `${property.name} hinzugefügt` : `+ ${property.name}`}
+                  {attached ? `${property.name} hinzugefügt` : `+ Eigenschaft hinzufügen: ${property.name}`}
                 </Button>
               );
             })}
@@ -2194,11 +2222,16 @@ function ProductPricingManager() {
             {pricingProperties.map((property, propertyIndex) => (
               <Card key={`${property.name}-${propertyIndex}`} variant="outlined" sx={{ borderRadius: 2, borderColor: "#cbd5e1" }}>
                 <CardContent sx={{ display: "grid", gap: 1.2, py: 1.5 }}>
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(220px,1fr) 150px 180px auto" }, gap: 1, alignItems: "center", pb: 1, borderBottom: "1px solid #e2e8f0" }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(220px,1fr) 120px 150px 180px 180px auto" }, gap: 1, alignItems: "center", pb: 1, borderBottom: "1px solid #e2e8f0" }}>
                     <Box>
                       <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>{property.name}</Typography>
                       <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>{property.propertyId ? `Stammdaten: ${property.propertyId}` : "Legacy-Eigenschaft"}</Typography>
                     </Box>
+                    <MuiTextField size="small" label="Reihenfolge" type="number" value={property.sortOrder ?? propertyIndex} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      next[propertyIndex].sortOrder = Number(event.target.value);
+                      updateProperties(next);
+                    }} />
                     <MuiTextField select size="small" label="Pflichtfeld" value={property.required === false ? "no" : "yes"} onChange={(event) => {
                       const next = structuredClone(pricingProperties);
                       next[propertyIndex].required = event.target.value === "yes";
@@ -2212,10 +2245,94 @@ function ProductPricingManager() {
                       next[propertyIndex] = { ...property, stepPrice: Number(event.target.value) };
                       updateProperties(next);
                     }} />
+                    <MuiTextField select size="small" label="Standardwert" value={(property.values ?? []).find((value) => value.defaultSelected)?.value ?? ""} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      next[propertyIndex].values = next[propertyIndex].values.map((item) => ({ ...item, defaultSelected: item.value === event.target.value }));
+                      updateProperties(next);
+                    }}>
+                      <MenuItem value="">Automatisch</MenuItem>
+                      {(property.values ?? []).filter((value) => value.enabled !== false).map((value) => (
+                        <MenuItem key={value.value} value={value.value}>{value.labelOverride || value.label || value.value}</MenuItem>
+                      ))}
+                    </MuiTextField>
                     <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
                       <Button size="small" variant="outlined" onClick={() => updateProperties([...pricingProperties.slice(0, propertyIndex + 1), JSON.parse(JSON.stringify(property)) as ProductPricingProperty, ...pricingProperties.slice(propertyIndex + 1)])}>Eigenschaft duplizieren</Button>
+                      <Button size="small" variant="outlined" disabled={propertyIndex === 0} onClick={() => {
+                        const next = structuredClone(pricingProperties);
+                        [next[propertyIndex - 1], next[propertyIndex]] = [next[propertyIndex], next[propertyIndex - 1]];
+                        updateProperties(next.map((item, index) => ({ ...item, sortOrder: index })));
+                      }}>Hoch</Button>
+                      <Button size="small" variant="outlined" disabled={propertyIndex === pricingProperties.length - 1} onClick={() => {
+                        const next = structuredClone(pricingProperties);
+                        [next[propertyIndex + 1], next[propertyIndex]] = [next[propertyIndex], next[propertyIndex + 1]];
+                        updateProperties(next.map((item, index) => ({ ...item, sortOrder: index })));
+                      }}>Runter</Button>
                       <Button size="small" color="error" variant="outlined" onClick={() => updateProperties(pricingProperties.filter((_, index) => index !== propertyIndex))}>Löschen</Button>
                     </Box>
+                  </Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "160px 160px 150px 1fr" }, gap: 1, alignItems: "center" }}>
+                    <MuiTextField select size="small" label="Darstellung" value={property.display?.control ?? ""} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      const control = event.target.value as NonNullable<ProductPricingProperty["display"]>["control"] | "";
+                      next[propertyIndex].display = { ...(next[propertyIndex].display ?? {}), control: control || undefined };
+                      updateProperties(next);
+                    }}>
+                      <MenuItem value="">Standard</MenuItem>
+                      <MenuItem value="select">Dropdown</MenuItem>
+                      <MenuItem value="buttons">Buttons</MenuItem>
+                      <MenuItem value="cards">Karten</MenuItem>
+                      <MenuItem value="radio">Radio</MenuItem>
+                      <MenuItem value="swatches">Farbfelder</MenuItem>
+                    </MuiTextField>
+                    <MuiTextField select size="small" label="Bereich" value={property.display?.section ?? ""} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      const section = event.target.value as NonNullable<ProductPricingProperty["display"]>["section"] | "";
+                      next[propertyIndex].display = { ...(next[propertyIndex].display ?? {}), section: section || undefined };
+                      updateProperties(next);
+                    }}>
+                      <MenuItem value="">Standard</MenuItem>
+                      <MenuItem value="general">Allgemein</MenuItem>
+                      <MenuItem value="format">Format</MenuItem>
+                      <MenuItem value="print">Druck</MenuItem>
+                      <MenuItem value="material">Material</MenuItem>
+                      <MenuItem value="cover">Umschlag</MenuItem>
+                      <MenuItem value="finishing">Veredelung</MenuItem>
+                      <MenuItem value="binding">Bindung</MenuItem>
+                    </MuiTextField>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 800 }}>
+                      <input type="checkbox" checked={Boolean(property.display?.advanced)} onChange={(event) => {
+                        const next = structuredClone(pricingProperties);
+                        next[propertyIndex].display = { ...(next[propertyIndex].display ?? {}), advanced: event.target.checked };
+                        updateProperties(next);
+                      }} />
+                      Erweiterte Option
+                    </label>
+                    <MuiTextField size="small" label="Hilfetext" value={property.display?.helpText ?? ""} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      next[propertyIndex].display = { ...(next[propertyIndex].display ?? {}), helpText: event.target.value || undefined };
+                      updateProperties(next);
+                    }} />
+                  </Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 150px 1fr" }, gap: 1, alignItems: "center" }}>
+                    <MuiTextField size="small" label="Sichtbar wenn Eigenschaft" value={property.visibility?.propertyId ?? ""} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      const value = event.target.value;
+                      next[propertyIndex].visibility = value ? { ...(next[propertyIndex].visibility ?? { operator: "equals", value: "" }), propertyId: value } : undefined;
+                      updateProperties(next);
+                    }} />
+                    <MuiTextField select size="small" label="Bedingung" value={property.visibility?.operator ?? "equals"} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      next[propertyIndex].visibility = { ...(next[propertyIndex].visibility ?? { propertyId: "", value: "" }), operator: event.target.value as "equals" | "not_equals" };
+                      updateProperties(next);
+                    }}>
+                      <MenuItem value="equals">ist</MenuItem>
+                      <MenuItem value="not_equals">ist nicht</MenuItem>
+                    </MuiTextField>
+                    <MuiTextField size="small" label="Wert" value={property.visibility?.value ?? ""} onChange={(event) => {
+                      const next = structuredClone(pricingProperties);
+                      next[propertyIndex].visibility = { ...(next[propertyIndex].visibility ?? { propertyId: "", operator: "equals" }), value: event.target.value };
+                      updateProperties(next);
+                    }} />
                   </Box>
 
                   <Box sx={{ display: "grid", gap: 0.9 }}>
@@ -2273,15 +2390,9 @@ function ProductPricingManager() {
                             };
                             updateProperties(next);
                           }}>
-                            <MenuItem value="copies">Auflage / Exemplare</MenuItem>
-                            <MenuItem value="printed_pages">Druckseiten gesamt</MenuItem>
-                            <MenuItem value="sheets">Blätter gesamt</MenuItem>
-                            <MenuItem value="black_white_pages">SW-Seiten gesamt</MenuItem>
-                            <MenuItem value="color_pages">Farbseiten gesamt</MenuItem>
-                            <MenuItem value="front_covers">Deckblatt vorne</MenuItem>
-                            <MenuItem value="back_covers">Rückseite / Rückkarton</MenuItem>
-                            <MenuItem value="printed_cover_sides">Bedruckte Umschlagseiten</MenuItem>
-                            <MenuItem value="per_order">Einmal pro Auftrag</MenuItem>
+                            {Object.entries(pricingQuantitySourceLabels).map(([source, label]) => (
+                              <MenuItem key={source} value={source}>{label}</MenuItem>
+                            ))}
                           </MuiTextField>
                           <MuiTextField size="small" label={value.pricingMode === "global" ? inheritedValuePrice(property, value) : value.pricingMode === "flat" ? "Festpreis (€)" : "Aufpreis / Stk. (€)"} type="number" disabled={value.pricingMode !== "fixed" && value.pricingMode !== "flat"} value={value.fixedPrice ?? 0} onChange={(event) => {
                             const next = structuredClone(pricingProperties);
@@ -2502,6 +2613,7 @@ function ProductPricingManager() {
                     <MuiTextField size="small" label="Höhe (cm)" type="number" value={previewConfig.areaHeightCm ?? "100"} onChange={(event) => setPreviewConfig((current) => ({ ...current, areaHeightCm: event.target.value }))} sx={{ width: 140 }} />
                   </>
                 ) : null}
+                <MuiTextField size="small" label="PDF-Seiten" type="number" value={previewConfig["PDF-Seiten"] ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, "PDF-Seiten": event.target.value, seitenanzahl: event.target.value }))} sx={{ width: 140 }} />
                 {pricingProperties.map((property) => {
                   const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
                   return (
@@ -2522,6 +2634,28 @@ function ProductPricingManager() {
             {preview.lines.map((line) => (
               <Typography key={`${line.label}-${line.value}`} variant="body2" sx={{ color: "#475569" }}>{line.label}: {line.value} +{formatCurrency(line.price)}</Typography>
             ))}
+            {previewQuantities ? (
+              <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 0.75 }}>
+                <Typography variant="caption" sx={{ fontWeight: 900, color: "#334155" }}>Auflage: {previewQuantities.copies}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900, color: "#334155" }}>Druckseiten: {previewQuantities.printedPages}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900, color: "#334155" }}>Blätter: {previewQuantities.sheets}</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 900, color: "#334155" }}>Umschlagseiten: {previewQuantities.printedCoverSides}</Typography>
+              </Box>
+            ) : null}
+            {resolveConfiguratorProfile(previewProduct) === "brochure" ? (
+              <Box sx={{ mt: 1, borderTop: "1px solid #e2e8f0", pt: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Produktionsvorschau Broschüre</Typography>
+                <Typography variant="body2" sx={{ color: "#475569" }}>PDF Seiten: {"pdfPagesPerCopy" in previewProduction ? previewProduction.pdfPagesPerCopy : previewProduction.pagesPerCopy}</Typography>
+                <Typography variant="body2" sx={{ color: "#475569" }}>Innenseiten: {previewProduction.pagesPerCopy}</Typography>
+                <Typography variant="body2" sx={{ color: "#475569" }}>Produktionsseiten: {"producedPageCount" in previewProduction ? previewProduction.producedPageCount : previewProduction.pagesPerCopy}</Typography>
+                {"blankProductionPages" in previewProduction ? <Typography variant="body2" sx={{ color: "#475569" }}>Zusätzliche Leerseiten: {previewProduction.blankProductionPages}</Typography> : null}
+                {"coverMapping" in previewProduction ? (
+                  <Typography variant="body2" sx={{ color: "#475569" }}>
+                    U1: {previewProduction.coverMapping.U1} · U2: {previewProduction.coverMapping.U2} · U3: {previewProduction.coverMapping.U3} · U4: {previewProduction.coverMapping.U4}
+                  </Typography>
+                ) : null}
+              </Box>
+            ) : null}
             <Typography variant="h5" sx={{ mt: 1, fontWeight: 900, color: "#0f172a" }}>Gesamt: {formatCurrency(preview.total)}</Typography>
             </Box>
           </CardContent>
@@ -2575,13 +2709,35 @@ function ProductHomepagePlacementFields() {
 }
 
 function ProductPdfAnalysisFields() {
+  const { setValue } = useFormContext();
+  const profile = (useWatch({ name: "configuratorProfile" }) as ProductCatalogItem["configuratorProfile"] | undefined) ?? "standard";
+  const pdfConfig = (useWatch({ name: "pdfConfig" }) as ProductCatalogItem["pdfConfig"] | undefined) ?? {};
+  const slug = (useWatch({ name: "slug" }) as string | undefined) ?? "";
+
+  function updatePdfConfig(key: keyof NonNullable<ProductCatalogItem["pdfConfig"]>, value: unknown) {
+    setValue("pdfConfig", { ...pdfConfig, [key]: value }, { shouldDirty: true });
+  }
+
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, borderColor: "#e2e8f0", bgcolor: "#fff" }}>
       <CardContent sx={{ display: "grid", gap: 1.5 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>PDF-Analyse</Typography>
+        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>Konfigurator-Vorlage</Typography>
+        <SelectInput
+          source="configuratorProfile"
+          label="Konfigurator-Vorlage"
+          defaultValue="standard"
+          choices={Object.entries(configuratorProfileLabels).map(([id, name]) => ({ id, name }))}
+          fullWidth
+        />
+        <Button size="small" variant="outlined" href={slug ? `/produkt/${slug}` : undefined} onClick={(event) => {
+          if (!slug) return;
+          event.preventDefault();
+          window.open(`/produkt/${slug}`, "_blank", "noopener,noreferrer");
+        }}>Produkt im Shop öffnen</Button>
+        <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "#0f172a" }}>PDF / Dateiprüfung</Typography>
         <SelectInput
           source="pdfAnalysisMode"
-          label="PDF-Analyse"
+          label="PDF-Datei"
           defaultValue="disabled"
           choices={[
             { id: "disabled", name: "Deaktiviert" },
@@ -2591,6 +2747,35 @@ function ProductPdfAnalysisFields() {
           helperText="Steuert, ob der bestehende PDF-Analyzer Seitenanzahl, Format und Ausrichtung automatisch in die Konfiguration übernimmt."
           fullWidth
         />
+        <MuiTextField
+          select
+          size="small"
+          label="Vorschau"
+          value={pdfConfig.previewMode ?? ""}
+          onChange={(event) => updatePdfConfig("previewMode", event.target.value || undefined)}
+        >
+          <MenuItem value="">Profil-Standard</MenuItem>
+          {Object.entries(pdfPreviewModeLabels).map(([value, label]) => <MenuItem key={value} value={value}>{label}</MenuItem>)}
+        </MuiTextField>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 0.75 }}>
+          {[
+            ["formatCheck", "Format prüfen"],
+            ["allowFormatOverride", "Produktionsformat darf abweichen"],
+            ["showColorAnalysis", "Farbanalyse anzeigen"],
+            ["allowPageMapping", "Seitenzuordnung"],
+            ["bindingCheck", "Bindungsprüfung"]
+          ].map(([key, label]) => (
+            <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontWeight: 800 }}>
+              <input type="checkbox" checked={Boolean(pdfConfig[key as keyof typeof pdfConfig])} onChange={(event) => updatePdfConfig(key as keyof NonNullable<ProductCatalogItem["pdfConfig"]>, event.target.checked)} />
+              {label}
+            </label>
+          ))}
+        </Box>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, 180px)" }, gap: 1 }}>
+          <MuiTextField size="small" label="Mindestseiten" type="number" value={pdfConfig.minPages ?? ""} onChange={(event) => updatePdfConfig("minPages", event.target.value === "" ? undefined : Number(event.target.value))} />
+          <MuiTextField size="small" label="Seitenvielfaches" type="number" value={pdfConfig.pageMultiple ?? ""} onChange={(event) => updatePdfConfig("pageMultiple", event.target.value === "" ? undefined : Number(event.target.value))} />
+        </Box>
+        {profile === "brochure" ? <Alert severity="info">Broschüren verwenden weiterhin die bestehende Umschlag-, U1-U4-, Bindungs- und Produktionslogik.</Alert> : null}
         <Box sx={{ display: "grid", gap: 0.75, color: "#475569" }}>
           <Typography variant="body2"><strong>Deaktiviert:</strong> Keine automatische PDF-Analyse für dieses Produkt.</Typography>
           <Typography variant="body2"><strong>Optional:</strong> PDF kann hochgeladen werden; erkannte Dokumentdaten werden übernommen.</Typography>
@@ -2746,7 +2931,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, pdfAnalysisMode: "disabled", productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minWidthCm: 1, maxWidthCm: 0, minHeightCm: 1, maxHeightCm: 0, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, configuratorProfile: "standard", pdfAnalysisMode: "disabled", pdfConfig: {}, productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minWidthCm: 1, maxWidthCm: 0, minHeightCm: 1, maxHeightCm: 0, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductFormFields />
       </SimpleForm>
     </Create>
@@ -3283,6 +3468,37 @@ function PropertyValuesInput() {
   );
 }
 
+function PropertySafeDeleteButton() {
+  const record = useRecordContext<GlobalProperty>();
+  const notify = useNotify();
+  const redirect = useRedirect();
+  if (!record?.slug || !record.usageCount) return null;
+
+  async function removeAndDelete() {
+    if (!record?.slug) return;
+    if (!window.confirm(`Eigenschaft "${record.name}" aus ${record.usageCount ?? 0} Produkt(en) entfernen und endgültig löschen?`)) return;
+    const response = await fetch(`/api/catalog/properties/${record.slug}?removeFromProducts=true`, { method: "DELETE" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      notify(typeof payload?.message === "string" ? payload.message : "Eigenschaft konnte nicht gelöscht werden.", { type: "error" });
+      return;
+    }
+    notify("Eigenschaft wurde aus Produkten entfernt und gelöscht.", { type: "success" });
+    redirect("/properties");
+  }
+
+  return (
+    <Alert severity="warning" sx={{ borderRadius: 2 }}>
+      Diese Eigenschaft wird in {record.usageCount} Produkt(en) verwendet. Normales Löschen deaktiviert sie nur.
+      <Box sx={{ mt: 1 }}>
+        <Button color="error" variant="outlined" size="small" onClick={() => void removeAndDelete()}>
+          Aus Produkten entfernen und löschen
+        </Button>
+      </Box>
+    </Alert>
+  );
+}
+
 function PropertyEdit() {
   return (
     <Edit>
@@ -3300,6 +3516,7 @@ function PropertyEdit() {
           <Alert severity="info" sx={{ borderRadius: 2 }}>
             Globale Preise gelten automatisch in jedem Produkt, das diese Eigenschaft verwendet. Im Produktbereich nur dann überschreiben, wenn ein Sonderpreis nötig ist.
           </Alert>
+          <PropertySafeDeleteButton />
         <PropertyValuesInput />
         </AdminFormCanvas>
       </SimpleForm>
@@ -4389,17 +4606,27 @@ format,Format,A3,A3,fixed,0.36,,,,true,20`,
   categories: `slug,name,description,visible,published,logo
 druck,Druck,Druckprodukte online konfigurieren,true,true,/uploads/categories/druck.webp
 werbetechnik,Werbetechnik,Beschriftung Schilder Folien und Montage,true,true,/uploads/categories/werbetechnik.webp`,
-  products: `slug,name,category,basePrice,pricingType,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minWidthCm,maxWidthCm,minHeightCm,maxHeightCm,minAreaM2,tags
-flyer,Flyer,druck,0.716,tiered,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,,,,,,kopien|druck
-banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,30,500,30,300,0.25,banner|werbetechnik`
+  products: `slug,name,category,basePrice,pricingType,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minWidthCm,maxWidthCm,minHeightCm,maxHeightCm,minAreaM2,tags,configuratorProfile,pdfAnalysisMode,previewMode,minPages,pageMultiple,allowPageMapping,formatCheck,allowFormatOverride
+flyer,Flyer,druck,0.716,tiered,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,,,,,,kopien|druck,simple-print,required,first-page,1,1,false,true,true
+banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,30,500,30,300,0.25,banner|werbetechnik,poster,optional,first-page,1,1,false,true,true`,
+  "property-display": `productSlug,propertySlug,control,section,advanced,sortOrder
+broschueren,broschuere-format,buttons,format,false,10
+broschueren,umschlag-option,cards,cover,false,20
+broschueren,umschlag-material,select,cover,false,30
+broschueren,innenteil-material,select,material,false,40
+broschueren,broschuere-bindung,cards,binding,false,50
+broschueren,broschuere-ecken,buttons,finishing,true,60`
 };
 
-type CatalogCsvTarget = "properties" | "categories" | "products";
+type CatalogCsvTarget = "properties" | "categories" | "products" | "property-display";
 
 function detectCatalogCsvTarget(rows: Record<string, string>[], fallback: CatalogCsvTarget): CatalogCsvTarget {
   const keys = new Set(rows.flatMap((row) => Object.keys(row).map(normalizeCsvKey)));
-  if (["category", "kategorie", "baseprice", "preis", "pricingtype", "preisart", "productstatus", "heroimage", "short", "kurztext"].some((key) => keys.has(key))) {
+  if (["category", "kategorie", "baseprice", "preis", "pricingtype", "preisart", "productstatus", "heroimage", "short", "kurztext", "configuratorprofile", "pdfanalysismode", "previewmode", "minpages", "pagemultiple", "allowpagemapping", "formatcheck", "allowformatoverride"].some((key) => keys.has(key))) {
     return "products";
+  }
+  if (keys.has("productslug") && keys.has("propertyslug")) {
+    return "property-display";
   }
   if (["logo", "description", "beschreibung", "defaultpropertytemplate", "quantitysteps", "showroomimages"].some((key) => keys.has(key))) {
     return "categories";
@@ -4528,6 +4755,7 @@ function CatalogCsvImportToolPage() {
       variants: [],
       pricingProperties,
       quantitySteps: priceTiers.map((tier) => tier.fromQuantity ?? tier.quantity),
+      ...productConfigFromCsvRow(row),
       production: {
         baseProductionDays: csvNumber(csvCell(row, "baseProductionDays", "produktionstage"), 3),
         expressAvailable: false,
@@ -4544,12 +4772,43 @@ function CatalogCsvImportToolPage() {
       const rows = parseCsvRows(csvText);
       if (!rows.length) throw new Error("CSV enthält keine Datenzeilen.");
       const importTarget = detectCatalogCsvTarget(rows, target);
+      if (importTarget === "property-display") {
+        const products = await fetchJson<ProductCatalogItem[]>("/api/catalog/products?scope=admin");
+        const applied = applyPropertyDisplayCsvRows(products, rows);
+        let imported = 0;
+        for (const product of applied.products) {
+          const response = await fetch("/api/catalog/products", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(product)
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({} as { message?: string }));
+            throw new Error(error.message || `Import fehlgeschlagen bei Produkt ${product.slug}.`);
+          }
+          imported += 1;
+        }
+        const summary = `${imported} Produkte mit Darstellungsdaten aktualisiert${importTarget !== target ? ` (${importTarget} automatisch erkannt)` : ""}.${applied.skipped.length ? ` Übersprungen: ${applied.skipped.join("; ")}` : ""}`;
+        setResult(summary);
+        notify(summary, { type: applied.skipped.length ? "warning" : "success" });
+        return;
+      }
       const globalProperties = importTarget === "products"
         ? await fetchJson<GlobalProperty[]>("/api/catalog/properties?scope=admin")
         : [];
+      const products = importTarget === "products"
+        ? await fetchJson<ProductCatalogItem[]>("/api/catalog/products?scope=admin")
+        : [];
       const payloads = importTarget === "properties"
         ? csvPropertyPayloads(rows)
-        : rows.map((row) => mapRow(row, importTarget, globalProperties) as { slug?: string; name?: string });
+        : rows.map((row) => {
+          if (importTarget === "products" && !hasFullProductCsvColumns(row)) {
+            const slug = productSlugFromConfigCsvRow(row);
+            const existing = products.find((product) => product.slug === slug);
+            if (existing) return mergeProductConfigFromCsv(existing, row) as ProductCatalogItem & { slug?: string; name?: string };
+          }
+          return mapRow(row, importTarget, globalProperties) as { slug?: string; name?: string };
+        });
       let imported = 0;
       const skipped: string[] = [];
       for (const [index, payload] of payloads.entries()) {
@@ -4590,6 +4849,7 @@ function CatalogCsvImportToolPage() {
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
           <Button variant={target === "properties" ? "contained" : "outlined"} onClick={() => changeTarget("properties")}>Eigenschaften</Button>
           <Button variant={target === "products" ? "contained" : "outlined"} onClick={() => changeTarget("products")}>Produkte</Button>
+          <Button variant={target === "property-display" ? "contained" : "outlined"} onClick={() => changeTarget("property-display")}>Eigenschaft-Darstellung</Button>
           <Button variant={target === "categories" ? "contained" : "outlined"} onClick={() => changeTarget("categories")}>Kategorien</Button>
           <Button variant="outlined" onClick={() => void exportPropertiesCsv()}>Eigenschaft-Staffeln exportieren</Button>
         </Box>
@@ -4606,7 +4866,7 @@ function CatalogCsvImportToolPage() {
           helperText="Trennzeichen: Komma oder Semikolon. Mehrere Werte mit | trennen. Staffeln in priceTiers als Von-Bis:Einzelpreis, z.B. 1-99:0.45."
         />
         <Alert severity="info">
-          Beispiel für {target === "properties" ? "Eigenschaften" : target === "products" ? "Produkte" : "Kategorien"} ist im Feld bereits eingefügt und kann direkt ersetzt werden.
+          Beispiel für {target === "properties" ? "Eigenschaften" : target === "products" ? "Produkte" : target === "property-display" ? "Eigenschaft-Darstellung" : "Kategorien"} ist im Feld bereits eingefügt und kann direkt ersetzt werden.
         </Alert>
         <Box>
           <Button variant="contained" onClick={() => void importCsv()} disabled={importing}>

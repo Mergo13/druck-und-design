@@ -6,6 +6,7 @@ import type { ProductCatalogItem } from "@/types/print-platform";
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
 import { validateProductPricing } from "@/lib/print-workflow";
+import { applyConfiguratorProfileDefaults } from "@/lib/product-configurator-profile";
 
 export async function GET(request: Request) {
   const scope = new URL(request.url).searchParams.get("scope");
@@ -52,15 +53,14 @@ export async function POST(request: Request) {
       }
     ]
     : body.priceHistory ?? existingProduct?.priceHistory;
-  const product: ProductCatalogItem = {
+  const product: ProductCatalogItem = applyConfiguratorProfileDefaults({
     ...body,
     priceHistory,
     productStatus: body.productStatus ?? (body.published === false || body.visible === false ? "inactive" : "active"),
     studentDiscountEligible: body.studentDiscountEligible ?? true,
-    pdfAnalysisMode: body.pdfAnalysisMode ?? "disabled",
     visible: body.productStatus ? body.productStatus === "active" : (body.visible ?? true),
     published: body.productStatus ? body.productStatus === "active" : (body.published ?? true)
-  };
+  });
   const validationErrors = validateProductPricing(product);
   if (validationErrors.length) {
     return NextResponse.json({ message: validationErrors[0], errors: validationErrors }, { status: 400 });
