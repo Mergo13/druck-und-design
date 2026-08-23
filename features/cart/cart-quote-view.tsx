@@ -43,6 +43,29 @@ function createItemId() {
   return `item-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
+function cartItemKey(item: CartEntry, index: number) {
+  return `${item.slug}-${index}-${JSON.stringify(item.pricingConfig ?? item.config ?? {})}`;
+}
+
+function visibleConfigEntries(item: CartEntry, limit = 8) {
+  const hidden = new Set([
+    "Kategorie",
+    "Hinweis",
+    "Lieferung",
+    "PrintCheck",
+    "PrintDatei",
+    "pricingConfig"
+  ]);
+  return Object.entries(item.config ?? {})
+    .filter(([key, value]) => {
+      if (hidden.has(key)) return false;
+      if (key.toLowerCase().includes("praegungdesignid")) return false;
+      if (String(value ?? "").trim() === "" || String(value) === "-") return false;
+      return true;
+    })
+    .slice(0, limit);
+}
+
 export function CartQuoteView() {
   const [cart, setCart] = useState<CartEntry[]>([]);
   const [notes, setNotes] = useState("");
@@ -145,22 +168,22 @@ export function CartQuoteView() {
     }
   }, [appliedCoupon, studentDiscountTotal]);
 
-  function updateQuantity(slug: string, nextQuantity: number) {
-    const next = cart.map((item) => item.slug === slug ? { ...item, quantity: Math.max(1, nextQuantity) } : item);
+  function updateQuantityAt(index: number, nextQuantity: number) {
+    const next = cart.map((item, itemIndex) => itemIndex === index ? { ...item, quantity: Math.max(1, nextQuantity) } : item);
     setCart(next);
     localStorage.setItem("dud_cart", JSON.stringify(next));
     window.dispatchEvent(new Event("dud-cart-updated"));
   }
 
-  function removeItem(slug: string) {
-    const next = cart.filter((item) => item.slug !== slug);
+  function removeItemAt(index: number) {
+    const next = cart.filter((_, itemIndex) => itemIndex !== index);
     setCart(next);
     localStorage.setItem("dud_cart", JSON.stringify(next));
     window.dispatchEvent(new Event("dud-cart-updated"));
   }
 
-  function updatePrintCheck(slug: string, checked: boolean) {
-    const next = cart.map((item) => item.slug === slug ? {
+  function updatePrintCheckAt(index: number, checked: boolean) {
+    const next = cart.map((item, itemIndex) => itemIndex === index ? {
       ...item,
       printCheckRequested: checked,
       printCheckFee: checked ? (item.printCheckFee || PRINT_CHECK_FEE) : 0,
@@ -403,6 +426,54 @@ export function CartQuoteView() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="space-y-6">
+          {hasItems ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-700">Positionen</p>
+                  <h2 className="text-lg font-black text-slate-950">Deine Druckaufträge</h2>
+                </div>
+                <p className="text-sm font-semibold text-slate-600">{cart.length} {cart.length === 1 ? "Position" : "Positionen"}</p>
+              </div>
+              <div className="grid gap-3">
+                {cart.map((item, index) => {
+                  const entries = visibleConfigEntries(item, 10);
+                  return (
+                    <div key={cartItemKey(item, index)} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-slate-950">{item.name}</p>
+                          <p className="mt-0.5 text-xs font-semibold text-slate-500">{item.category}</p>
+                        </div>
+                        <p className="text-sm font-black text-slate-950">{formatEuro((item.unitPrice ?? 0) * item.quantity)}</p>
+                      </div>
+                      {entries.length ? (
+                        <dl className="mt-3 grid gap-1.5 text-xs sm:grid-cols-2">
+                          {entries.map(([key, value]) => (
+                            <div key={`${key}-${value}`} className="flex justify-between gap-3 rounded-md bg-white px-2 py-1.5">
+                              <dt className="text-slate-500">{key}</dt>
+                              <dd className="max-w-[60%] truncate text-right font-semibold text-slate-800" title={String(value)}>{String(value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => updateQuantityAt(index, item.quantity - 1)}>-</Button>
+                          <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
+                          <Button variant="outline" size="sm" onClick={() => updateQuantityAt(index, item.quantity + 1)}>+</Button>
+                        </div>
+                        <button type="button" className="text-xs font-semibold text-rose-600 hover:underline" onClick={() => removeItemAt(index)}>
+                          Entfernen
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
               <div className="rounded-md bg-emerald-50 p-2 text-emerald-700">
@@ -653,12 +724,12 @@ export function CartQuoteView() {
                   </div>
                 </div>
                 <div className="mt-3 grid gap-2">
-                  {cart.filter((item) => item.printCheckFileName || item.printCheckFileUrl).map((item) => (
-                    <label key={`print-check-${item.slug}`} className={item.printCheckRequested ? "flex cursor-pointer items-start gap-3 rounded-md border border-emerald-300 bg-white p-3" : "flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 bg-white p-3 hover:border-emerald-300"}>
+                  {cart.map((item, index) => ({ item, index })).filter(({ item }) => item.printCheckFileName || item.printCheckFileUrl).map(({ item, index }) => (
+                    <label key={`print-check-${cartItemKey(item, index)}`} className={item.printCheckRequested ? "flex cursor-pointer items-start gap-3 rounded-md border border-emerald-300 bg-white p-3" : "flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 bg-white p-3 hover:border-emerald-300"}>
                       <input
                         type="checkbox"
                         checked={Boolean(item.printCheckRequested)}
-                        onChange={(event) => updatePrintCheck(item.slug, event.target.checked)}
+                        onChange={(event) => updatePrintCheckAt(index, event.target.checked)}
                         className="mt-1 h-4 w-4 shrink-0 accent-emerald-700"
                       />
                       <span className="min-w-0 text-xs leading-5">
@@ -740,15 +811,27 @@ export function CartQuoteView() {
                 </div>
 
                 <div className="flex-1 space-y-3 overflow-y-auto p-5">
-                  {cart.map((item) => (
-                    <div key={item.slug} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  {cart.map((item, index) => {
+                    const entries = visibleConfigEntries(item, 6);
+                    return (
+                    <div key={cartItemKey(item, index)} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                       <p className="text-sm font-bold">{item.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{item.category}</p>
+                      {entries.length ? (
+                        <div className="mt-3 grid gap-1 rounded-md border border-slate-200 bg-slate-50 p-2">
+                          {entries.map(([key, value]) => (
+                            <div key={`${key}-${value}`} className="flex justify-between gap-3 text-xs">
+                              <span className="text-slate-500">{key}</span>
+                              <span className="max-w-[58%] truncate text-right font-semibold text-slate-800" title={String(value)}>{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="mt-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={() => updateQuantity(item.slug, item.quantity - 1)}>-</Button>
+                          <Button variant="outline" size="sm" onClick={() => updateQuantityAt(index, item.quantity - 1)}>-</Button>
                           <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
-                          <Button variant="outline" size="sm" onClick={() => updateQuantity(item.slug, item.quantity + 1)}>+</Button>
+                          <Button variant="outline" size="sm" onClick={() => updateQuantityAt(index, item.quantity + 1)}>+</Button>
                         </div>
                         <span className="text-sm font-bold">{formatEuro((item.unitPrice ?? 0) * item.quantity)}</span>
                       </div>
@@ -766,12 +849,13 @@ export function CartQuoteView() {
                       <button
                         type="button"
                         className="mt-3 text-xs font-semibold text-rose-600 hover:underline"
-                        onClick={() => removeItem(item.slug)}
+                        onClick={() => removeItemAt(index)}
                       >
                         Entfernen
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                   {!cart.length ? (
                     <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
                       Ihr Warenkorb ist aktuell leer.

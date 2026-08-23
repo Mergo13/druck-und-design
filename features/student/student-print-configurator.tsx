@@ -41,9 +41,16 @@ function slugify(input: string) {
 }
 
 function enabledValues(property: ProductPricingProperty) {
+  const seen = new Set<string>();
   return (property.values ?? [])
     .filter((value) => value.enabled !== false)
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .filter((value) => {
+      const key = slugify(value.value || value.label || "");
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function valueLabel(value: ProductPropertyValue) {
@@ -112,9 +119,16 @@ function sanitizeConfiguration(properties: ProductPricingProperty[], current: Pr
 }
 
 function sortedPricingProperties(product: ProductCatalogItem) {
+  const seen = new Set<string>();
   return (product.pricingProperties ?? [])
     .filter((property) => enabledValues(property).length > 0)
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .filter((property) => {
+      const key = slugify(property.propertyId || property.name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function isRuntimeUploadImage(src?: string) {
@@ -200,6 +214,7 @@ export function StudentConfigurator({
   const [dragging, setDragging] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
+  const [cartAdded, setCartAdded] = useState(false);
   const [finalizedEmbossing, setFinalizedEmbossing] = useState<FinalizedEmbossing | null>(null);
   const [draftEmbossingLineCount, setDraftEmbossingLineCount] = useState(0);
   const pdfMode = resolvePdfAnalysisMode(product);
@@ -311,6 +326,7 @@ export function StudentConfigurator({
   async function handleFile(file?: File) {
     setMessage("");
     setCartMessage("");
+    setCartAdded(false);
     setThumbnails([]);
     if (!file) return;
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
@@ -340,13 +356,14 @@ export function StudentConfigurator({
 
   function addToCart() {
     setCartMessage("");
+    setCartAdded(false);
     if (pdfRequired && !analysis?.valid) {
       setCartMessage("Bitte lade zuerst eine geprüfte PDF hoch.");
-      return;
+      return false;
     }
     if (embossingActive && !finalizedEmbossing) {
       setCartMessage("Bitte schließe die Prägegestaltung ab, bevor du bestellst.");
-      return;
+      return false;
     }
     const authoritativeConfig: ProductConfiguration = { ...pricingConfig };
     if (analysis?.valid) {
@@ -381,7 +398,7 @@ export function StudentConfigurator({
       ...authoritativePrice.lines.map((line) => [line.label, `${line.value}${line.price ? ` (+${formatEuro(line.price)})` : ""}`] as [string, string])
     ]);
     const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<any>;
-    existing.push({
+    const cartEntry = {
       slug: product.slug,
       name: product.name,
       quantity: 1,
@@ -395,10 +412,19 @@ export function StudentConfigurator({
       printCheckFileName: analysis?.fileName,
       printCheckFileUrl: analysis?.fileUrl,
       config: selectedConfig
-    });
+    };
+    const found = existing.find((entry) => entry.slug === product.slug && JSON.stringify(entry.pricingConfig ?? {}) === JSON.stringify(authoritativeConfig));
+    if (found) {
+      const nextQuantity = Math.max(1, Number(found.quantity) || 1) + 1;
+      Object.assign(found, cartEntry, { quantity: nextQuantity });
+    } else {
+      existing.push(cartEntry);
+    }
     localStorage.setItem("dud_cart", JSON.stringify(existing));
     window.dispatchEvent(new Event("dud-cart-updated"));
     setCartMessage("Dein Druckauftrag wurde in den Warenkorb gelegt.");
+    setCartAdded(true);
+    return true;
   }
 
   return (
@@ -445,7 +471,7 @@ export function StudentConfigurator({
               <Badge variant="outline" className="border-brand-blue/20 bg-brand-mist text-brand-blue">2 Ausführung</Badge>
               <div className="mt-5 grid gap-5">
                 {standardProperties.map((property) => (
-                  <PropertyControl key={property.name} property={property} value={normalizedConfig[propertyKey(property)] ?? ""} onChange={(value) => updateProperty(property, value)} />
+                  <PropertyControl key={propertyKey(property)} property={property} value={normalizedConfig[propertyKey(property)] ?? ""} onChange={(value) => updateProperty(property, value)} />
                 ))}
                 <label className="grid gap-2">
                   <span className="text-sm font-black text-brand-ink">Menge</span>
@@ -461,7 +487,7 @@ export function StudentConfigurator({
                   {advancedOpen ? (
                     <div className="mt-5 grid gap-5">
                       {advancedProperties.map((property) => (
-                        <PropertyControl key={property.name} property={property} value={normalizedConfig[propertyKey(property)] ?? ""} onChange={(value) => updateProperty(property, value)} />
+                        <PropertyControl key={propertyKey(property)} property={property} value={normalizedConfig[propertyKey(property)] ?? ""} onChange={(value) => updateProperty(property, value)} />
                       ))}
                     </div>
                   ) : null}
@@ -535,7 +561,21 @@ export function StudentConfigurator({
               <Button type="button" className="mt-5 w-full" disabled={pdfRequired && !analysis?.valid} onClick={addToCart}>
                 In den Warenkorb <ArrowRight className="h-4 w-4" />
               </Button>
-              {cartMessage ? <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{cartMessage}</p> : null}
+              {cartMessage ? (
+                <div className={cartAdded ? "mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800" : "mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900"}>
+                  <p>{cartMessage}</p>
+                  {cartAdded ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild size="sm" className="bg-emerald-700 hover:bg-emerald-800">
+                        <Link href="/warenkorb">Warenkorb ansehen</Link>
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setCartAdded(false)}>
+                        Weiter konfigurieren
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </aside>
         </div>
@@ -543,7 +583,8 @@ export function StudentConfigurator({
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white p-3 shadow-[0_-8px_30px_rgba(15,23,42,.12)] lg:hidden">
         <div className="mx-auto flex w-[min(100%-16px,720px)] items-center justify-between gap-3">
           <span className="text-xl font-black text-brand-ink">{formatEuro(discount.total)}</span>
-          <Button type="button" disabled={pdfRequired && !analysis?.valid} onClick={addToCart}>In den Warenkorb</Button>
+          <Button type="button" disabled={pdfRequired && !analysis?.valid} onClick={addToCart}>{cartAdded ? "Erneut hinzufügen" : "In den Warenkorb"}</Button>
+          {cartAdded ? <Button asChild variant="outline"><Link href="/warenkorb">Warenkorb</Link></Button> : null}
         </div>
       </div>
     </section>

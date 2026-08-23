@@ -6,7 +6,8 @@ import { deriveProductDocumentProduction, pricingQuantitiesForProductDocument } 
 import { resolveBindingConfigurationForProduct, type BindingResolutionResult } from "@/lib/binding-resolution";
 import { isBrochureProduct } from "@/lib/product-configurator-profile";
 import { getProductionBindingConfig } from "@/lib/production-binding-config";
-import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateSelectedCategoryPropertiesPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateProductPricingResult } from "@/lib/universal-pricing";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { applyStudentDiscount, getStudentDiscountPercent, isVerifiedStudent } from "@/lib/student-discount";
 import type { UserAccount } from "@/types";
@@ -116,9 +117,16 @@ function enabledCategoryProperties(product: ProductCatalogItem, categoryProperti
   return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
 }
 
-function calculateProductUnitPrice(product: ProductCatalogItem, quantity: number, selectedOptions: Record<string, string>, categoryProperties: ProductCategoryProperty[]) {
+function calculateProductUnitPrice(product: ProductCatalogItem, quantity: number, selectedOptions: Record<string, string>, categoryProperties: ProductCategoryProperty[], globalProperties: Awaited<ReturnType<typeof getGlobalProperties>>) {
   if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-    return calculateConfiguredProductPrice(product, quantity, selectedOptions, pricingQuantitiesForProductDocument(product, categoryProperties, selectedOptions, quantity)).total;
+    const productionContext = pricingQuantitiesForProductDocument(product, categoryProperties, selectedOptions, quantity);
+    return calculateProductPricingResult({
+      product,
+      quantity,
+      configuration: selectedOptions,
+      productionContext,
+      globalProperties
+    }).total;
   }
   const firstVariant = product.variants[0];
   const productPrice = firstVariant
@@ -205,7 +213,7 @@ export async function priceCartItems(params: {
       pricingConfig.resolvedBindingSku = bindingResolution.sku ?? "";
       pricingConfig.resolvedBindingSupplierArticle = bindingResolution.supplierArticleNumber ?? "";
     }
-    const normalUnitPrice = calculateProductUnitPrice(product, productQuantity, pricingConfig, categoryProperties);
+    const normalUnitPrice = calculateProductUnitPrice(product, productQuantity, pricingConfig, categoryProperties, globalProperties);
     const lineNormalPrice = money(normalUnitPrice * lineQuantity);
     const discountResult = applyStudentDiscount({ subtotal: lineNormalPrice, product, user: params.user, percent });
     const lineFinalPrice = discountResult.total;

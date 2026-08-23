@@ -1,4 +1,4 @@
-import type { PdfAnalysisMode, ProductCatalogItem, ProductConfiguratorProfile, ProductPdfConfig } from "@/types/print-platform";
+import type { ExperienceProfileKey, PdfAnalysisMode, ProductCatalogItem, ProductConfiguratorProfile, ProductPdfConfig } from "@/types/print-platform";
 
 export const configuratorProfileLabels: Record<ProductConfiguratorProfile, string> = {
   standard: "Standard",
@@ -19,6 +19,17 @@ export const pdfPreviewModeLabels: Record<NonNullable<ProductPdfConfig["previewM
   "front-back": "Vorder-/Rückseite",
   thumbnails: "Seitenvorschau",
   "page-list": "Seitenliste"
+};
+
+export const experienceProfileLabels: Record<ExperienceProfileKey, string> = {
+  standard: "Standard",
+  document: "Dokument",
+  book: "Buch / Broschüre",
+  cards: "Karten",
+  folded: "Gefalzt",
+  "large-format": "Großformat",
+  textile: "Textil",
+  signage: "Beschilderung"
 };
 
 const profilePdfDefaults: Record<ProductConfiguratorProfile, ProductPdfConfig> = {
@@ -60,11 +71,21 @@ export function resolvePdfAnalysisMode(product: Pick<ProductCatalogItem, "config
   return product.pdfAnalysisMode ?? (isBrochureProduct(product) ? "required" : "disabled");
 }
 
+export function resolveExperienceProfile(product: Pick<ProductCatalogItem, "experienceProfile" | "configuratorProfile" | "slug">): ExperienceProfileKey {
+  if (product.experienceProfile) return product.experienceProfile;
+  const configuratorProfile = resolveConfiguratorProfile(product);
+  if (configuratorProfile === "thesis" || configuratorProfile === "brochure") return "book";
+  if (configuratorProfile === "document" || configuratorProfile === "simple-print") return "document";
+  if (configuratorProfile === "poster" || configuratorProfile === "plan" || configuratorProfile === "werbetechnik") return "large-format";
+  return "standard";
+}
+
 export function applyConfiguratorProfileDefaults(product: ProductCatalogItem): ProductCatalogItem {
   const profile = resolveConfiguratorProfile(product);
   const defaults = profilePdfDefaults[profile];
   return {
     ...product,
+    experienceProfile: product.experienceProfile ?? resolveExperienceProfile(product),
     pdfAnalysisMode: product.pdfAnalysisMode ?? (profile === "brochure" ? "required" : "disabled"),
     pdfConfig: { ...defaults, ...(product.pdfConfig ?? {}) }
   };

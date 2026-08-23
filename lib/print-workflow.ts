@@ -1,4 +1,5 @@
 import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty, ProductPropertyProductionMetadata } from "@/types/print-platform";
+import { resolvePricingQuantity, type PricingProductionContext } from "@/lib/pricing-quantity";
 
 function money(value: number) {
   return Math.round(value * 100) / 100;
@@ -119,20 +120,7 @@ export function calculateConfiguredProductPrice(
   product: ProductCatalogItem,
   quantity: number,
   selectedOptions: Record<string, string>,
-  pricingQuantities?: {
-    baseQuantity?: number;
-    propertyQuantity?: number;
-    copies?: number;
-    printedPages?: number;
-    sheets?: number;
-    blackWhitePages?: number;
-    colorPages?: number;
-    frontCovers?: number;
-    backCovers?: number;
-    printedCoverSides?: number;
-    embossingLines?: number;
-    perOrder?: number;
-  }
+  pricingQuantities?: PricingProductionContext
 ) {
   const qty = safeQuantity(quantity);
   const baseQty = safeQuantity(pricingQuantities?.baseQuantity ?? qty);
@@ -252,19 +240,12 @@ function resolvePropertyPricingQuantity(
 ) {
   const source = production?.pricingQuantitySource;
   if (!source) return fallbackQuantity;
-  const value = source === "copies" ? pricingQuantities?.copies
-    : source === "printed_pages" ? pricingQuantities?.printedPages
-      : source === "sheets" ? pricingQuantities?.sheets
-        : source === "black_white_pages" ? pricingQuantities?.blackWhitePages
-          : source === "color_pages" ? pricingQuantities?.colorPages
-              : source === "front_covers" ? pricingQuantities?.frontCovers
-                : source === "back_covers" ? pricingQuantities?.backCovers
-                  : source === "printed_cover_sides" ? pricingQuantities?.printedCoverSides
-                    : source === "embossing_lines" ? pricingQuantities?.embossingLines
-                      : source === "per_order" ? pricingQuantities?.perOrder
-                        : fallbackQuantity;
-  const numeric = Number(value ?? fallbackQuantity);
-  return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : fallbackQuantity;
+  const quantity = resolvePricingQuantity({
+    source,
+    productionContext: pricingQuantities,
+    fallbackQuantity
+  });
+  return Number.isInteger(quantity) ? quantity : Math.round(quantity);
 }
 
 export function getProductStartingPriceLabel(product: ProductCatalogItem) {

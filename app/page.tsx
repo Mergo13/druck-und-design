@@ -17,6 +17,7 @@ import { localBusinessJsonLd } from "@/lib/seo";
 import { getSiteImageMap } from "@/lib/site-images";
 import { getHomepageSettings } from "@/lib/homepage-settings";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
+import { shopProductsFromCatalog } from "@/lib/shop-products";
 import { prisma } from "@/lib/prisma";
 import type { ProductCatalogItem } from "@/types/print-platform";
 
@@ -32,7 +33,8 @@ export default async function HomePage() {
     getHomepageSettings(),
     getHomepageReviewData()
   ]);
-  const bestsellerProducts = products
+  const shopProducts = shopProductsFromCatalog(products);
+  const bestsellerProducts = shopProducts
     .filter((product) => product.visible !== false && product.published !== false && product.isBestseller)
     .sort((a, b) => Number(a.bestsellerSortOrder ?? 999) - Number(b.bestsellerSortOrder ?? 999))
     .slice(0, 4);

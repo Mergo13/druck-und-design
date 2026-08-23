@@ -4,6 +4,7 @@ import { ShopBrowser } from "@/features/shop/shop-browser";
 import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository";
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
+import { shopCategoriesForProducts, shopProductsFromCatalog } from "@/lib/shop-products";
 import { ShowroomSection } from "@/components/showroom/showroom-section";
 import { getCategoryShowroom } from "@/lib/showroom-content";
 import { getSiteImageMap } from "@/lib/site-images";
@@ -31,8 +32,10 @@ export default async function CategoryPage({ params }: { params: Promise<{ kateg
   const { kategorie } = await params;
   const [categories, rawProducts, session, siteImages] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser(), getSiteImageMap()]);
   const authenticated = Boolean(session);
-  const products = authenticated ? rawProducts : rawProducts.map(withoutPrices);
-  const category = categories.find((item) => item.slug === kategorie);
+  const shopProducts = shopProductsFromCatalog(rawProducts);
+  const shopCategories = shopCategoriesForProducts(categories, rawProducts);
+  const products = authenticated ? shopProducts : shopProducts.map(withoutPrices);
+  const category = shopCategories.find((item) => item.slug === kategorie);
   if (!category || ["druckservice", "werbetechnik", "werbeagentur", "kleidung-textilien", "leistungen"].includes(kategorie)) notFound();
   const showroomImages = getCategoryShowroom(category, siteImages);
 
@@ -48,7 +51,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ kateg
         description="Typische Anwendungen und Umsetzungen für diese Produktgruppe."
         images={showroomImages}
       />
-      <ShopBrowser initialCategory={category.slug} categories={categories} products={products} authenticated={authenticated} />
+      <ShopBrowser initialCategory={category.slug} categories={shopCategories} products={products} authenticated={authenticated} />
     </section>
   );
 }

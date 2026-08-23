@@ -11,6 +11,55 @@ export const bulkDeleteSchema = z.object({
   ids: z.array(z.string().min(1)).min(1)
 });
 
+const pricingQuantitySourceSchema = z.enum([
+  "copies",
+  "printed_pages",
+  "sheets",
+  "black_white_pages",
+  "color_pages",
+  "front_covers",
+  "back_covers",
+  "printed_cover_sides",
+  "embossing_lines",
+  "per_order",
+  "area_m2",
+  "perimeter_m",
+  "running_meter",
+  "machine_sheets",
+  "finished_units",
+  "cuts",
+  "folds",
+  "holes",
+  "finishing_passes",
+  "machine_minutes",
+  "labor_minutes",
+  "design_hours"
+]);
+
+const pricingGuardSchema = z.object({
+  minimumOrderPrice: z.number().nonnegative().optional(),
+  minimumMarginPercent: z.number().min(0).max(99).optional(),
+  targetMarginPercent: z.number().min(0).max(99).optional(),
+  maximumDiscountPercent: z.number().min(0).max(100).optional(),
+  roundingRule: z.enum(["none", "cent", "ten_cent", "fifty_cent", "whole", "psychological"]).optional()
+}).optional();
+
+const pricingComponentSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  kind: z.enum(["print", "paper", "material", "setup", "cutting", "folding", "binding", "lamination", "embossing", "finishing", "packaging", "machine", "labor"]),
+  quantitySource: pricingQuantitySourceSchema,
+  pricingSource: z.enum(["inline", "global"]).optional(),
+  propertyId: z.string().optional(),
+  propertyValueId: z.string().optional(),
+  sellingPrice: z.number().nonnegative().optional(),
+  costPrice: z.number().nonnegative().optional(),
+  priceOverride: z.number().nonnegative().optional(),
+  costOverride: z.number().nonnegative().optional(),
+  markupOverride: z.number().nonnegative().optional(),
+  enabled: z.boolean().optional()
+});
+
 export const moduleCreateSchemas = {
   quotes: z.object({
     customer: z.string().min(1),
@@ -122,6 +171,7 @@ export const moduleCreateSchemas = {
           stepPrice: z.number().nonnegative().optional(),
           pricingMode: z.enum(["included", "fixed", "tiered", "flat", "multiplier"]).optional(),
           fixedPrice: z.number().nonnegative().optional(),
+          costPrice: z.number().nonnegative().optional(),
           multiplier: z.number().nonnegative().optional(),
           tierPrices: z.array(z.object({
             quantity: z.number().int().positive(),
@@ -150,6 +200,20 @@ export const moduleCreateSchemas = {
     rating: z.number(),
     basePrice: z.number(),
     pricingType: z.enum(["fixed", "tiered", "area", "hourly"]).optional(),
+    configuratorProfile: z.enum(["standard", "simple-print", "front-back", "brochure", "document", "thesis", "poster", "plan", "werbetechnik", "custom"]).optional(),
+    pricingProfile: z.union([
+      z.enum(["digital-document", "digital-sheet", "sheet-print", "business-card", "brochure", "booklet", "thesis", "document-binding", "large-format", "plan-print", "area-print", "area-finishing", "sticker", "textile-print", "signage", "design-service", "custom-formula"]),
+      z.object({
+        key: z.enum(["digital-document", "digital-sheet", "sheet-print", "business-card", "brochure", "booklet", "thesis", "document-binding", "large-format", "plan-print", "area-print", "area-finishing", "sticker", "textile-print", "signage", "design-service", "custom-formula"]),
+        label: z.string().optional(),
+        components: z.array(pricingComponentSchema).optional(),
+        guards: pricingGuardSchema
+      })
+    ]).optional(),
+    pricingComponents: z.array(pricingComponentSchema).optional(),
+    pricingGuards: pricingGuardSchema,
+    experienceProfile: z.enum(["standard", "document", "book", "cards", "folded", "large-format", "textile", "signage"]).optional(),
+    pdfAnalysisMode: z.enum(["disabled", "optional", "required"]).optional(),
     purchaseMode: z.enum(["online", "request", "both", "disabled"]).optional(),
     isBestseller: z.boolean().optional(),
     bestsellerSortOrder: z.number().optional(),
@@ -180,6 +244,10 @@ export const moduleCreateSchemas = {
         value: z.string().min(1),
         pricingMode: z.enum(["global", "included", "fixed", "tiered", "flat", "multiplier"]),
         fixedPrice: z.number().nonnegative().optional(),
+        costPrice: z.number().nonnegative().optional(),
+        priceOverride: z.number().nonnegative().optional(),
+        costOverride: z.number().nonnegative().optional(),
+        markupOverride: z.number().nonnegative().optional(),
         multiplier: z.number().nonnegative().optional(),
         tierPrices: z.array(z.object({
           quantity: z.number().int().positive(),

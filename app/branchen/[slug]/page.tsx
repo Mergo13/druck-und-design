@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getPublicIndustries, getPublicIndustryBySlug, getPublicProducts } from "@/lib/catalog-repository";
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
+import { shopProductsFromCatalog } from "@/lib/shop-products";
 import { prisma } from "@/lib/prisma";
 import { getSiteImageMap } from "@/lib/site-images";
 
@@ -56,7 +57,7 @@ export default async function IndustryPage({ params }: { params: Promise<{ slug:
     image: item.image || siteImages[`industry.${industry.slug}.showroom.${index + 1}`]
   }));
   const linkedProductSlugs = new Set(industry.productSlugs ?? []);
-  const relatedRawProducts = rawProducts
+  const relatedRawProducts = shopProductsFromCatalog(rawProducts)
     .filter((product) => linkedProductSlugs.has(product.slug) || (product.industrySlugs ?? []).includes(industry.slug))
     .slice(0, 6);
   const relatedProducts = authenticated ? relatedRawProducts : relatedRawProducts.map(withoutPrices);

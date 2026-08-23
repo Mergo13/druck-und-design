@@ -1,6 +1,8 @@
 import type { ProductCatalogItem, ProductConfiguratorProfile, ProductPdfConfig, ProductPricingProperty } from "@/types/print-platform";
 
 const configuratorProfiles = new Set<ProductConfiguratorProfile>(["standard", "simple-print", "front-back", "brochure", "document", "thesis", "poster", "plan", "werbetechnik", "custom"]);
+const pricingProfiles = new Set(["digital-document", "digital-sheet", "sheet-print", "business-card", "brochure", "booklet", "thesis", "document-binding", "large-format", "plan-print", "area-print", "area-finishing", "sticker", "textile-print", "signage", "design-service", "custom-formula"]);
+const experienceProfiles = new Set(["standard", "document", "book", "cards", "folded", "large-format", "textile", "signage"]);
 const previewModes = new Set<NonNullable<ProductPdfConfig["previewMode"]>>(["none", "first-page", "front-back", "thumbnails", "page-list"]);
 const displayControls = new Set<NonNullable<ProductPricingProperty["display"]>["control"]>(["select", "buttons", "cards", "radio", "swatches"]);
 const displaySections = new Set<NonNullable<ProductPricingProperty["display"]>["section"]>(["general", "format", "print", "material", "cover", "finishing", "binding"]);
@@ -42,6 +44,8 @@ function slugify(input: string) {
 
 export function productConfigFromCsvRow(row: Record<string, string>): Partial<ProductCatalogItem> {
   const profile = cell(row, "configuratorProfile", "configurator_profile");
+  const pricingProfile = cell(row, "pricingProfile", "pricing_profile");
+  const experienceProfile = cell(row, "experienceProfile", "experience_profile");
   const pdfAnalysisMode = cell(row, "pdfAnalysisMode", "pdf_analysis_mode");
   const previewMode = cell(row, "previewMode", "preview_mode");
   const minPages = csvNumber(cell(row, "minPages", "min_pages"));
@@ -62,6 +66,8 @@ export function productConfigFromCsvRow(row: Record<string, string>): Partial<Pr
 
   return {
     ...(profile && configuratorProfiles.has(profile as ProductConfiguratorProfile) ? { configuratorProfile: profile as ProductConfiguratorProfile } : {}),
+    ...(pricingProfile && pricingProfiles.has(pricingProfile) ? { pricingProfile: pricingProfile as Partial<ProductCatalogItem>["pricingProfile"] } : {}),
+    ...(experienceProfile && experienceProfiles.has(experienceProfile) ? { experienceProfile: experienceProfile as Partial<ProductCatalogItem>["experienceProfile"] } : {}),
     ...(pdfAnalysisMode === "disabled" || pdfAnalysisMode === "optional" || pdfAnalysisMode === "required" ? { pdfAnalysisMode } : {}),
     ...(Object.keys(pdfConfig).length ? { pdfConfig } : {})
   };
@@ -70,6 +76,8 @@ export function productConfigFromCsvRow(row: Record<string, string>): Partial<Pr
 export function hasProductConfigCsvColumns(row: Record<string, string>) {
   return Boolean(
     cell(row, "configuratorProfile", "configurator_profile") ||
+    cell(row, "pricingProfile", "pricing_profile") ||
+    cell(row, "experienceProfile", "experience_profile") ||
     cell(row, "pdfAnalysisMode", "pdf_analysis_mode") ||
     cell(row, "previewMode", "preview_mode") ||
     cell(row, "minPages", "min_pages") ||

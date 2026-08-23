@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AnimatedPrice, MotionSelection } from "@/components/ui/motion-primitives";
 import { BindingConfigurationSummary } from "@/features/configurator/binding-configuration-summary";
 import { PdfPageThumbnail } from "@/features/configurator/pdf/pdf-page-thumbnail";
 import { PdfPreviewPanel } from "@/features/configurator/pdf/pdf-preview-panel";
@@ -14,6 +15,7 @@ import { usePdfSession } from "@/lib/pdf/pdf-session";
 import { isBrochureProduct, resolvePdfAnalysisMode, resolveProductPdfConfig } from "@/lib/product-configurator-profile";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
+import { calculateProductPricingResult } from "@/lib/universal-pricing";
 import { applyStudentDiscount } from "@/lib/student-discount";
 import type { PdfAnalysis } from "@/lib/student-print-config";
 import { formatEuro } from "@/lib/utils";
@@ -305,13 +307,20 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const currentPrice = useMemo(() => {
     const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
     if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-      return calculateConfiguredProductPrice(product, quantity, normalizedConfig, pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, normalizedConfig, quantity) : undefined).total;
+      const productionContext = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, normalizedConfig, quantity) : undefined;
+      return calculateProductPricingResult({
+        product,
+        quantity,
+        configuration: normalizedConfig,
+        productionContext,
+        globalProperties
+      }).total;
     }
     const productPrice = firstVariant
       ? calculateVariantPrice(product, firstVariant.id, quantity, config)
       : product.basePrice;
     return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
-  }, [categoryProperties, config, currentQuantity, enabledProperties, firstVariant, normalizedConfig, pdfAnalysisEnabled, product]);
+  }, [categoryProperties, config, currentQuantity, enabledProperties, firstVariant, globalProperties, normalizedConfig, pdfAnalysisEnabled, product]);
   const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
     ...normalizedConfig,
     ...(finalizedEmbossing?.cartConfig ?? {}),
@@ -578,8 +587,15 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     }
     const authoritativePricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, authoritativeConfig, currentQuantity) : undefined;
     const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
+    const authoritativePricing = calculateProductPricingResult({
+      product,
+      quantity: currentQuantity,
+      configuration: authoritativeConfig,
+      productionContext: authoritativePricingQuantities,
+      globalProperties
+    });
     const authoritativeDiscount = applyStudentDiscount({
-      subtotal: priceSnapshot.total,
+      subtotal: authoritativePricing.total,
       product,
       user: studentVerified ? { studentVerification: { status: "approved" } } : null,
       percent: studentDiscountPercent
@@ -636,7 +652,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     if (found) {
       found.quantity += 1;
       found.unitPrice = authoritativeDisplayedTotal;
-      found.normalUnitPrice = priceSnapshot.total;
+      found.normalUnitPrice = authoritativePricing.total;
       found.config = selectedConfig;
       found.pricingConfig = authoritativeConfig;
       found.studentDiscountEligible = product.studentDiscountEligible !== false;
@@ -651,7 +667,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         quantity: 1,
         category: product.category,
         unitPrice: authoritativeDisplayedTotal,
-        normalUnitPrice: priceSnapshot.total,
+        normalUnitPrice: authoritativePricing.total,
         pricingConfig: authoritativeConfig,
         studentDiscountEligible: product.studentDiscountEligible !== false,
         printCheckRequested: false,
@@ -717,12 +733,13 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           onClick={() => setValue(option.value)}
           className={selected
             ? card
-              ? "grid gap-2 rounded-md border border-brand-blue bg-brand-mist p-3 text-left text-sm font-bold text-brand-blue"
-              : "rounded-md border border-brand-blue bg-brand-mist px-3 py-2 text-sm font-bold text-brand-blue"
+              ? "relative grid gap-2 overflow-hidden rounded-md border border-brand-blue bg-brand-mist p-3 text-left text-sm font-bold text-brand-blue"
+              : "relative overflow-hidden rounded-md border border-brand-blue bg-brand-mist px-3 py-2 text-sm font-bold text-brand-blue"
             : card
-              ? "grid gap-2 rounded-md border border-slate-200 bg-white p-3 text-left text-sm font-bold text-slate-700 hover:border-brand-blue"
-              : "rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:border-brand-blue"}
+              ? "relative grid gap-2 overflow-hidden rounded-md border border-slate-200 bg-white p-3 text-left text-sm font-bold text-slate-700 transition-colors hover:border-brand-blue"
+              : "relative overflow-hidden rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition-colors hover:border-brand-blue"}
         >
+          <MotionSelection selected={selected} />
           {card && option.image ? (
             <span className="block overflow-hidden rounded border border-slate-200 bg-slate-50">
               <img src={option.image} alt="" className="aspect-[4/3] w-full object-cover" />
@@ -784,7 +801,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-primary">Ihr Produkt</p>
-          <h2 className="text-2xl font-black">{authenticated ? formatEuro(displayedTotal) : "Preis nach Anmeldung"}</h2>
+          <h2 className="text-2xl font-black">{authenticated ? <AnimatedPrice value={displayedTotal} /> : "Preis nach Anmeldung"}</h2>
           <p className="text-sm text-muted-foreground">Konfiguration mit optionalem Datei-Upload</p>
           {authenticated && studentDiscountAmount > 0 ? (
             <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs font-semibold text-emerald-800">

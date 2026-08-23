@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Star } from "lucide-react";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
@@ -11,20 +11,22 @@ import { withoutPrices } from "@/lib/product-price-visibility";
 import { prisma } from "@/lib/prisma";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import { getStudentDiscountPercent, isStudentDiscountEligibleProduct, isVerifiedStudent } from "@/lib/student-discount";
+import { studentProductHref } from "@/lib/student-products";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const product = await getPublicProductBySlug(slug);
+  const canonical = product?.isStudentShop === true ? studentProductHref(product) : `/produkt/${slug}`;
   return {
     title: product ? `${product.name} online konfigurieren` : "Produkt",
     description: product?.seo,
-    alternates: { canonical: `/produkt/${slug}` },
+    alternates: { canonical },
     openGraph: product ? {
       title: `${product.name} | druck&design studio`,
       description: product.seo,
-      url: `/produkt/${slug}`,
+      url: canonical,
       type: "website",
       locale: "de_AT",
       images: [{ url: product.heroImage, alt: product.name }]
@@ -36,6 +38,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const rawProduct = await getPublicProductBySlug(slug);
   if (!rawProduct) notFound();
+  if (rawProduct.isStudentShop === true) redirect(studentProductHref(rawProduct));
   const session = await getSessionUser();
   const authenticated = Boolean(session);
   const [accountProfile, storeControl, globalProperties, approvedReviews] = await Promise.all([

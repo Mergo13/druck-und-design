@@ -3,6 +3,7 @@ import { ShopBrowser } from "@/features/shop/shop-browser";
 import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository";
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
+import { shopCategoriesForProducts, shopProductsFromCatalog } from "@/lib/shop-products";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,9 @@ export default async function ProduktePage({ searchParams }: { searchParams?: Pr
   const initialQuery = params?.q;
   const [categories, rawProducts, session] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser()]);
   const authenticated = Boolean(session);
-  const products = authenticated ? rawProducts : rawProducts.map(withoutPrices);
+  const shopProducts = shopProductsFromCatalog(rawProducts);
+  const shopCategories = shopCategoriesForProducts(categories, rawProducts);
+  const products = authenticated ? shopProducts : shopProducts.map(withoutPrices);
 
   return (
     <section className="pb-14">
@@ -40,7 +43,7 @@ export default async function ProduktePage({ searchParams }: { searchParams?: Pr
         </div>
       </div>
       <div className="container-page py-10">
-        <ShopBrowser initialCategory={initialCategory} initialQuery={initialQuery} categories={categories} products={products} authenticated={authenticated} />
+        <ShopBrowser initialCategory={initialCategory} initialQuery={initialQuery} categories={shopCategories} products={products} authenticated={authenticated} />
       </div>
     </section>
   );

@@ -18,11 +18,12 @@ import CampaignIcon from "@mui/icons-material/Campaign";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import TuneIcon from "@mui/icons-material/Tune";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
-import { Alert, Box, Button, Card, CardContent, Checkbox, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Card, CardContent, Checkbox, Chip, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, Skeleton, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
-import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import {
   Admin,
+  AppBar as RaAppBar,
   ArrayInput,
   BooleanField,
   BooleanInput,
@@ -57,12 +58,13 @@ import {
 import { Route } from "react-router-dom";
 import { useFormContext, useWatch } from "react-hook-form";
 import { calculateConfiguredProductPrice, calculateTierPrice, validateProductPricing } from "@/lib/print-workflow";
+import { calculateProductPricingResult } from "@/lib/universal-pricing";
 import { productPropertyFromGlobal, resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
-import { configuratorProfileLabels, pdfPreviewModeLabels, resolveConfiguratorProfile } from "@/lib/product-configurator-profile";
+import { configuratorProfileLabels, experienceProfileLabels, pdfPreviewModeLabels, resolveConfiguratorProfile } from "@/lib/product-configurator-profile";
 import { applyPropertyDisplayCsvRows, hasFullProductCsvColumns, mergeProductConfigFromCsv, productConfigFromCsvRow, productSlugFromConfigCsvRow } from "@/lib/catalog-csv-config";
 import { deriveProductDocumentProduction, pricingQuantitiesForProductDocument } from "@/lib/document-production";
 import type { BindingSystem } from "@/lib/binding-resolution";
-import type { GlobalProperty, HomepageSettings, ProductCatalogItem, ProductIndustry, ProductPriceTier, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
+import type { GlobalProperty, HomepageSettings, PricingProfileKey, ProductCatalogItem, ProductIndustry, ProductPriceTier, ProductPricingComponent, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
 type AdminRecord = RaRecord & {
   slug?: string;
@@ -218,8 +220,40 @@ const pricingQuantitySourceLabels = {
   back_covers: "Pro hinterem Umschlag",
   printed_cover_sides: "Pro bedruckter Umschlagseite",
   embossing_lines: "Pro Prägezeile",
-  per_order: "Einmal pro Auftrag"
+  per_order: "Einmal pro Auftrag",
+  area_m2: "Pro m²",
+  perimeter_m: "Pro Laufmeter Umfang",
+  running_meter: "Pro Laufmeter",
+  machine_sheets: "Pro Maschinenbogen",
+  finished_units: "Pro fertiger Einheit",
+  cuts: "Pro Schnitt",
+  folds: "Pro Falz",
+  holes: "Pro Loch",
+  finishing_passes: "Pro Veredelungsdurchlauf",
+  machine_minutes: "Pro Maschinenminute",
+  labor_minutes: "Pro Arbeitsminute",
+  design_hours: "Pro Designstunde"
 } as const;
+
+const pricingProfileLabels: Record<PricingProfileKey, string> = {
+  "digital-document": "Digitales Dokument",
+  "digital-sheet": "Digitalbogen",
+  "sheet-print": "Bogendruck",
+  "business-card": "Visitenkarte",
+  brochure: "Broschüre",
+  booklet: "Booklet",
+  thesis: "Abschlussarbeit",
+  "document-binding": "Dokumentbindung",
+  "large-format": "Großformat",
+  "plan-print": "Plan / CAD",
+  "area-print": "Flächendruck",
+  "area-finishing": "Flächenveredelung",
+  sticker: "Sticker",
+  "textile-print": "Textildruck",
+  signage: "Beschilderung",
+  "design-service": "Designleistung",
+  "custom-formula": "Individuelle Formel"
+};
 
 function AdminImagePreview({ src, alt, sx, children }: { src?: string; alt: string; sx?: object; children?: ReactNode }) {
   const value = String(src ?? "").trim();
@@ -272,6 +306,45 @@ function normalizeCatalogRecordForAdmin(record: AdminRecord): AdminRecord {
 const catalogApiUrl = "/api/catalog";
 const catalogResources = new Set(["products", "categories", "properties", "industries"]);
 const searchFilters = [<TextInput key="q" source="q" label="Suche" alwaysOn />];
+
+function AdminStatusBadge({ label, tone = "neutral", onClick }: { label: string; tone?: "blue" | "green" | "amber" | "red" | "gray" | "neutral"; onClick?: () => void }) {
+  const colors = {
+    blue: { bg: "#eff6ff", fg: "#1155cc", border: "#bfdbfe" },
+    green: { bg: "#ecfdf3", fg: "#027a48", border: "#bbf7d0" },
+    amber: { bg: "#fffbeb", fg: "#b54708", border: "#fde68a" },
+    red: { bg: "#fef2f2", fg: "#b42318", border: "#fecaca" },
+    gray: { bg: "#f8fafc", fg: "#64748b", border: "#e2e8f0" },
+    neutral: { bg: "#f8fafc", fg: adminColors.ink, border: adminColors.border }
+  }[tone];
+
+  return (
+    <Chip
+      size="small"
+      label={label}
+      onClick={onClick}
+      sx={{
+        height: 24,
+        borderRadius: 999,
+        bgcolor: colors.bg,
+        color: colors.fg,
+        border: `1px solid ${colors.border}`,
+        fontWeight: 900,
+        fontSize: 11,
+        cursor: onClick ? "pointer" : "default",
+        "& .MuiChip-label": { px: 1 }
+      }}
+    />
+  );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <Box sx={{ border: `1px dashed ${adminColors.border}`, borderRadius: 2, bgcolor: "#f8fafc", p: 2 }}>
+      <Typography variant="body2" sx={{ fontWeight: 900, color: adminColors.ink }}>{title}</Typography>
+      <Typography variant="body2" sx={{ mt: 0.35, color: adminColors.muted }}>{text}</Typography>
+    </Box>
+  );
+}
 
 function CatalogBulkActionsToolbar({ label, confirmContent }: { label: string; confirmContent: string }) {
   const resource = useResourceContext();
@@ -495,7 +568,53 @@ type DashboardStats = {
 };
 
 function formatCurrency(value: number) {
-  return `${value.toFixed(2)} €`;
+  return Number(value || 0).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+}
+
+type ProductHealthCheck = { key: string; label: string; state: "ok" | "warning" | "missing"; detail?: string };
+type ProductHealth = { status: "healthy" | "warning" | "incomplete"; label: string; tone: "green" | "amber" | "red"; items: ProductHealthCheck[] };
+
+function calculateProductHealth(product: Partial<ProductCatalogItem>): ProductHealth {
+  const pricingErrors = product.slug ? validateProductPricing(product as ProductCatalogItem) : ["Produktdaten fehlen."];
+  const enabledRequiredProperties = (product.pricingProperties ?? []).filter((property) => property.required && (property.values ?? []).some((value) => value.enabled !== false));
+  const requiredWithoutDefault = enabledRequiredProperties.filter((property) => !(property.values ?? []).some((value) => value.enabled !== false && value.defaultSelected));
+  const publishedLive = product.productStatus === "active" ? product.visible !== false && product.published !== false : true;
+  const items: ProductHealthCheck[] = [
+    { key: "pricing", label: "Pricing configured", state: pricingErrors.length ? "missing" : "ok", detail: pricingErrors[0] },
+    { key: "requiredProperties", label: "Required properties configured", state: requiredWithoutDefault.length ? "warning" : "ok", detail: requiredWithoutDefault.map((property) => property.name).join(", ") },
+    { key: "image", label: "Product image exists", state: product.heroImage ? "ok" : "missing" },
+    { key: "category", label: "Category exists", state: product.category ? "ok" : "missing" },
+    { key: "production", label: "Production settings configured", state: (product as any).production || product.productBindingConfig?.enabledSystems?.length || product.deliveryText ? "ok" : "warning" },
+    { key: "seo", label: "SEO configured", state: product.seo?.trim() ? "ok" : "warning", detail: "SEO description missing" },
+    { key: "published", label: "Product published correctly", state: publishedLive ? "ok" : "missing", detail: "Live product is hidden or unpublished" },
+    { key: "pricingErrors", label: "Pricing has no obvious errors", state: pricingErrors.length ? "warning" : "ok", detail: pricingErrors[0] }
+  ];
+  const missing = items.some((item) => item.state === "missing");
+  const warning = items.some((item) => item.state === "warning");
+  return missing
+    ? { status: "incomplete", label: "Incomplete", tone: "red", items }
+    : warning
+      ? { status: "warning", label: "Warning", tone: "amber", items }
+      : { status: "healthy", label: "Healthy", tone: "green", items };
+}
+
+function ProductHealthBadge({ product }: { product: ProductCatalogItem }) {
+  const health = calculateProductHealth(product);
+  function showDetails() {
+    window.alert([
+      "Product Health",
+      "",
+      ...health.items.map((item) => `${item.state === "ok" ? "✓" : "⚠"} ${item.label}${item.detail ? `\n  ${item.detail}` : ""}`)
+    ].join("\n"));
+  }
+  return <AdminStatusBadge label={health.label} tone={health.tone} onClick={showDetails} />;
+}
+
+function publicationLabel(product: Partial<ProductCatalogItem>) {
+  if (product.productStatus === "draft") return { label: "Draft", tone: "gray" as const };
+  if (product.productStatus === "inactive" || product.purchaseMode === "disabled") return { label: "Inactive", tone: "gray" as const };
+  if (product.visible === false || product.published === false) return { label: "Hidden", tone: "amber" as const };
+  return { label: "Live", tone: "green" as const };
 }
 
 function parseCsvRows(input: string): Record<string, string>[] {
@@ -618,6 +737,7 @@ function csvPropertyPayloads(rows: Record<string, string>[]) {
           active: csvBool(csvCell(row, "valueActive", "active", "aktiv"), true),
           pricingMode: (csvCell(row, "pricingMode", "preisart") || "included") as GlobalProperty["values"][number]["pricingMode"],
           fixedPrice: csvNumber(csvCell(row, "fixedPrice", "aufpreis", "festpreis"), 0),
+          costPrice: csvOptionalNumber(csvCell(row, "costPrice", "kostenpreis", "cost_price")),
           multiplier: csvNumber(csvCell(row, "multiplier", "multiplikator"), 1),
           tierPrices: []
         };
@@ -654,7 +774,7 @@ function csvEscape(value: unknown) {
 }
 
 function globalPropertiesToCsv(properties: GlobalProperty[]) {
-  const header = ["slug", "name", "value", "label", "image", "description", "pricingMode", "fixedPrice", "multiplier", "from_quantity", "to_quantity", "unit_price", "active", "sortOrder"];
+  const header = ["slug", "name", "value", "label", "image", "description", "pricingMode", "fixedPrice", "costPrice", "multiplier", "from_quantity", "to_quantity", "unit_price", "active", "sortOrder"];
   const rows = properties.flatMap((property) => (property.values ?? []).flatMap((value) => {
     if (value.pricingMode === "tiered" && value.tierPrices?.length) {
       return value.tierPrices.map((tier) => [
@@ -666,6 +786,7 @@ function globalPropertiesToCsv(properties: GlobalProperty[]) {
         value.description ?? "",
         "tiered",
         "",
+        value.costPrice ?? "",
         "",
         tier.fromQuantity ?? tier.quantity,
         tier.toQuantity ?? "",
@@ -683,6 +804,7 @@ function globalPropertiesToCsv(properties: GlobalProperty[]) {
       value.description ?? "",
       value.pricingMode ?? "included",
       value.fixedPrice ?? "",
+      value.costPrice ?? "",
       value.multiplier ?? "",
       "",
       "",
@@ -700,36 +822,34 @@ function AdminDashboardHome() {
   const [period, setPeriod] = useState<PeriodKey>("30d");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(false);
-  const [vatPercent, setVatPercent] = useState(20);
-  const [savingTax, setSavingTax] = useState(false);
-
-  const tools = [
-    { label: "Wartungsmodus", path: "/tools/maintenance", color: "primary" as const },
-    { label: "Online Shop", path: "/tools/online-shop", color: "primary" as const },
-    { label: "Urlaubsmodus", path: "/tools/vacation", color: "primary" as const },
-    { label: "E-Mail Konfiguration", path: "/tools/email", color: "primary" as const },
-    { label: "Upload-Ordner", path: "/tools/uploads", color: "primary" as const },
-    { label: "Bildpfade Import", path: "/tools/image-import", color: "primary" as const },
-    { label: "CSV Katalog Import", path: "/tools/catalog-csv", color: "primary" as const },
-    { label: "Produktionsdaten Bindungen", path: "/tools/production-bindings", color: "primary" as const },
-    { label: "Homepage Inhalte", path: "/tools/homepage", color: "primary" as const },
-    { label: "Website Bilder", path: "/tools/site-images", color: "primary" as const },
-    { label: "Backup", path: "/tools/backup", color: "primary" as const },
-    { label: "Werbung", path: "/tools/werbung", color: "primary" as const },
-    { label: "CRM", path: "/tools/crm", color: "primary" as const },
-    { label: "Shutdown", path: "/tools/shutdown", color: "error" as const },
-    { label: "Layout Studio", path: "/tools/layouts", color: "inherit" as const }
-  ];
+  const [recentOrders, setRecentOrders] = useState<Array<AdminOrderItem & { customer?: string; items?: Array<Record<string, any>> }>>([]);
+  const [products, setProducts] = useState<ProductCatalogItem[]>([]);
+  const [crmSummary, setCrmSummary] = useState<{ crmPending: number; crmSynced: number } | null>(null);
 
   useEffect(() => {
     void (async () => {
       setLoadingStats(true);
       try {
-        const statsRes = await fetch(`/api/admin/stats?period=${period}`);
+        const [statsRes, ordersRes, productsRes, crmRes] = await Promise.all([
+          fetch(`/api/admin/stats?period=${period}`),
+          fetch("/api/admin/modules/orders?page=1&pageSize=6"),
+          fetch("/api/catalog/products?scope=admin"),
+          fetch("/api/admin/tools?action=crm-status")
+        ]);
         if (!statsRes.ok) throw new Error();
         const payload = await statsRes.json() as DashboardStats;
         setStats(payload);
-        setVatPercent(Number(payload.vatPercent ?? 20));
+        if (ordersRes.ok) {
+          const orders = await ordersRes.json() as { items: Array<AdminOrderItem & { customer?: string; items?: Array<Record<string, any>> }> };
+          setRecentOrders(orders.items ?? []);
+        }
+        if (productsRes.ok) {
+          setProducts(await productsRes.json() as ProductCatalogItem[]);
+        }
+        if (crmRes.ok) {
+          const crm = await crmRes.json() as { summary?: { crmPending: number; crmSynced: number } };
+          setCrmSummary(crm.summary ?? null);
+        }
       } catch {
         notify("Dashboard-Daten konnten nicht geladen werden.", { type: "error" });
       } finally {
@@ -738,67 +858,89 @@ function AdminDashboardHome() {
     })();
   }, [period]);
 
-  async function saveTax() {
-    setSavingTax(true);
-    try {
-      const res = await fetch("/api/admin/tools?action=tax", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vatPercent })
-      });
-      if (!res.ok) throw new Error();
-      const statsRes = await fetch(`/api/admin/stats?period=${period}`);
-      if (statsRes.ok) {
-        const payload = await statsRes.json() as DashboardStats;
-        setStats(payload);
-        setVatPercent(Number(payload.vatPercent ?? vatPercent));
-      }
-      notify("Steuersatz gespeichert.", { type: "success" });
-    } catch {
-      notify("Steuersatz konnte nicht gespeichert werden.", { type: "error" });
-    } finally {
-      setSavingTax(false);
-    }
-  }
+  const productHealth = products.map(calculateProductHealth);
+  const incompleteProducts = productHealth.filter((item) => item.status !== "healthy").length;
+  const lowMarginProducts = productHealth.filter((item) => item.items.some((check) => check.key === "pricingErrors" && check.state !== "ok")).length;
+  const ordersWaitingForPdf = recentOrders.filter((order) => order.items?.some((item) => {
+    const config = item.config ?? {};
+    return config.pdfAnalysisStatus === "required" || config.PrintDatei === "-" || config.printCheckRequested === true;
+  })).length;
+  const attention = [
+    incompleteProducts ? { text: `${incompleteProducts} Produkte unvollständig`, path: "/products", tone: "amber" as const } : null,
+    crmSummary?.crmPending ? { text: `${crmSummary.crmPending} CRM Rechnungen ausstehend`, path: "/tools/crm", tone: "red" as const } : null,
+    ordersWaitingForPdf ? { text: `${ordersWaitingForPdf} Bestellung wartet auf PDF/Dateiprüfung`, path: "/orders", tone: "amber" as const } : null,
+    lowMarginProducts ? { text: `${lowMarginProducts} Preis-Konfiguration prüfen`, path: "/products", tone: "amber" as const } : null
+  ].filter(Boolean) as Array<{ text: string; path: string; tone: "amber" | "red" }>;
+
+  const quickLinks = [
+    { label: "Products", path: "/products" },
+    { label: "CRM / Rechnungen", path: "/tools/crm" },
+    { label: "Files", path: "/fileUploads" },
+    { label: "Email", path: "/tools/email" }
+  ];
 
   return (
-    <Grid container spacing={2.5}>
+    <Grid container spacing={2.25}>
       <Grid size={{ xs: 12 }}>
-        <Typography variant="h5">DUD Studio Admin</Typography>
-        <Typography variant="body2" color="text.secondary">Schnellzugriffe für den täglichen Betrieb.</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: 0 }}>Overview</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35, fontWeight: 650 }}>Orders, pricing health and CRM transfer status.</Typography>
       </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <DashboardCard label="Revenue" value={formatCurrency(stats?.grossRevenue ?? 0)} />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <DashboardCard label="Orders" value={String(stats?.revenueOrderCount ?? 0)} />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <DashboardCard label="Open Requests" value={String(stats?.openRequestCount ?? 0)} />
+      </Grid>
+      <Grid size={{ xs: 12, md: 3 }}>
+        <DashboardCard label="Products" value={String(stats?.productsTotal ?? 0)} />
+      </Grid>
+
       <Grid size={{ xs: 12 }}>
-        <Grid container spacing={1.5}>
-          {tools.map((tool) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={tool.path}>
-              <Button
-                fullWidth
-                variant={tool.color === "inherit" ? "outlined" : "contained"}
-                color={tool.color}
-                sx={{ minHeight: 84, textAlign: "center", fontWeight: 700, fontSize: 15, borderRadius: 2 }}
-                onClick={() => redirect(tool.path)}
-              >
-                {tool.label}
-              </Button>
-            </Grid>
-          ))}
-        </Grid>
+        <Card sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ display: "grid", gap: 1.25 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Needs Attention</Typography>
+            {loadingStats ? <Skeleton height={44} /> : attention.length ? attention.map((item) => (
+              <Box key={item.text} onClick={() => redirect(item.path)} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, py: 0.75, borderTop: `1px solid ${adminColors.border}`, cursor: "pointer", "&:hover": { color: adminColors.blue } }}>
+                <Typography variant="body2" sx={{ fontWeight: 800 }}>{item.text}</Typography>
+                <AdminStatusBadge label={item.tone === "red" ? "Problem" : "Check"} tone={item.tone} />
+              </Box>
+            )) : <EmptyState title="No open requests." text="Everything is currently processed." />}
+          </CardContent>
+        </Card>
       </Grid>
-      <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Produkte" value={String(stats?.productsTotal ?? 0)} />
-      </Grid>
-      <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Kategorien" value={String(stats?.categoriesTotal ?? 0)} />
-      </Grid>
-      <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Bestellungen" value={String(stats?.revenueOrderCount ?? 0)} />
-      </Grid>
-      <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Offene Anfragen" value={String(stats?.openRequestCount ?? 0)} />
-      </Grid>
+
       <Grid size={{ xs: 12 }}>
-        <Card>
-          <CardContent>
+        <Card sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ display: "grid", gap: 1.25 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Recent Orders</Typography>
+            {loadingStats ? <Skeleton height={96} /> : recentOrders.length ? (
+              <Box sx={{ display: "grid" }}>
+                {recentOrders.map((order) => {
+                  const firstItem = order.items?.[0];
+                  const label = firstItem?.name ?? firstItem?.description ?? order.customer ?? "Bestellung";
+                  const status = String(order.status ?? "Neu");
+                  const tone = /bezahlt|paid|ready|fertig/i.test(status) ? "green" : /prüfung|produktion|processing/i.test(status) ? "amber" : /storniert|cancel/i.test(status) ? "red" : "blue";
+                  return (
+                    <Box key={order.id} onClick={() => redirect("edit", "orders", order.id)} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "160px minmax(0,1fr) 120px 120px" }, gap: 1, alignItems: "center", py: 1, borderTop: `1px solid ${adminColors.border}`, cursor: "pointer", "&:hover": { bgcolor: "#f8fafc" } }}>
+                      <Typography variant="body2" sx={{ fontWeight: 900 }}>{order.id}</Typography>
+                      <Typography variant="body2" sx={{ color: adminColors.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{String(label)}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 900 }}>{formatCurrency(Number(order.total || 0))}</Typography>
+                      <AdminStatusBadge label={status} tone={tone} />
+                    </Box>
+                  );
+                })}
+              </Box>
+            ) : <EmptyState title="No recent orders." text="New webshop orders will appear here." />}
+          </CardContent>
+        </Card>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 7 }}>
+        <Card sx={{ borderRadius: 2, height: "100%" }}>
+          <CardContent sx={{ display: "grid", gap: 1.5 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
               <Typography variant="h6">Umsatz Analytics</Typography>
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -814,16 +956,7 @@ function AdminDashboardHome() {
                 ))}
               </Box>
             </Box>
-
-            <Grid container spacing={1.5} sx={{ mt: 0.25 }}>
-              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Brutto Umsatz" value={formatCurrency(stats?.grossRevenue ?? 0)} /></Grid>
-              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label={`Netto (bei ${vatPercent}%)`} value={formatCurrency(stats?.netRevenue ?? 0)} /></Grid>
-              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="MwSt Betrag" value={formatCurrency(stats?.taxAmount ?? 0)} /></Grid>
-              <Grid size={{ xs: 12, md: 3 }}><DashboardCard label="Ø Bestellwert" value={formatCurrency(stats?.averageOrder ?? 0)} /></Grid>
-            </Grid>
-
-            <Box sx={{ mt: 2, border: "1px solid #e2e8f0", borderRadius: 2, p: 2 }}>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Umsatzverlauf</Typography>
+            <Box sx={{ border: "1px solid #e2e8f0", borderRadius: 2, p: 2 }}>
               <Box sx={{ height: 180, display: "flex", alignItems: "flex-end", gap: 0.75 }}>
                 {(stats?.chartBuckets ?? []).map((bucket) => (
                   <Box key={bucket.label} sx={{ flex: 1, minWidth: 0 }}>
@@ -844,35 +977,33 @@ function AdminDashboardHome() {
                 ))}
               </Box>
             </Box>
-
-            <Box sx={{ mt: 2, display: "grid", gap: 1.25 }}>
-              <Typography variant="subtitle2">Steuer (MwSt)</Typography>
-              <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-                <MuiTextField
-                  size="small"
-                  type="number"
-                  label="MwSt %"
-                  value={vatPercent}
-                  onChange={(event) => setVatPercent(Number(event.target.value))}
-                  sx={{ width: 130 }}
-                />
-                <Button variant="contained" onClick={() => void saveTax()} disabled={savingTax}>
-                  {savingTax ? "Speichert..." : "Steuer speichern"}
-                </Button>
-              </Box>
-              <Typography variant="caption" color="text.secondary">
-                Standard: 20%. Der Satz wird für Netto/Brutto Umsatzberechnung im Dashboard verwendet.
-              </Typography>
-            </Box>
           </CardContent>
         </Card>
       </Grid>
 
-      {loadingStats ? (
-        <Grid size={{ xs: 12 }}>
-          <Typography variant="caption" color="text.secondary">Analytics wird geladen...</Typography>
-        </Grid>
-      ) : null}
+      <Grid size={{ xs: 12, md: 5 }}>
+        <Card sx={{ borderRadius: 2, height: "100%" }}>
+          <CardContent sx={{ display: "grid", gap: 1.25 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Quick Access</Typography>
+            {quickLinks.map((item) => (
+              <Button key={item.path} variant="outlined" onClick={() => redirect(item.path)} sx={{ justifyContent: "flex-start", py: 1 }}>
+                {item.label}
+              </Button>
+            ))}
+            <Divider />
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 900 }}>Net revenue</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 950 }}>{formatCurrency(stats?.netRevenue ?? 0)}</Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 900 }}>Avg order</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 950 }}>{formatCurrency(stats?.averageOrder ?? 0)}</Typography>
+              </Box>
+            </Box>
+          </CardContent>
+        </Card>
+      </Grid>
     </Grid>
   );
 }
@@ -1060,7 +1191,7 @@ function ProductGroupedList() {
                   }}
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "auto 1fr", md: "42px minmax(260px, 1.6fr) 130px 130px 110px auto" },
+                    gridTemplateColumns: { xs: "auto 1fr", md: "42px minmax(260px, 1.6fr) 110px 120px 130px 110px auto" },
                     gap: { xs: 1, md: 1.5 },
                     alignItems: "center",
                     px: 2,
@@ -1090,12 +1221,11 @@ function ProductGroupedList() {
                       {product.slug}
                     </Typography>
                   </Box>
-                  <Typography variant="caption" sx={{ fontWeight: 850, color: product.productStatus === "active" ? "#027a48" : product.productStatus === "draft" ? "#b54708" : adminColors.muted }}>
-                    {product.productStatus === "active" ? "Aktiv" : product.productStatus === "draft" ? "Entwurf" : "Inaktiv"}
-                  </Typography>
+                  <AdminStatusBadge label={publicationLabel(product).label} tone={publicationLabel(product).tone} />
                   <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 750 }}>
                     {product.purchaseMode === "request" ? "Anfrage" : product.purchaseMode === "both" ? "Online + Anfrage" : product.purchaseMode === "disabled" ? "Deaktiviert" : "Online"}
                   </Typography>
+                  <ProductHealthBadge product={product} />
                   <Typography variant="caption" sx={{ color: adminColors.ink, fontWeight: 900 }}>
                     {formatCurrency(Number(product.basePrice ?? 0))}
                   </Typography>
@@ -1143,16 +1273,22 @@ function OrderEdit() {
     <Edit>
       <SimpleForm>
         <OrderEmbossingDetails />
+        <OrderCommunicationHistory />
+        <OrderFileStatus />
         <TextInput source="id" disabled />
         <TextInput source="customer" label="Kunde" validate={[required()]} />
         <TextInput source="email" label="E-Mail" />
         <NumberInput source="total" label="Summe" disabled />
         <SelectInput source="status" choices={[
-          { id: "Anfrage", name: "Anfrage" },
-          { id: "Neu", name: "Neu" },
-          { id: "Bezahlt", name: "Bezahlt" },
-          { id: "In Prüfung", name: "In Prüfung" },
-          { id: "In Produktion", name: "In Produktion" },
+          { id: "Anfrage", name: "Request" },
+          { id: "Neu", name: "New" },
+          { id: "Bezahlt", name: "Paid" },
+          { id: "File Check", name: "File Check" },
+          { id: "Ready for Print", name: "Ready for Print" },
+          { id: "Printing", name: "Printing" },
+          { id: "Finishing", name: "Finishing" },
+          { id: "Ready", name: "Ready" },
+          { id: "Completed", name: "Completed" },
           { id: "Versendet", name: "Versendet" },
           { id: "Storniert", name: "Storniert" }
         ]} />
@@ -1160,6 +1296,65 @@ function OrderEdit() {
         <TextInput source="shippingAddress" label="Lieferadresse" multiline />
       </SimpleForm>
     </Edit>
+  );
+}
+
+function OrderCommunicationHistory() {
+  const record = useRecordContext<AdminRecord & { status?: string; createdAt?: string; updatedAt?: string; invoiceNumber?: string }>();
+  if (!record) return null;
+  const created = record.createdAt ? new Date(record.createdAt).toLocaleString("de-DE") : "-";
+  const paid = /bezahlt|paid/i.test(String(record.status ?? ""));
+  const entries = [
+    { label: "Bestellbestätigung", sent: true, date: created },
+    { label: "Zahlungsbestätigung", sent: paid, date: paid ? created : "Not sent" },
+    { label: "Rechnung", sent: Boolean((record as any).invoiceNumber), date: (record as any).invoiceNumber ? created : "Not sent" },
+    { label: "Ready-for-pickup email", sent: /ready|completed|abhol/i.test(String(record.status ?? "")), date: /ready|completed|abhol/i.test(String(record.status ?? "")) ? new Date(record.updatedAt ?? record.createdAt ?? Date.now()).toLocaleString("de-DE") : "Not sent" }
+  ];
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
+      <CardContent sx={{ display: "grid", gap: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Customer Communication</Typography>
+        {entries.map((entry) => (
+          <Box key={entry.label} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "260px 1fr" }, gap: 1, py: 0.6, borderTop: `1px solid ${adminColors.border}` }}>
+            <Typography variant="body2" sx={{ fontWeight: 850 }}>{entry.sent ? "✓" : "○"} {entry.label}</Typography>
+            <Typography variant="body2" sx={{ color: adminColors.muted }}>{entry.date}</Typography>
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function OrderFileStatus() {
+  const record = useRecordContext<AdminRecord & { items?: Array<Record<string, any>> }>();
+  const items = record?.items ?? [];
+  const fileRows = items.map((item, index) => {
+    const config = item.config ?? {};
+    const fileUrl = item.printCheckFileUrl || config.PrintDatei || config.pdfAnalysisFileUrl;
+    const fileName = item.printCheckFileName || config.Dateiname || config.pdfAnalysisFileName;
+    const pages = config.pdfAnalysisPageCount || config["PDF-Seiten"] || config.seitenanzahl;
+    const bw = config.pdfAnalysisBwPageCount || config["SW-Seiten"];
+    const color = config.pdfAnalysisColorPageCount || config.Farbseiten;
+    const uploaded = Boolean(fileUrl && fileUrl !== "-");
+    const status = !uploaded ? "Missing" : config.pdfAnalysisStatus === "success" ? "Uploaded" : config.pdfAnalysisStatus === "invalid" ? "Invalid format" : "Check required";
+    return { index, fileUrl, fileName, pages, bw, color, status };
+  }).filter((row) => row.fileUrl || row.pages || row.status !== "Missing");
+  if (!fileRows.length) return null;
+  return (
+    <Card variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
+      <CardContent sx={{ display: "grid", gap: 1 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>PDF / File Status</Typography>
+        {fileRows.map((row) => (
+          <Box key={`${row.index}-${row.fileName ?? ""}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 160px 120px 120px 120px" }, gap: 1, alignItems: "center", py: 0.75, borderTop: `1px solid ${adminColors.border}` }}>
+            <Typography variant="body2" sx={{ fontWeight: 850, overflowWrap: "anywhere" }}>{row.fileName || row.fileUrl || "PDF"}</Typography>
+            <AdminStatusBadge label={row.status} tone={row.status === "Uploaded" ? "green" : row.status === "Missing" || row.status === "Invalid format" ? "red" : "amber"} />
+            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.pages ? `${row.pages} pages` : "-"}</Typography>
+            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.bw ? `${row.bw} BW` : "-"}</Typography>
+            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.color ? `${row.color} Color` : "-"}</Typography>
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1913,17 +2108,22 @@ function ProductDuplicateButton() {
 
 function ProductPricingManager() {
   const { setValue, getValues } = useFormContext();
+  const notify = useNotify();
   const pricingType = (useWatch({ name: "pricingType" }) as ProductCatalogItem["pricingType"] | undefined) ?? "tiered";
   const productStatus = (useWatch({ name: "productStatus" }) as ProductCatalogItem["productStatus"] | undefined) ?? "draft";
   const basePrice = Number(useWatch({ name: "basePrice" }) ?? 0);
   const priceTiers = (useWatch({ name: "priceTiers" }) as ProductPriceTier[] | undefined) ?? [];
   const pricingProperties = (useWatch({ name: "pricingProperties" }) as ProductPricingProperty[] | undefined) ?? [];
+  const pricingProfile = useWatch({ name: "pricingProfile" }) as ProductCatalogItem["pricingProfile"] | undefined;
+  const pricingComponents = (useWatch({ name: "pricingComponents" }) as ProductPricingComponent[] | undefined) ?? [];
+  const pricingGuards = useWatch({ name: "pricingGuards" }) as ProductCatalogItem["pricingGuards"] | undefined;
   const priceHistory = (useWatch({ name: "priceHistory" }) as ProductCatalogItem["priceHistory"] | undefined) ?? [];
   const productBindingConfig = (useWatch({ name: "productBindingConfig" }) as ProductCatalogItem["productBindingConfig"] | undefined) ?? {};
   const usesBindingProductionLogic = (productBindingConfig.enabledSystems ?? []).length > 0;
   const [previewQuantity, setPreviewQuantity] = useState<number>(() => Number(priceTiers[0]?.quantity ?? 1));
   const [previewConfig, setPreviewConfig] = useState<Record<string, string>>({});
   const [csvText, setCsvText] = useState("");
+  const [componentJson, setComponentJson] = useState("");
   const [propertySearch, setPropertySearch] = useState("");
   const { data: globalPropertiesRaw = [] } = useGetList("properties", {
     pagination: { page: 1, perPage: 200 },
@@ -1997,6 +2197,9 @@ function ProductPricingManager() {
       basePrice,
       pricingType,
       productStatus,
+      pricingProfile,
+      pricingComponents,
+      pricingGuards,
       priceTiers: tierRows,
       pricingProperties: resolveGlobalPropertyPricing({ ...values, pricingProperties } as ProductCatalogItem, globalProperties).pricingProperties ?? pricingProperties
     };
@@ -2015,7 +2218,8 @@ function ProductPricingManager() {
 
   const previewProduct = currentProduct();
   const previewQty = previewQuantity || Number(tierRows[0]?.quantity ?? 1);
-  const previewProductionConfig = resolveConfiguratorProfile(previewProduct) === "brochure"
+  const previewProfile = resolveConfiguratorProfile(previewProduct);
+  const previewProductionConfig = previewProfile === "brochure"
     ? {
       ...previewConfig,
       brochureConfig: "true",
@@ -2027,6 +2231,13 @@ function ProductPricingManager() {
   const previewProduction = deriveProductDocumentProduction(previewProduct, [], previewProductionConfig, previewQty);
   const previewQuantities = pricingQuantitiesForProductDocument(previewProduct, [], previewProductionConfig, previewQty);
   const preview = calculateConfiguredProductPrice(previewProduct, previewQty, previewConfig, previewQuantities);
+  const universalPreview = calculateProductPricingResult({
+    product: previewProduct,
+    quantity: previewQty,
+    configuration: previewConfig,
+    productionContext: previewQuantities,
+    globalProperties
+  });
   const previewTier = pricingType === "tiered"
     ? (() => {
       try {
@@ -2049,6 +2260,17 @@ function ProductPricingManager() {
       return { quantity: fromQuantity, fromQuantity, toQuantity: Number.isFinite(toQuantity) && toQuantity > 0 ? toQuantity : undefined, unitPrice, price: Math.round(fromQuantity * unitPrice * 100) / 100 };
     }).filter((row) => Number.isFinite(row.fromQuantity) && row.fromQuantity > 0 && Number.isFinite(row.unitPrice) && row.unitPrice >= 0);
     if (rows.length) updateTiers(rows);
+  }
+
+  function exportComponentsJson() {
+    setComponentJson(JSON.stringify(pricingComponents, null, 2));
+  }
+
+  function importComponentsJson() {
+    const parsed = JSON.parse(componentJson || "[]") as ProductPricingComponent[];
+    if (Array.isArray(parsed)) {
+      setValue("pricingComponents", parsed, { shouldDirty: true });
+    }
   }
 
   function countTierDependencies(quantity: number) {
@@ -2195,6 +2417,54 @@ function ProductPricingManager() {
             </Grid>
           </Grid>
         ) : null}
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: "pointer", fontSize: 14, fontWeight: 900, color: "#0f172a" }}>Advanced pricing</summary>
+          <Grid container spacing={1.5} sx={{ mt: 1 }}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <SelectInput source="pricingProfile" label="Pricing profile" choices={Object.entries(pricingProfileLabels).map(([id, name]) => ({ id, name }))} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <SelectInput source="experienceProfile" label="Experience profile" choices={Object.entries(experienceProfileLabels).map(([id, name]) => ({ id, name }))} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <SelectInput source="pricingGuards.roundingRule" label="Rundung" choices={[
+                { id: "none", name: "Keine" },
+                { id: "cent", name: "Cent" },
+                { id: "ten_cent", name: "0,10 € aufrunden" },
+                { id: "fifty_cent", name: "0,50 € aufrunden" },
+                { id: "whole", name: "Ganze Euro" },
+                { id: "psychological", name: "x,90 €" }
+              ]} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="pricingGuards.minimumOrderPrice" label="Mindestbestellwert (€)" min={0} step={0.01} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="pricingGuards.minimumMarginPercent" label="Mindestmarge (%)" min={0} max={99} step={0.1} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="pricingGuards.targetMarginPercent" label="Zielmarge (%)" min={0} max={99} step={0.1} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <NumberInput source="pricingGuards.maximumDiscountPercent" label="Max. Rabatt (%)" min={0} max={100} step={0.1} fullWidth />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <MuiTextField
+                multiline
+                minRows={4}
+                label="Pricing components JSON"
+                value={componentJson}
+                onChange={(event) => setComponentJson(event.target.value)}
+                placeholder={'[{"id":"print-bw","label":"SW Druck","kind":"print","quantitySource":"black_white_pages","sellingPrice":0.08,"costPrice":0.03}]'}
+                fullWidth
+              />
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1 }}>
+                <Button size="small" variant="outlined" onClick={exportComponentsJson}>Komponenten exportieren</Button>
+                <Button size="small" variant="outlined" onClick={importComponentsJson}>Komponenten importieren</Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </details>
           </CardContent>
         </Card>
 
@@ -2426,7 +2696,7 @@ function ProductPricingManager() {
                   <Box sx={{ display: "grid", gap: 0.9 }}>
                     {(property.values ?? []).map((value, valueIndex) => (
                       <Box key={`${value.value}-${valueIndex}`} sx={{ border: "1px solid #e2e8f0", borderRadius: 1.5, p: 1, display: "grid", gap: 1, bgcolor: value.enabled === false ? "#f8fafc" : "white", color: "#0f172a" }}>
-                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "86px minmax(150px,1fr) minmax(150px,1fr) 170px 190px 140px auto" }, gap: 1, alignItems: "center" }}>
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "86px minmax(150px,1fr) minmax(150px,1fr) 170px 190px 140px 140px 140px auto" }, gap: 1, alignItems: "center" }}>
                           <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 800, color: "#0f172a" }}>
                             <input
                               type="checkbox"
@@ -2485,6 +2755,16 @@ function ProductPricingManager() {
                           <MuiTextField size="small" label={value.pricingMode === "global" ? inheritedValuePrice(property, value) : value.pricingMode === "flat" ? "Festpreis (€)" : "Aufpreis / Stk. (€)"} type="number" disabled={value.pricingMode !== "fixed" && value.pricingMode !== "flat"} value={value.fixedPrice ?? 0} onChange={(event) => {
                             const next = structuredClone(pricingProperties);
                             next[propertyIndex].values[valueIndex].fixedPrice = Number(event.target.value);
+                            updateProperties(next);
+                          }} />
+                          <MuiTextField size="small" label="VK Override (€)" type="number" value={value.priceOverride ?? ""} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            next[propertyIndex].values[valueIndex].priceOverride = event.target.value === "" ? undefined : Number(event.target.value);
+                            updateProperties(next);
+                          }} />
+                          <MuiTextField size="small" label="Kosten (€)" type="number" value={value.costOverride ?? value.costPrice ?? ""} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            next[propertyIndex].values[valueIndex].costOverride = event.target.value === "" ? undefined : Number(event.target.value);
                             updateProperties(next);
                           }} />
                           {value.pricingMode === "multiplier" ? (
@@ -2701,7 +2981,16 @@ function ProductPricingManager() {
           "& .MuiSelect-icon": { color: "#475569" }
         }}>
           <CardContent sx={{ display: "grid", gap: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Preisvorschau</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
+              <Box>
+                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 950, textTransform: "uppercase", letterSpacing: ".08em" }}>Price Test</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Live Preisberechnung</Typography>
+              </Box>
+              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                <Button size="small" variant="outlined" onClick={() => notify("Preis wurde mit der aktuellen Konfiguration neu berechnet.", { type: "info" })}>Recalculate</Button>
+                <Button size="small" variant="outlined" disabled={!previewProduct.slug} onClick={() => previewProduct.slug && window.open(`/produkt/${previewProduct.slug}`, "_blank", "noopener,noreferrer")}>Open customer preview</Button>
+              </Box>
+            </Box>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "160px 1fr" }, gap: 1 }}>
               <MuiTextField select size="small" label="Menge" value={previewQuantity || tierRows[0]?.quantity || 1} onChange={(event) => setPreviewQuantity(Number(event.target.value))}>
                 {tierRows.map((tier) => <MenuItem key={tier.quantity} value={tier.quantity}>{tier.quantity}</MenuItem>)}
@@ -2713,7 +3002,13 @@ function ProductPricingManager() {
                     <MuiTextField size="small" label="Höhe (cm)" type="number" value={previewConfig.areaHeightCm ?? "100"} onChange={(event) => setPreviewConfig((current) => ({ ...current, areaHeightCm: event.target.value }))} sx={{ width: 140 }} />
                   </>
                 ) : null}
-                <MuiTextField size="small" label="PDF-Seiten" type="number" value={previewConfig["PDF-Seiten"] ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, "PDF-Seiten": event.target.value, seitenanzahl: event.target.value }))} sx={{ width: 140 }} />
+                {previewProduct.pdfAnalysisMode !== "disabled" || ["brochure", "document", "thesis", "simple-print"].includes(previewProfile) ? (
+                  <>
+                    <MuiTextField size="small" label="Pages" type="number" value={previewConfig["PDF-Seiten"] ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, "PDF-Seiten": event.target.value, seitenanzahl: event.target.value }))} sx={{ width: 120 }} />
+                    <MuiTextField size="small" label="BW pages" type="number" value={previewConfig.pdfAnalysisBwPageCount ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, pdfAnalysisBwPageCount: event.target.value, "SW-Seiten": event.target.value }))} sx={{ width: 120 }} />
+                    <MuiTextField size="small" label="Color pages" type="number" value={previewConfig.pdfAnalysisColorPageCount ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, pdfAnalysisColorPageCount: event.target.value, Farbseiten: event.target.value }))} sx={{ width: 120 }} />
+                  </>
+                ) : null}
                 {pricingProperties.map((property) => {
                   const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
                   return (
@@ -2742,7 +3037,7 @@ function ProductPricingManager() {
                 <Typography variant="caption" sx={{ fontWeight: 900, color: "#334155" }}>Umschlagseiten: {previewQuantities.printedCoverSides}</Typography>
               </Box>
             ) : null}
-            {resolveConfiguratorProfile(previewProduct) === "brochure" ? (
+            {previewProfile === "brochure" ? (
               <Box sx={{ mt: 1, borderTop: "1px solid #e2e8f0", pt: 1 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Produktionsvorschau Broschüre</Typography>
                 <Typography variant="body2" sx={{ color: "#475569" }}>PDF Seiten: {"pdfPagesPerCopy" in previewProduction ? previewProduction.pdfPagesPerCopy : previewProduction.pagesPerCopy}</Typography>
@@ -2756,7 +3051,29 @@ function ProductPricingManager() {
                 ) : null}
               </Box>
             ) : null}
-            <Typography variant="h5" sx={{ mt: 1, fontWeight: 900, color: "#0f172a" }}>Gesamt: {formatCurrency(preview.total)}</Typography>
+            <Box sx={{ mt: 1.25, borderTop: "1px solid #e2e8f0", pt: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Pricing breakdown</Typography>
+              <Typography variant="body2" sx={{ color: "#334155", fontWeight: 800 }}>Selling price: {formatCurrency(universalPreview.customerPrice)}</Typography>
+              {universalPreview.productionCost !== undefined ? (
+                <>
+                  <Typography variant="body2" sx={{ color: "#475569" }}>Estimated cost: {formatCurrency(universalPreview.productionCost)}</Typography>
+                  <Typography variant="body2" sx={{ color: "#475569" }}>Contribution: {formatCurrency(universalPreview.contribution ?? 0)}</Typography>
+                  <Typography variant="body2" sx={{ color: "#475569" }}>Margin: {(universalPreview.marginPercent ?? 0).toLocaleString("de-DE")} %</Typography>
+                </>
+              ) : <Typography variant="body2" sx={{ color: "#64748b" }}>Cost data incomplete</Typography>}
+              {universalPreview.minimumPriceApplied || universalPreview.marginGuardApplied ? (
+                <Typography variant="body2" sx={{ color: "#b45309", fontWeight: 800 }}>Profitability guard angewendet</Typography>
+              ) : null}
+              {universalPreview.components.filter((component) => component.id !== "legacy").map((component) => (
+                <Typography key={component.id} variant="caption" sx={{ display: "block", color: "#64748b", fontWeight: 700 }}>
+                  {component.label}: {component.quantity.toLocaleString("de-DE")} × {formatCurrency(component.unitSellingPrice)} = {formatCurrency(component.sellingTotal)}
+                </Typography>
+              ))}
+              {universalPreview.warnings?.map((warning) => (
+                <Typography key={`${warning.code}-${warning.componentId ?? warning.message}`} variant="caption" sx={{ display: "block", color: "#b45309", fontWeight: 800 }}>{warning.message}</Typography>
+              ))}
+            </Box>
+            <Typography variant="h5" sx={{ mt: 1, fontWeight: 900, color: "#0f172a" }}>Calculated price: {formatCurrency(preview.total)}</Typography>
             </Box>
           </CardContent>
         </Card>
@@ -3031,7 +3348,7 @@ function ProductEdit() {
 function ProductCreate() {
   return (
     <Create>
-      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, configuratorProfile: "standard", pdfAnalysisMode: "disabled", pdfConfig: {}, productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minWidthCm: 1, maxWidthCm: 0, minHeightCm: 1, maxHeightCm: 0, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
+      <SimpleForm warnWhenUnsavedChanges sx={{ maxWidth: "none", bgcolor: "#f8fafc" }} defaultValues={{ visible: false, published: false, productStatus: "draft", purchaseMode: "online", isBestseller: false, bestsellerSortOrder: 10, isStudentShop: false, studentShopSortOrder: 10, studentDiscountEligible: true, configuratorProfile: "standard", experienceProfile: "standard", pdfAnalysisMode: "disabled", pdfConfig: {}, productBindingConfig: { enabledSystems: [], bindingSizeSelectionMode: "automatic" }, pricingType: "tiered", pricingComponents: [], pricingGuards: {}, basePrice: 0, priceTiers: [{ quantity: 1, price: 0 }], areaPricing: { defaultWidthCm: 100, defaultHeightCm: 100, minWidthCm: 1, maxWidthCm: 0, minHeightCm: 1, maxHeightCm: 0, minAreaM2: 0 }, pricingProperties: [], rating: 4.8, tags: [], gallery: [], variants: [], industrySlugs: [], enabledCategoryProperties: [], production: { baseProductionDays: 3, expressAvailable: true, preflightProfile: "standard-print", renderPipeline: "pdf-x4" } }}>
         <ProductFormFields />
       </SimpleForm>
     </Create>
@@ -3423,7 +3740,7 @@ function PropertyCsvPanel() {
           label="CSV Inhalt"
           value={csvText}
           onChange={(event) => setCsvText(event.target.value)}
-          helperText="Spalten: slug,name,value,label,pricingMode,fixedPrice,from_quantity,to_quantity,unit_price,active,sortOrder"
+          helperText="Spalten: slug,name,value,label,pricingMode,fixedPrice,costPrice,from_quantity,to_quantity,unit_price,active,sortOrder"
           fullWidth
         />
         {result ? <Alert severity={result.includes("fehlgeschlagen") ? "error" : "success"}>{result}</Alert> : null}
@@ -3530,7 +3847,7 @@ function PropertyValuesInput() {
             <TextInput source="description" label="Beschreibung" helperText="Optionaler Kurztext für Karten." fullWidth />
           </Box>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "240px 180px 180px" }, gap: 1.25, alignItems: "start" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "240px 180px 180px 180px" }, gap: 1.25, alignItems: "start" }}>
             <SelectInput source="pricingMode" label="Preisart" defaultValue="included" choices={[
               { id: "included", name: "Inklusive" },
               { id: "fixed", name: "Aufpreis / Stk." },
@@ -3539,6 +3856,7 @@ function PropertyValuesInput() {
               { id: "multiplier", name: "Multiplikator" }
             ]} helperText="Legt fest, wie dieser Wert in der zentralen Preisberechnung wirkt." fullWidth />
             <NumberInput source="fixedPrice" label="Aufpreis/Festpreis (€)" min={0} step={0.01} defaultValue={0} helperText="Für Aufpreis / Stk. oder Festpreis." fullWidth />
+            <NumberInput source="costPrice" label="Kostenpreis (€)" min={0} step={0.01} helperText="Optional intern für Marge/Kosten." fullWidth />
             <NumberInput source="multiplier" label="Multiplikator" min={0} step={0.01} defaultValue={1} helperText="1 = kein Aufschlag, 1.2 = +20%." fullWidth />
           </Box>
 
@@ -3604,6 +3922,16 @@ function PropertySafeDeleteButton() {
   );
 }
 
+function PropertyUsageWarning() {
+  const record = useRecordContext<GlobalProperty>();
+  if (!record?.usageCount) return null;
+  return (
+    <Alert severity="warning" sx={{ borderRadius: 2 }}>
+      Changing global prices for "{record.name}" can affect {record.usageCount} product(s). This is a warning, not a blocker.
+    </Alert>
+  );
+}
+
 function PropertyEdit() {
   return (
     <Edit>
@@ -3621,6 +3949,7 @@ function PropertyEdit() {
           <Alert severity="info" sx={{ borderRadius: 2 }}>
             Globale Preise gelten automatisch in jedem Produkt, das diese Eigenschaft verwendet. Im Produktbereich nur dann überschreiben, wenn ein Sonderpreis nötig ist.
           </Alert>
+          <PropertyUsageWarning />
           <PropertySafeDeleteButton />
         <PropertyValuesInput />
         </AdminFormCanvas>
@@ -4701,19 +5030,19 @@ function CatalogImageImportToolPage() {
 }
 
 const csvExamples = {
-  properties: `slug,name,value,label,pricingMode,fixedPrice,from_quantity,to_quantity,unit_price,active,sortOrder
-papier,Papier,250g,250 g Papier,tiered,,1,9,0.32,true,10
-papier,Papier,250g,250 g Papier,tiered,,10,24,0.30,true,10
-papier,Papier,250g,250 g Papier,tiered,,25,49,0.28,true,10
-papier,Papier,250g,250 g Papier,tiered,,100,499,0.24,true,10
-papier,Papier,250g,250 g Papier,tiered,,500,999999,0.22,true,10
-format,Format,A3,A3,fixed,0.36,,,,true,20`,
+  properties: `slug,name,value,label,pricingMode,fixedPrice,costPrice,from_quantity,to_quantity,unit_price,active,sortOrder
+papier,Papier,250g,250 g Papier,tiered,,0.12,1,9,0.32,true,10
+papier,Papier,250g,250 g Papier,tiered,,0.12,10,24,0.30,true,10
+papier,Papier,250g,250 g Papier,tiered,,0.12,25,49,0.28,true,10
+papier,Papier,250g,250 g Papier,tiered,,0.12,100,499,0.24,true,10
+papier,Papier,250g,250 g Papier,tiered,,0.12,500,999999,0.22,true,10
+format,Format,A3,A3,fixed,0.36,0.14,,,,true,20`,
   categories: `slug,name,description,visible,published,logo
 druck,Druck,Druckprodukte online konfigurieren,true,true,/uploads/categories/druck.webp
 werbetechnik,Werbetechnik,Beschriftung Schilder Folien und Montage,true,true,/uploads/categories/werbetechnik.webp`,
-  products: `slug,name,category,basePrice,pricingType,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minWidthCm,maxWidthCm,minHeightCm,maxHeightCm,minAreaM2,tags,configuratorProfile,pdfAnalysisMode,previewMode,minPages,pageMultiple,allowPageMapping,formatCheck,allowFormatOverride
-flyer,Flyer,druck,0.716,tiered,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,,,,,,kopien|druck,simple-print,required,first-page,1,1,false,true,true
-banner-m2,Banner nach Maß,werbetechnik,29.90,area,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,30,500,30,300,0.25,banner|werbetechnik,poster,optional,first-page,1,1,false,true,true`,
+  products: `slug,name,category,basePrice,pricingType,pricingProfile,experienceProfile,productStatus,priceTiers,pricingProperties,short,description,seo,heroImage,deliveryText,defaultWidthCm,defaultHeightCm,minWidthCm,maxWidthCm,minHeightCm,maxHeightCm,minAreaM2,tags,configuratorProfile,pdfAnalysisMode,previewMode,minPages,pageMultiple,allowPageMapping,formatCheck,allowFormatOverride
+flyer,Flyer,druck,0.716,tiered,sheet-print,document,draft,"25-49:0.716|50-99:0.438","format|druckart|druckseiten|papier|veredelung",Flyer in vielen Formaten und Papieren,Flyer hochwertig drucken,Flyer drucken Wels,/uploads/products/flyer.webp,3-5 Werktage,,,,,,,,kopien|druck,simple-print,required,first-page,1,1,false,true,true
+banner-m2,Banner nach Maß,werbetechnik,29.90,area,area-print,large-format,draft,"1-999:29.90",,Banner pro m²,Banner mit Wunschmaß,Banner Wels,/uploads/products/banner.webp,3-5 Werktage,100,100,30,500,30,300,0.25,banner|werbetechnik,poster,optional,first-page,1,1,false,true,true`,
   "property-display": `productSlug,propertySlug,control,section,advanced,sortOrder
 broschueren,broschuere-format,buttons,format,false,10
 broschueren,umschlag-option,cards,cover,false,20
@@ -4727,7 +5056,7 @@ type CatalogCsvTarget = "properties" | "categories" | "products" | "property-dis
 
 function detectCatalogCsvTarget(rows: Record<string, string>[], fallback: CatalogCsvTarget): CatalogCsvTarget {
   const keys = new Set(rows.flatMap((row) => Object.keys(row).map(normalizeCsvKey)));
-  if (["category", "kategorie", "baseprice", "preis", "pricingtype", "preisart", "productstatus", "heroimage", "short", "kurztext", "configuratorprofile", "pdfanalysismode", "previewmode", "minpages", "pagemultiple", "allowpagemapping", "formatcheck", "allowformatoverride"].some((key) => keys.has(key))) {
+  if (["category", "kategorie", "baseprice", "preis", "pricingtype", "preisart", "pricingprofile", "experienceprofile", "productstatus", "heroimage", "short", "kurztext", "configuratorprofile", "pdfanalysismode", "previewmode", "minpages", "pagemultiple", "allowpagemapping", "formatcheck", "allowformatoverride"].some((key) => keys.has(key))) {
     return "products";
   }
   if (keys.has("productslug") && keys.has("propertyslug")) {
@@ -5577,6 +5906,71 @@ function WerbungToolPage() {
   );
 }
 
+function SettingsToolPage() {
+  const notify = useNotify();
+  const [vatPercent, setVatPercent] = useState(20);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/tools?action=tax");
+        if (!res.ok) throw new Error("Steuerkonfiguration konnte nicht geladen werden.");
+        const payload = await res.json() as { vatPercent: number };
+        setVatPercent(Number(payload.vatPercent ?? 20));
+      } catch (error) {
+        notify(error instanceof Error ? error.message : "Laden fehlgeschlagen.", { type: "error" });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function saveTax() {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/tools?action=tax", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vatPercent })
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof payload?.message === "string" ? payload.message : "Speichern fehlgeschlagen.");
+      setVatPercent(Number(payload.vatPercent ?? vatPercent));
+      notify("Steuersatz gespeichert.", { type: "success" });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Steuersatz konnte nicht gespeichert werden.", { type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <AdminToolShell title="Settings" description="Globale Admin-Konfigurationen, die nicht in den täglichen Dashboard-Workflow gehören.">
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent sx={{ display: "grid", gap: 1.5, maxWidth: 460 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>VAT configuration</Typography>
+          <MuiTextField
+            size="small"
+            type="number"
+            label="VAT %"
+            value={vatPercent}
+            disabled={loading || saving}
+            onChange={(event) => setVatPercent(Number(event.target.value))}
+            slotProps={{ htmlInput: { min: 0, step: 0.1 } }}
+          />
+          <Box>
+            <Button variant="contained" onClick={() => void saveTax()} disabled={loading || saving}>
+              {saving ? "Saving..." : "Save change"}
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+    </AdminToolShell>
+  );
+}
+
 function CRMToolPage() {
   const notify = useNotify();
   const [loading, setLoading] = useState(true);
@@ -5675,7 +6069,7 @@ function CRMToolPage() {
     void load();
   }, []);
 
-  async function handleAction(orderId: string, operation: "stornieren" | "delete") {
+  async function handleAction(orderId: string, operation: "stornieren" | "retry") {
     setActionLoadingId(`${operation}:${orderId}`);
     try {
       const res = await fetch("/api/admin/tools?action=crm-manage", {
@@ -5687,7 +6081,7 @@ function CRMToolPage() {
         const detail = await res.text().catch(() => "");
         throw new Error(`HTTP ${res.status}${detail ? `: ${detail.slice(0, 160)}` : ""}`);
       }
-      notify(operation === "stornieren" ? "Bestellung storniert." : "Bestellung gelöscht.", { type: "info" });
+      notify(operation === "retry" ? "CRM Rechnung wurde erneut übertragen." : "Bestellung storniert.", { type: operation === "retry" ? "success" : "info" });
       await load();
     } catch (error) {
       notify(`Aktion fehlgeschlagen. ${error instanceof Error ? error.message : "Unbekannter Fehler"}`, { type: "error" });
@@ -5697,14 +6091,19 @@ function CRMToolPage() {
   }
 
   return (
-    <AdminToolShell title="CRM" description="Rechnungen, Sync-Status und Umsatz-Kalkulationen für CRM-Anbindung.">
+    <AdminToolShell title="CRM / Rechnungen" description="CRM besitzt Rechnungsnummern, Rechnungs-PDFs, Gutschriften, Storno-Dokumente und Mahnungen. Der Webshop bleibt Eigentümer von Bestellungen, Zahlungen und Kundenkommunikation.">
       <Box sx={{ display: "grid", gap: 1.5 }}>
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="subtitle2">Webshop Order API</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.6 }}>
-              Ziel-Endpoint für Webshop-Bestellungen. Requests werden als JSON mit Bearer Token gesendet.
-            </Typography>
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ display: "grid", gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Connection</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                  Ziel-Endpoint für Webshop-Bestellungen. Requests werden als JSON mit Bearer Token gesendet.
+                </Typography>
+              </Box>
+              <AdminStatusBadge label={crmConfigured.url && crmConfigured.token ? "Connected" : "Not configured"} tone={crmConfigured.url && crmConfigured.token ? "green" : "red"} />
+            </Box>
             <Box sx={{ mt: 1.5, display: "grid", gap: 1.25 }}>
               <MuiTextField
                 size="small"
@@ -5732,92 +6131,61 @@ function CRMToolPage() {
               />
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                 <Button variant="contained" onClick={() => void saveConfig()} disabled={configLoading || configSaving}>
-                  {configSaving ? "Speichert..." : "Webshop Order API speichern"}
+                  {configSaving ? "Speichert..." : "Save connection"}
                 </Button>
-                <Typography variant="caption" color={crmConfigured.url && crmConfigured.token ? "success.main" : "error.main"}>
-                  {crmConfigured.url && crmConfigured.token ? "API URL und Token sind konfiguriert." : "API URL oder Token fehlt."}
-                </Typography>
-              </Box>
-              <Box component="pre" sx={{ m: 0, p: 1.5, borderRadius: 1, border: "1px solid #cbd5e1", bgcolor: "#f8fafc", color: "#0f172a", overflowX: "auto", fontSize: 12, lineHeight: 1.6 }}>
-{`{
-  "email": "kunde@example.com",
-  "customer": "Webshop Kunde",
-  "total": 129.90,
-  "items": [
-    {
-      "description": "Produktname",
-      "qty": 1,
-      "price": 129.90
-    }
-  ]
-}`}
+                <Button variant="outlined" onClick={() => void load()} disabled={loading}>Test connection</Button>
               </Box>
             </Box>
           </CardContent>
         </Card>
 
-        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Button variant="contained" onClick={() => void load()} disabled={loading}>
-            CRM Sync Status laden
-          </Button>
-          <Button variant="outlined" onClick={() => void load()} disabled={loading}>
-            Rechnungen aktualisieren
-          </Button>
-          <Button variant="outlined" onClick={() => void load()} disabled={loading}>
-            Kalkulation neu berechnen
-          </Button>
-        </Box>
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent sx={{ display: "grid", gap: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Used for</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 0.75 }}>
+              {["Invoice creation", "Invoice storage", "Invoice PDF", "Credit note", "Cancellation", "Reminder"].map((item) => (
+                <Typography key={item} variant="body2" sx={{ color: adminColors.ink, fontWeight: 800 }}>✓ {item}</Typography>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
 
         <Grid container spacing={1.25}>
           <Grid size={{ xs: 12, md: 4 }}>
-            <DashboardCard label="Stripe Bestellungen" value={String(payload?.summary.stripeOrders ?? 0)} />
+            <DashboardCard label="Paid webshop orders" value={String(payload?.summary.stripeOrders ?? 0)} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <DashboardCard label="CRM synchronisiert" value={String(payload?.summary.crmSynced ?? 0)} />
+            <DashboardCard label="Synced" value={String(payload?.summary.crmSynced ?? 0)} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <DashboardCard label="CRM ausstehend" value={String(payload?.summary.crmPending ?? 0)} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <DashboardCard label="Umsatz synchronisiert" value={formatCurrency(payload?.summary.syncedRevenue ?? 0)} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <DashboardCard label="Umsatz ausstehend" value={formatCurrency(payload?.summary.pendingRevenue ?? 0)} />
+            <DashboardCard label="Pending" value={String(payload?.summary.crmPending ?? 0)} />
           </Grid>
         </Grid>
 
-        <Card variant="outlined">
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
           <CardContent>
-            <Typography variant="subtitle2">Ausstehende CRM Rechnungen</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Invoice Transfer Problems</Typography>
+              <Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>Refresh</Button>
+            </Box>
             {(payload?.pending ?? []).length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8 }}>
-                Keine offenen Rechnungen.
-              </Typography>
+              <EmptyState title="No invoice transfer problems." text="Paid webshop orders are synced to CRM." />
             ) : (
               <Box sx={{ mt: 1, display: "grid", gap: 0.6 }}>
                 {(payload?.pending ?? []).slice(0, 15).map((row) => (
-                  <Box key={row.id} sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr .6fr .9fr auto", alignItems: "center", gap: 1, fontSize: 13, border: "1px solid #e2e8f0", borderRadius: 1, px: 1, py: 0.7 }}>
+                  <Box key={row.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1.2fr 1fr .6fr .9fr auto" }, alignItems: "center", gap: 1, fontSize: 13, border: "1px solid #e2e8f0", borderRadius: 1, px: 1, py: 0.9 }}>
                     <Typography variant="body2" sx={{ fontSize: 13 }}>{row.id}</Typography>
                     <Typography variant="body2" sx={{ fontSize: 13 }}>{row.customer}</Typography>
                     <Typography variant="body2" sx={{ fontSize: 13 }}>{formatCurrency(Number(row.total || 0))}</Typography>
                     <Typography variant="body2" sx={{ fontSize: 13 }}>{new Date(row.createdAt).toLocaleString()}</Typography>
                     <Box sx={{ display: "flex", gap: 0.75, justifyContent: "flex-end" }}>
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         size="small"
                         disabled={actionLoadingId !== null}
-                        onClick={() => void handleAction(row.id, "stornieren")}
+                        onClick={() => void handleAction(row.id, "retry")}
                       >
-                        Stornieren
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        disabled={actionLoadingId !== null}
-                        onClick={() => void handleAction(row.id, "delete")}
-                      >
-                        Löschen
+                        Retry
                       </Button>
                     </Box>
                   </Box>
@@ -5827,7 +6195,7 @@ function CRMToolPage() {
           </CardContent>
         </Card>
 
-        <Card variant="outlined">
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
           <CardContent>
             <Typography variant="subtitle2">Letzte CRM Syncs</Typography>
             {(payload?.recentSyncs ?? []).length === 0 ? (
@@ -5849,15 +6217,6 @@ function CRMToolPage() {
                         onClick={() => void handleAction(row.orderId, "stornieren")}
                       >
                         Stornieren
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        disabled={actionLoadingId !== null}
-                        onClick={() => void handleAction(row.orderId, "delete")}
-                      >
-                        Löschen
                       </Button>
                     </Box>
                   </Box>
@@ -6026,6 +6385,30 @@ function ProductionBindingConfigToolPage() {
                   <Typography variant="caption" sx={{ display: "block", color: adminColors.muted }}>
                     Varianten: {variants.filter((variant) => variant.bindingSystemId === system.id).length}
                   </Typography>
+                  {Array.isArray(system.sizes) && system.sizes.length ? (
+                    <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 0.75 }}>
+                      {system.sizes.slice(0, 6).map((size: any) => {
+                        const caliper = Number(size.referenceCapacity?.referencePaperCaliperMm ?? 0);
+                        const maxThickness = Number(size.maxBlockThicknessMm ?? 0);
+                        const capacity = caliper > 0 && maxThickness > 0 ? Math.floor(maxThickness / caliper) : undefined;
+                        return (
+                          <Box key={String(size.id ?? size.value)} sx={{ border: "1px solid #e2e8f0", borderRadius: 1, bgcolor: "#fff", p: 1 }}>
+                            <Typography variant="caption" sx={{ display: "block", fontWeight: 950, color: adminColors.ink }}>{size.label ?? size.value}</Typography>
+                            <Typography variant="caption" sx={{ display: "block", color: adminColors.muted }}>Spine/Diameter: {size.spineWidthMm ?? size.diameterMm ?? "-"} mm</Typography>
+                            <Typography variant="caption" sx={{ display: "block", color: adminColors.muted }}>Max block: {size.maxBlockThicknessMm ?? "-"} mm</Typography>
+                            {size.referenceCapacity ? (
+                              <Typography variant="caption" sx={{ display: "block", color: adminColors.muted }}>
+                                Reference: {size.referenceCapacity.minSheets ?? "-"}-{size.referenceCapacity.maxSheets ?? "-"} sheets at {size.referenceCapacity.referencePaperCaliperMm ?? "-"} mm
+                              </Typography>
+                            ) : null}
+                            {capacity !== undefined ? (
+                              <Typography variant="caption" sx={{ display: "block", color: adminColors.ink, fontWeight: 850 }}>Calculated capacity: ~{capacity} sheets</Typography>
+                            ) : null}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  ) : null}
                 </Box>
               ))}
             </Box>
@@ -6038,51 +6421,69 @@ function ProductionBindingConfigToolPage() {
 
 const adminMenuGroups = [
   {
-    label: "Übersicht",
+    label: "",
     items: [
-      { href: "#/", label: "Dashboard", description: "Umsatz, Aufträge und schnelle Aktionen", icon: <DashboardIcon /> }
+      { href: "#/", label: "Dashboard", description: "Operations overview", icon: <DashboardIcon /> }
     ]
   },
   {
-    label: "Katalog & Preise",
+    label: "STORE",
     items: [
-      { href: "#/products", label: "Produkte", description: "Produkte, Staffelpreise und Konfigurator", icon: <Inventory2Icon /> },
-      { href: "#/properties", label: "Eigenschaften", description: "Globale Werte, Aufpreise und Staffeln", icon: <LocalOfferIcon /> },
-      { href: "#/tools/production-bindings", label: "Produktionsdaten", description: "Bindungen, Größen, Varianten und Lieferanten", icon: <TuneIcon /> },
-      { href: "#/categories", label: "Kategorien", description: "Shop-Struktur, Eigenschaften und Bilder", icon: <CategoryIcon /> },
-      { href: "#/industries", label: "Branchen", description: "Landingpages und Branchen-Zuordnung", icon: <BusinessIcon /> }
+      { href: "#/products", label: "Products", description: "Catalog, health and pricing", icon: <Inventory2Icon /> },
+      { href: "#/categories", label: "Categories", description: "Shop structure", icon: <CategoryIcon /> },
+      { href: "#/properties", label: "Properties", description: "Global values and prices", icon: <LocalOfferIcon /> },
+      { href: "#/tools/production-bindings", label: "Bindings", description: "Binding production data", icon: <TuneIcon /> },
+      { href: "#/fileUploads", label: "Files", description: "Customer uploads", icon: <UploadFileIcon /> }
     ]
   },
   {
-    label: "Studenten",
+    label: "SALES",
     items: [
-      { href: "#/studentArticles", label: "Ratgeber", description: "Studenten-Content und SEO Artikel", icon: <ArticleIcon /> },
-      { href: "#/studentVerifications", label: "Prüfung", description: "Studentenstatus kontrollieren", icon: <SchoolIcon /> }
+      { href: "#/orders", label: "Orders", description: "Webshop orders and status", icon: <ReceiptLongIcon /> },
+      { href: "#/quotes", label: "Requests", description: "Customer requests and quotes", icon: <RequestQuoteIcon /> }
     ]
   },
   {
-    label: "Verkauf",
+    label: "CONTENT",
     items: [
-      { href: "#/orders", label: "Bestellungen", description: "Webshop-Aufträge und Status", icon: <ReceiptLongIcon /> },
-      { href: "#/quotes", label: "Angebote", description: "Anfragen und individuelle Angebote", icon: <RequestQuoteIcon /> },
-      { href: "#/invoices", label: "Rechnungen", description: "Zahlungen, CRM und Dokumente", icon: <ReceiptLongIcon /> },
-      { href: "#/fileUploads", label: "Datei-Uploads", description: "Kundendaten und Druckdateien", icon: <UploadFileIcon /> }
+      { href: "#/tools/homepage", label: "Homepage", description: "Homepage content", icon: <ArticleIcon /> },
+      { href: "#/tools/site-images", label: "Website Images", description: "Global image slots", icon: <UploadFileIcon /> },
+      { href: "#/tools/werbung", label: "Advertising", description: "Tracking and campaigns", icon: <CampaignIcon /> },
+      { href: "#/tools/layouts", label: "Layout Studio", description: "Visual layouts", icon: <TuneIcon /> },
+      { href: "#/industries", label: "Branchen", description: "Landingpages", icon: <BusinessIcon /> },
+      { href: "#/studentArticles", label: "Ratgeber", description: "Student SEO content", icon: <SchoolIcon /> }
     ]
   },
   {
-    label: "Marketing",
+    label: "INTEGRATIONS",
     items: [
-      { href: "#/coupons", label: "Gutscheine", description: "Codes, Rabatte und Aktionen", icon: <CardGiftcardIcon /> },
-      { href: "#/reviews", label: "Bewertungen", description: "Kundenstimmen freigeben", icon: <StarIcon /> },
-      { href: "#/newsletter", label: "Kontakte", description: "Newsletter-Abonnenten", icon: <MailIcon /> },
-      { href: "#/newsletterCampaigns", label: "Newsletter", description: "Kampagnen erstellen und senden", icon: <CampaignIcon /> }
+      { href: "#/tools/crm", label: "CRM / Rechnungen", description: "Invoices and sync", icon: <ReceiptLongIcon /> },
+      { href: "#/tools/email", label: "Email", description: "SMTP settings", icon: <MailIcon /> }
     ]
   },
   {
-    label: "Betrieb",
+    label: "TOOLS",
     items: [
-      { href: "#/shipping", label: "Versandarten", description: "Liefermethoden und Preise", icon: <LocalShippingIcon /> },
-      { href: "#/usersRoles", label: "Benutzer & Rollen", description: "Admin-Zugänge und Rollen", icon: <ManageAccountsIcon /> }
+      { href: "#/tools/catalog-csv", label: "CSV Import", description: "Catalog CSV import", icon: <UploadFileIcon /> },
+      { href: "#/tools/image-import", label: "Image Import", description: "Assign catalog images", icon: <UploadFileIcon /> }
+    ]
+  },
+  {
+    label: "SYSTEM",
+    items: [
+      { href: "#/tools/backup", label: "Backup", description: "Database backups", icon: <TuneIcon /> },
+      { href: "#/tools/maintenance", label: "Maintenance", description: "Maintenance mode", icon: <TuneIcon /> },
+      { href: "#/tools/vacation", label: "Vacation Mode", description: "Delivery notices", icon: <LocalShippingIcon /> },
+      { href: "#/tools/online-shop", label: "Shop Control", description: "Checkout controls", icon: <TuneIcon /> },
+      { href: "#/tools/settings", label: "Settings", description: "Global settings", icon: <ManageAccountsIcon /> },
+      { href: "#/studentVerifications", label: "Studentenprüfung", description: "Student verification", icon: <SchoolIcon /> },
+      { href: "#/coupons", label: "Gutscheine", description: "Discounts", icon: <CardGiftcardIcon /> },
+      { href: "#/reviews", label: "Bewertungen", description: "Reviews", icon: <StarIcon /> },
+      { href: "#/newsletter", label: "Kontakte", description: "Newsletter contacts", icon: <MailIcon /> },
+      { href: "#/newsletterCampaigns", label: "Newsletter", description: "Campaigns", icon: <CampaignIcon /> },
+      { href: "#/shipping", label: "Versandarten", description: "Shipping methods", icon: <LocalShippingIcon /> },
+      { href: "#/usersRoles", label: "Benutzer & Rollen", description: "Admin access", icon: <ManageAccountsIcon /> },
+      { href: "#/tools/shutdown", label: "Shutdown", description: "Destructive system action", icon: <DeleteOutlineIcon />, destructive: true }
     ]
   }
 ];
@@ -6106,9 +6507,11 @@ function AdminMenu() {
       {adminMenuGroups.map((group, groupIndex) => (
         <Box key={group.label} sx={{ mb: 1.25 }}>
           {groupIndex > 0 ? <Divider sx={{ my: 1.25 }} /> : null}
-          <Typography variant="caption" sx={{ display: "block", px: 1.25, pb: 0.75, color: "#64748b", fontWeight: 900, textTransform: "uppercase", letterSpacing: ".08em" }}>
-            {group.label}
-          </Typography>
+          {group.label ? (
+            <Typography variant="caption" sx={{ display: "block", px: 1.25, pb: 0.75, color: "#64748b", fontWeight: 900, textTransform: "uppercase", letterSpacing: ".08em" }}>
+              {group.label}
+            </Typography>
+          ) : null}
           <MuiList disablePadding sx={{ display: "grid", gap: 0.5 }}>
             {group.items.map((item) => {
               const active = item.href === "#/" ? hash === "#/" : hash.startsWith(item.href);
@@ -6125,13 +6528,13 @@ function AdminMenu() {
                     borderRadius: 1.5,
                     px: 1.25,
                     py: 1,
-                    color: active ? "#0d3f99" : "#334155",
-                    border: active ? "1px solid rgba(17,85,204,.22)" : "1px solid transparent",
-                    bgcolor: active ? "rgba(17,85,204,.08)" : "transparent",
-                    "&:hover": { bgcolor: active ? "rgba(17,85,204,.12)" : "#eef4ff", borderColor: "rgba(17,85,204,.16)" }
+                    color: item.destructive ? "#b42318" : active ? "#0d3f99" : "#334155",
+                    border: active ? "1px solid rgba(17,85,204,.22)" : item.destructive ? "1px solid #fecaca" : "1px solid transparent",
+                    bgcolor: active ? "rgba(17,85,204,.08)" : item.destructive ? "#fef2f2" : "transparent",
+                    "&:hover": { bgcolor: item.destructive ? "#fee2e2" : active ? "rgba(17,85,204,.12)" : "#eef4ff", borderColor: item.destructive ? "#fca5a5" : "rgba(17,85,204,.16)" }
                   }}
                 >
-                  <ListItemIcon sx={{ minWidth: 34, mt: 0.2, color: active ? "#1155cc" : "#64748b" }}>
+                  <ListItemIcon sx={{ minWidth: 34, mt: 0.2, color: item.destructive ? "#b42318" : active ? "#1155cc" : "#64748b" }}>
                     {item.icon}
                   </ListItemIcon>
                   <Box sx={{ minWidth: 0 }}>
@@ -6150,11 +6553,39 @@ function AdminMenu() {
   );
 }
 
+function AdminGlobalAppBar() {
+  const [query, setQuery] = useState("");
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    window.location.hash = `#/orders?filter=${encodeURIComponent(JSON.stringify({ q }))}`;
+  }
+  return (
+    <RaAppBar sx={{ bgcolor: "#fff", color: adminColors.ink, borderBottom: `1px solid ${adminColors.border}`, boxShadow: "none" }}>
+      <Box sx={{ width: "100%", display: "flex", alignItems: "center", gap: 2, px: { xs: 1, md: 2 } }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 950, minWidth: { xs: 80, md: 160 } }}>DUD Admin</Typography>
+        <Box component="form" onSubmit={submit} sx={{ flex: 1, maxWidth: 620 }}>
+          <MuiTextField
+            size="small"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search orders, products, customers, invoices..."
+            fullWidth
+          />
+        </Box>
+        <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 800, display: { xs: "none", sm: "block" } }}>Admin</Typography>
+      </Box>
+    </RaAppBar>
+  );
+}
+
 function AdminLayout(props: any) {
   return (
     <Layout
       {...props}
       menu={AdminMenu}
+      appBar={AdminGlobalAppBar}
       sx={{
         minWidth: 0,
         width: "100%",
@@ -6186,6 +6617,7 @@ export function ReactAdminDashboard() {
         <Route path="/tools/site-images" element={<SiteImagesToolPage />} />
         <Route path="/tools/backup" element={<BackupToolPage />} />
         <Route path="/tools/werbung" element={<WerbungToolPage />} />
+        <Route path="/tools/settings" element={<SettingsToolPage />} />
         <Route path="/tools/crm" element={<CRMToolPage />} />
         <Route path="/tools/shutdown" element={<ShutdownToolPage />} />
         <Route path="/tools/layouts" element={<LayoutStudioPage />} />

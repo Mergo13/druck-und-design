@@ -3,6 +3,7 @@ import { posts } from "@/data/products";
 import { getCategories, getProducts } from "@/lib/catalog-repository";
 import { localSeoPages, siteUrl } from "@/lib/seo";
 import { getStudentArticles, studentLandingPages } from "@/lib/student-content";
+import { shopProductsFromCatalog } from "@/lib/shop-products";
 
 function getBaseUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL?.trim() || siteUrl).replace(/\/+$/, "");
@@ -71,7 +72,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "weekly" as const,
       priority: 0.72
     })),
-    ...products
+    ...shopProductsFromCatalog(products)
       .filter((product) => product.visible !== false && product.published !== false)
       .map((product) => ({
         url: `${baseUrl}/produkt/${product.slug}`,

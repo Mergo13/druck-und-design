@@ -71,6 +71,30 @@ export type ProductPriceTier = {
 
 export type ProductPropertyPriceMode = "global" | "included" | "fixed" | "tiered" | "flat" | "multiplier";
 
+export type PricingQuantitySource =
+  | "copies"
+  | "printed_pages"
+  | "sheets"
+  | "black_white_pages"
+  | "color_pages"
+  | "front_covers"
+  | "back_covers"
+  | "printed_cover_sides"
+  | "embossing_lines"
+  | "per_order"
+  | "area_m2"
+  | "perimeter_m"
+  | "running_meter"
+  | "machine_sheets"
+  | "finished_units"
+  | "cuts"
+  | "folds"
+  | "holes"
+  | "finishing_passes"
+  | "machine_minutes"
+  | "labor_minutes"
+  | "design_hours";
+
 export type ProductPropertyTierPrice = {
   quantity: number;
   fromQuantity?: number;
@@ -91,6 +115,10 @@ export type ProductPropertyValue = {
   sortOrder?: number;
   pricingMode: ProductPropertyPriceMode;
   fixedPrice?: number;
+  costPrice?: number;
+  priceOverride?: number;
+  costOverride?: number;
+  markupOverride?: number;
   multiplier?: number;
   tierPrices?: ProductPropertyTierPrice[];
   production?: ProductPropertyProductionMetadata;
@@ -106,8 +134,123 @@ export type ProductPropertyProductionMetadata = {
   bindingSeries?: string;
   bindingColor?: string;
   format?: string;
-  pricingQuantitySource?: "copies" | "printed_pages" | "sheets" | "black_white_pages" | "color_pages" | "front_covers" | "back_covers" | "printed_cover_sides" | "embossing_lines" | "per_order";
+  pricingQuantitySource?: PricingQuantitySource;
   printColorMode?: "black_white" | "full_color" | "auto";
+};
+
+export type PricingProfileKey =
+  | "digital-document"
+  | "digital-sheet"
+  | "sheet-print"
+  | "business-card"
+  | "brochure"
+  | "booklet"
+  | "thesis"
+  | "document-binding"
+  | "large-format"
+  | "plan-print"
+  | "area-print"
+  | "area-finishing"
+  | "sticker"
+  | "textile-print"
+  | "signage"
+  | "design-service"
+  | "custom-formula";
+
+export type PricingComponentKind =
+  | "print"
+  | "paper"
+  | "material"
+  | "setup"
+  | "cutting"
+  | "folding"
+  | "binding"
+  | "lamination"
+  | "embossing"
+  | "finishing"
+  | "packaging"
+  | "machine"
+  | "labor";
+
+export type PricingRoundingRule = "none" | "cent" | "ten_cent" | "fifty_cent" | "whole" | "psychological";
+
+export type PricingGuardConfig = {
+  minimumOrderPrice?: number;
+  minimumMarginPercent?: number;
+  targetMarginPercent?: number;
+  maximumDiscountPercent?: number;
+  roundingRule?: PricingRoundingRule;
+};
+
+export type ProductPricingComponent = {
+  id: string;
+  label: string;
+  kind: PricingComponentKind;
+  quantitySource: PricingQuantitySource;
+  pricingSource?: "inline" | "global";
+  propertyId?: string;
+  propertyValueId?: string;
+  sellingPrice?: number;
+  costPrice?: number;
+  priceOverride?: number;
+  costOverride?: number;
+  markupOverride?: number;
+  enabled?: boolean;
+};
+
+export type ProductPricingProfileConfig = {
+  key: PricingProfileKey;
+  label?: string;
+  components?: ProductPricingComponent[];
+  guards?: PricingGuardConfig;
+};
+
+export type ExperienceProfileKey =
+  | "standard"
+  | "document"
+  | "book"
+  | "cards"
+  | "folded"
+  | "large-format"
+  | "textile"
+  | "signage";
+
+export type PricingComponentResult = {
+  id: string;
+  label: string;
+  quantity: number;
+  quantitySource: PricingQuantitySource;
+  unitSellingPrice: number;
+  unitCost?: number;
+  sellingTotal: number;
+  costTotal?: number;
+};
+
+export type PricingWarning = {
+  code: "requiresManualQuote" | "missingQuantity" | "missingPrice" | "marginGuardApplied" | "minimumPriceApplied";
+  message: string;
+  componentId?: string;
+};
+
+export type PricingRecommendation = {
+  code: string;
+  message: string;
+};
+
+export type PricingResult = {
+  subtotal: number;
+  discount: number;
+  customerPrice: number;
+  vat?: number;
+  total: number;
+  productionCost?: number;
+  contribution?: number;
+  marginPercent?: number;
+  minimumPriceApplied?: boolean;
+  marginGuardApplied?: boolean;
+  components: PricingComponentResult[];
+  warnings?: PricingWarning[];
+  recommendations?: PricingRecommendation[];
 };
 
 export type PdfAnalysisMode = "disabled" | "optional" | "required";
@@ -169,6 +312,7 @@ export type GlobalPropertyValue = {
   active: boolean;
   pricingMode?: Exclude<ProductPropertyPriceMode, "global">;
   fixedPrice?: number;
+  costPrice?: number;
   multiplier?: number;
   tierPrices?: ProductPropertyTierPrice[];
 };
@@ -258,6 +402,10 @@ export type ProductCatalogItem = {
   studentShopSortOrder?: number;
   studentDiscountEligible?: boolean;
   configuratorProfile?: ProductConfiguratorProfile;
+  pricingProfile?: PricingProfileKey | ProductPricingProfileConfig;
+  pricingComponents?: ProductPricingComponent[];
+  pricingGuards?: PricingGuardConfig;
+  experienceProfile?: ExperienceProfileKey;
   pdfAnalysisMode?: PdfAnalysisMode;
   pdfConfig?: ProductPdfConfig;
   productBindingConfig?: {

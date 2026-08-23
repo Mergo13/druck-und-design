@@ -6,8 +6,10 @@ import { ensureAdminBootstrap } from "@/lib/admin-bootstrap";
 import { requireModulePermission } from "@/lib/admin-permissions";
 import { writeAuditLog } from "@/lib/admin-audit";
 import { prisma } from "@/lib/prisma";
+import { createCRMInvoice } from "@/lib/crm";
 import { getCategories, getProducts, upsertCategory, upsertProduct } from "@/lib/catalog-repository";
 import { getSiteImageMap, saveSiteImageMap, siteImageSlots } from "@/lib/site-images";
+import { LEGAL_DOCUMENT_FOOTER } from "@/lib/legal";
 
 const ENV_KEYS = [
   "SMTP_HOST",
@@ -104,6 +106,101 @@ async function callCrmInvoiceMutation(operation: "stornieren" | "delete", invoic
   }
 
   return { skipped: false as const, payload };
+}
+
+async function createInvoiceForAdminOrder(orderId: string) {
+  const order = await prisma.adminOrder.findUnique({ where: { id: orderId } });
+  if (!order) {
+    throw new Error("Order not found.");
+  }
+  const email = order.email?.trim();
+  if (!email) {
+    throw new Error("Order has no customer email.");
+  }
+  const existing = await prisma.adminInvoice.findUnique({ where: { orderId } });
+  if (existing) {
+    return {
+      invoiceId: existing.externalInvoiceId || existing.id,
+      invoiceNumber: existing.invoiceNumber || existing.id,
+      pdfUrl: existing.pdfUrl || undefined,
+      alreadySynced: true
+    };
+  }
+  const syncRows = await readCrmSyncRows();
+  const synced = syncRows.find((row) => row.orderId === orderId);
+  if (synced?.invoiceId) {
+    return {
+      invoiceId: synced.invoiceId,
+      invoiceNumber: synced.invoiceNumber,
+      pdfUrl: synced.pdfUrl,
+      alreadySynced: true
+    };
+  }
+  const rawItems = Array.isArray(order.items) ? order.items : [];
+  const crmInvoice = await createCRMInvoice({
+    customer: order.company?.trim() || order.customer,
+    email,
+    company: order.company || "",
+    vatId: order.vatId || "",
+    address: order.billingAddress || "",
+    shipping_address: order.shippingAddress || "",
+    shipping_cost: Number(order.shippingCost ?? 0),
+    shipping_name: order.shippingName || "",
+    processing_fee: Number(order.processingFee ?? 0),
+    footer_text: LEGAL_DOCUMENT_FOOTER,
+    total: Number(Number(order.total || 0).toFixed(2)),
+    items: rawItems.map((item: any) => ({
+      description: String(item.name ?? item.description ?? "Webshop Position"),
+      qty: Math.max(1, Number(item.quantity ?? item.qty ?? 1)),
+      price: Number(Number(item.price ?? item.unitPrice ?? 0).toFixed(2))
+    }))
+  });
+  await prisma.adminInvoice.upsert({
+    where: { id: crmInvoice.invoice_id },
+    update: {
+      customer: order.company?.trim() || order.customer,
+      email: email.toLowerCase(),
+      orderId,
+      externalInvoiceId: crmInvoice.invoice_id,
+      invoiceNumber: crmInvoice.invoice_number,
+      pdfUrl: crmInvoice.pdf_url,
+      source: "crm",
+      amount: Number(order.total || 0),
+      status: "Bezahlt"
+    },
+    create: {
+      id: crmInvoice.invoice_id,
+      customer: order.company?.trim() || order.customer,
+      email: email.toLowerCase(),
+      orderId,
+      externalInvoiceId: crmInvoice.invoice_id,
+      invoiceNumber: crmInvoice.invoice_number,
+      pdfUrl: crmInvoice.pdf_url,
+      source: "crm",
+      amount: Number(order.total || 0),
+      status: "Bezahlt"
+    }
+  });
+  const stripeSessionId = orderId.startsWith("STRIPE-") ? orderId.replace(/^STRIPE-/, "") : orderId;
+  const nextRows = [
+    ...syncRows.filter((row) => row.orderId !== orderId),
+    {
+      stripeSessionId,
+      syncedAt: new Date().toISOString(),
+      orderId,
+      customerEmail: email,
+      invoiceId: crmInvoice.invoice_id,
+      invoiceNumber: crmInvoice.invoice_number,
+      pdfUrl: crmInvoice.pdf_url
+    }
+  ];
+  await writeCrmSyncRows(nextRows);
+  return {
+    invoiceId: crmInvoice.invoice_id,
+    invoiceNumber: crmInvoice.invoice_number,
+    pdfUrl: crmInvoice.pdf_url,
+    alreadySynced: false
+  };
 }
 
 function parseEnv(content: string): Record<string, string> {
@@ -780,7 +877,7 @@ export async function POST(request: Request) {
     let orderId = typeof body.orderId === "string" ? body.orderId.trim() : "";
     const invoiceId = typeof body.invoiceId === "string" ? body.invoiceId.trim() : "";
     const operation = typeof body.operation === "string" ? body.operation.trim().toLowerCase() : "";
-    if (!["stornieren", "delete"].includes(operation)) {
+    if (!["stornieren", "delete", "retry"].includes(operation)) {
       return NextResponse.json({ message: "Invalid operation." }, { status: 400 });
     }
 
@@ -794,6 +891,18 @@ export async function POST(request: Request) {
 
     if (!orderId) {
       return NextResponse.json({ message: "Missing orderId/invoiceId mapping." }, { status: 400 });
+    }
+
+    if (operation === "retry") {
+      const result = await createInvoiceForAdminOrder(orderId);
+      await writeAuditLog({
+        actorEmail: permission.sessionUser.email,
+        module: "invoices",
+        action: "crm-retry",
+        entityId: orderId,
+        payload: { orderId, ...result }
+      });
+      return NextResponse.json({ success: true, orderId, result });
     }
 
     if (operation === "stornieren") {

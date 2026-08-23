@@ -73,7 +73,8 @@ export function resolveGlobalPropertyPricing(product: ProductCatalogItem, global
             image: value.image ?? globalValue.image,
             description: value.description ?? globalValue.description,
             pricingMode,
-            fixedPrice: pricingMode === "fixed" || pricingMode === "flat" ? Number(globalValue.fixedPrice ?? 0) || 0 : value.fixedPrice,
+            fixedPrice: pricingMode === "fixed" || pricingMode === "flat" ? Number(value.priceOverride ?? globalValue.fixedPrice ?? 0) || 0 : value.fixedPrice,
+            costPrice: value.costOverride ?? globalValue.costPrice ?? value.costPrice,
             multiplier: pricingMode === "multiplier" ? Number(globalValue.multiplier ?? 1) || 1 : value.multiplier,
             tierPrices: pricingMode === "tiered" ? normalizeTierPrices(globalValue.tierPrices) : value.tierPrices
           };
