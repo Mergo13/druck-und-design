@@ -557,6 +557,8 @@ export async function upsertGlobalProperty(property: GlobalProperty, originalSlu
       id: value.id || slugifyProperty(`${slug}-${value.value || index + 1}`),
       value: value.value,
       label: value.label,
+      image: value.image,
+      description: value.description,
       sortOrder: Number(value.sortOrder) || index,
       active: value.active ?? true,
       pricingMode: value.pricingMode ?? "included",

@@ -125,9 +125,18 @@ function withBrochureDefaults(config: Record<string, string>, analysis: PdfAnaly
   };
 }
 
-function propertyVisible(property: ProductPricingProperty, config: Record<string, string>) {
+function propertyVisibleInProduct(property: ProductPricingProperty, properties: ProductPricingProperty[], config: Record<string, string>) {
   if (!property.visibility?.propertyId) return true;
-  const actual = config[`eigenschaft:${property.visibility.propertyId}`] ?? config[property.visibility.propertyId] ?? "";
+  const dependencyId = slugify(property.visibility.propertyId);
+  const dependency = properties.find((entry) => {
+    const ids = [entry.propertyId, entry.name].filter(Boolean).map((value) => slugify(String(value)));
+    return ids.includes(dependencyId);
+  });
+  const dependencyValues = (dependency?.values ?? []).filter((value) => value.enabled !== false);
+  const dependencyValue = dependency
+    ? config[`eigenschaft:${dependency.name}`] ?? dependencyValues.find((value) => value.defaultSelected)?.value ?? dependencyValues[0]?.value ?? ""
+    : undefined;
+  const actual = dependencyValue ?? config[`eigenschaft:${property.visibility.propertyId}`] ?? config[property.visibility.propertyId] ?? "";
   return property.visibility.operator === "not_equals"
     ? actual !== property.visibility.value
     : actual === property.visibility.value;
@@ -690,7 +699,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   }
 
   function renderPropertyControl(property: ProductPricingProperty) {
-    if (!propertyVisible(property, config)) return null;
+    if (!propertyVisibleInProduct(property, pricingProperties, config)) return null;
     const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
     if (!enabledValues.length) return null;
     const key = `eigenschaft:${property.name}`;
@@ -708,13 +717,19 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           onClick={() => setValue(option.value)}
           className={selected
             ? card
-              ? "rounded-md border border-brand-blue bg-brand-mist p-3 text-left text-sm font-bold text-brand-blue"
+              ? "grid gap-2 rounded-md border border-brand-blue bg-brand-mist p-3 text-left text-sm font-bold text-brand-blue"
               : "rounded-md border border-brand-blue bg-brand-mist px-3 py-2 text-sm font-bold text-brand-blue"
             : card
-              ? "rounded-md border border-slate-200 bg-white p-3 text-left text-sm font-bold text-slate-700 hover:border-brand-blue"
+              ? "grid gap-2 rounded-md border border-slate-200 bg-white p-3 text-left text-sm font-bold text-slate-700 hover:border-brand-blue"
               : "rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:border-brand-blue"}
         >
-          {labelFor(option)}
+          {card && option.image ? (
+            <span className="block overflow-hidden rounded border border-slate-200 bg-slate-50">
+              <img src={option.image} alt="" className="aspect-[4/3] w-full object-cover" />
+            </span>
+          ) : null}
+          <span>{labelFor(option)}</span>
+          {card && option.description ? <span className="text-xs font-semibold text-slate-500">{option.description}</span> : null}
         </button>
       );
     };
@@ -725,8 +740,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         {property.display?.helpText ? <span className="text-xs font-semibold text-slate-500">{property.display.helpText}</span> : null}
         {control === "buttons" && shortChoices ? (
           <div className="flex flex-wrap gap-2">{enabledValues.map((option) => choiceButton(option))}</div>
-        ) : control === "cards" && shortChoices ? (
-          <div className="grid grid-cols-2 gap-2">{enabledValues.map((option) => choiceButton(option, true))}</div>
+        ) : control === "cards" ? (
+          <div className="grid gap-2 sm:grid-cols-2">{enabledValues.map((option) => choiceButton(option, true))}</div>
         ) : control === "radio" && shortChoices ? (
           <div className="grid gap-2">{enabledValues.map((option) => (
             <label key={option.value} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">
@@ -755,7 +770,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const visibleStandardProperties = isBrochure ? [] : pricingProperties.filter((property) => !property.display?.advanced);
   const visibleAdvancedProperties = isBrochure ? [] : pricingProperties.filter((property) => property.display?.advanced);
   const selectedSummary = [
-    ...pricingProperties.map((property) => {
+    ...pricingProperties.filter((property) => propertyVisibleInProduct(property, pricingProperties, config)).map((property) => {
       const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
       const selected = config[`eigenschaft:${property.name}`] || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
       const match = enabledValues.find((value) => value.value === selected);

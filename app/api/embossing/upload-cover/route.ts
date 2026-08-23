@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { requireEmbossingUser } from "@/lib/embossing/server";
 import { saveUploadedFile } from "@/lib/file-storage";
 
-const ALLOWED_EXTENSIONS = [".svg", ".pdf", ".png"];
+const ALLOWED_EXTENSIONS = [".svg", ".ai", ".pdf", ".png"];
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 function publicPathFromUrl(url: string) {
@@ -98,6 +98,12 @@ export async function POST(request: Request) {
       ? await analyzeSvg(filePath)
       : lowerName.endsWith(".pdf")
         ? await analyzePdf(filePath)
+        : lowerName.endsWith(".ai")
+          ? {
+            lineCount: 0,
+            extractedLines: [] as string[],
+            analysisMessage: "AI-Datei gespeichert. Text kann daraus im Browser nicht zuverlässig gelesen werden; bitte Prägezeilen manuell eintragen."
+          }
         : {
           lineCount: 0,
           extractedLines: [] as string[],

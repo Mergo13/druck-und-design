@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireEmbossingUser } from "@/lib/embossing/server";
 import { saveUploadedFile } from "@/lib/file-storage";
 
-const ALLOWED_EXTENSIONS = [".svg", ".pdf", ".png"];
+const ALLOWED_EXTENSIONS = [".svg", ".ai", ".pdf", ".png"];
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 export async function POST(request: Request) {
@@ -18,7 +18,8 @@ export async function POST(request: Request) {
       folder: "embossing",
       allowedExtensions: ALLOWED_EXTENSIONS,
       maxBytes: MAX_FILE_SIZE,
-      filenameBase: `${auth.session.id}-logo`
+      filenameBase: `${auth.session.id}-logo`,
+      optimizeForWeb: false
     });
     return NextResponse.json(uploaded);
   } catch (error) {

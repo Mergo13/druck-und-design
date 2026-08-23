@@ -84,6 +84,37 @@ function areaM2(product: ProductCatalogItem, selectedOptions: Record<string, str
   return money(Math.max(rawArea, Number(product.areaPricing?.minAreaM2 || 0)));
 }
 
+function normalizePropertyKey(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function selectedPropertyOption(property: ProductPricingProperty, selectedOptions: Record<string, string>) {
+  const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
+  const selected = selectedOptions[`eigenschaft:${property.name}`];
+  const selectedValue = selected || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
+  return enabledValues.find((value) => value.value === selectedValue);
+}
+
+function propertyVisibleForPricing(property: ProductPricingProperty, properties: ProductPricingProperty[], selectedOptions: Record<string, string>) {
+  if (!property.visibility?.propertyId) return true;
+  const dependencyId = normalizePropertyKey(property.visibility.propertyId);
+  const dependency = properties.find((entry) => {
+    const ids = [entry.propertyId, entry.name].filter(Boolean).map((value) => normalizePropertyKey(String(value)));
+    return ids.includes(dependencyId);
+  });
+  const actual = dependency
+    ? selectedPropertyOption(dependency, selectedOptions)?.value ?? ""
+    : selectedOptions[`eigenschaft:${property.visibility.propertyId}`] ?? selectedOptions[property.visibility.propertyId] ?? "";
+  return property.visibility.operator === "not_equals"
+    ? actual !== property.visibility.value
+    : actual === property.visibility.value;
+}
+
 export function calculateConfiguredProductPrice(
   product: ProductCatalogItem,
   quantity: number,
@@ -99,6 +130,7 @@ export function calculateConfiguredProductPrice(
     frontCovers?: number;
     backCovers?: number;
     printedCoverSides?: number;
+    embossingLines?: number;
     perOrder?: number;
   }
 ) {
@@ -138,17 +170,18 @@ export function calculateConfiguredProductPrice(
     basePrintBase = money(baseUnitPrice * baseQty);
   }
 
-  const properties = (product.pricingProperties ?? []).filter((property) => (property.values ?? []).some((value) => value.enabled !== false));
+  const allProperties = product.pricingProperties ?? [];
+  const properties = allProperties.filter((property) => (
+    propertyVisibleForPricing(property, allProperties, selectedOptions) &&
+    (property.values ?? []).some((value) => value.enabled !== false)
+  ));
   let totalFactor = 1;
   const factorLines: typeof lines = [];
   const surchargeLines: typeof lines = [];
   let surchargeTotal = 0;
 
   for (const property of properties) {
-    const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
-    const selected = selectedOptions[`eigenschaft:${property.name}`];
-    const selectedValue = selected || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
-    const match = enabledValues.find((value) => value.value === selectedValue);
+    const match = selectedPropertyOption(property, selectedOptions);
     if (!match) continue;
 
     const displayValue = match.labelOverride || match.label || match.value;
@@ -227,8 +260,9 @@ function resolvePropertyPricingQuantity(
               : source === "front_covers" ? pricingQuantities?.frontCovers
                 : source === "back_covers" ? pricingQuantities?.backCovers
                   : source === "printed_cover_sides" ? pricingQuantities?.printedCoverSides
-                    : source === "per_order" ? pricingQuantities?.perOrder
-                      : fallbackQuantity;
+                    : source === "embossing_lines" ? pricingQuantities?.embossingLines
+                      : source === "per_order" ? pricingQuantities?.perOrder
+                        : fallbackQuantity;
   const numeric = Number(value ?? fallbackQuantity);
   return Number.isFinite(numeric) ? Math.max(0, Math.round(numeric)) : fallbackQuantity;
 }

@@ -1,216 +1,316 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, CheckCircle2, FileText, Loader2, UploadCloud } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { ArrowRight, CheckCircle2, ChevronDown, Loader2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { EmbossingConfigurator } from "@/features/embossing/embossing-configurator";
+import { pricingQuantitiesForProductDocument } from "@/lib/document-production";
+import { getPdfjs } from "@/lib/pdf/pdfjs-client";
+import { resolvePdfAnalysisMode, resolveProductPdfConfig } from "@/lib/product-configurator-profile";
+import { calculateConfiguredProductPrice } from "@/lib/print-workflow";
+import { applyStudentDiscount } from "@/lib/student-discount";
+import type { PdfAnalysis } from "@/lib/student-print-config";
 import { formatEuro } from "@/lib/utils";
-import {
-  STUDENT_PRINT_PRESETS,
-  bindingLabel,
-  calculateSheets,
-  deriveStudentProductionQuantities,
-  estimateBlockThicknessMm,
-  getAvailableBindings,
-  parsePageRange,
-  paperLabel,
-  productPriceConfig,
-  productionLabel,
-  recommendBinding,
-  recommendPaper,
-  studentProductConfig,
-  type PdfAnalysis,
-  type StudentColorMode,
-  type StudentPrintAudience,
-  type StudentPrintPreset,
-  type StudentPrintSelection
-} from "@/lib/student-print-config";
-import type { ProductCatalogItem } from "@/types/print-platform";
+import type { EmbossingColor } from "@/lib/embossing/types";
+import type { ProductCatalogItem, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
 
-type PricePayload = {
-  unitPrice: number;
-  total: number;
-  config: Record<string, string>;
-  production: ReturnType<typeof deriveStudentProductionQuantities>;
-  price: { total: number; lines: Array<{ label: string; value: string; price: number }> };
+type ProductConfiguration = Record<string, string>;
+type Thumb = { page: number; url: string; label: string };
+type FinalizedEmbossing = {
+  id: string;
+  cartConfig: Record<string, string>;
+  lineCount: number;
+  previewUrl?: string;
+  productionPdfUrl?: string;
 };
 
-type Thumb = { page: number; url: string; label: string };
-
-const initialAudience: StudentPrintAudience = "student";
-
-function presetId(preset: StudentPrintPreset) {
-  return `${preset.audience}:${preset.key}`;
+function propertyKey(property: ProductPricingProperty) {
+  return `eigenschaft:${property.name}`;
 }
 
-function selectionForPreset(preset: StudentPrintPreset): StudentPrintSelection {
-  return {
-    presetKey: preset.key,
-    productSlug: preset.productSlug,
-    format: preset.defaults.format,
-    manualPageCount: undefined,
-    colorMode: preset.defaults.colorMode,
-    manualColorPages: [],
-    printSides: preset.defaults.printSides,
-    paper: preset.defaults.paper,
-    binding: preset.defaults.binding,
-    quantity: 1,
-    production: preset.defaults.production
-  };
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
-function colorModeLabel(mode: StudentColorMode) {
-  if (mode === "auto") return "Automatisch wie im PDF";
-  if (mode === "bw") return "Alles Schwarz-Weiß";
-  if (mode === "color") return "Alles Farbe";
-  return "Seiten selbst auswählen";
+function enabledValues(property: ProductPricingProperty) {
+  return (property.values ?? [])
+    .filter((value) => value.enabled !== false)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+}
+
+function valueLabel(value: ProductPropertyValue) {
+  return value.labelOverride || value.label || value.value;
+}
+
+function findDependency(properties: ProductPricingProperty[], dependencyId: string) {
+  const normalized = slugify(dependencyId);
+  return properties.find((property) => {
+    const ids = [property.propertyId, property.name].filter(Boolean).map((item) => slugify(String(item)));
+    return ids.includes(normalized);
+  });
+}
+
+export function isStudentPropertyVisible(
+  property: ProductPricingProperty,
+  properties: ProductPricingProperty[],
+  configuration: ProductConfiguration
+) {
+  if (!property.visibility?.propertyId) return true;
+  const dependency = findDependency(properties, property.visibility.propertyId);
+  const actual = dependency
+    ? configuration[propertyKey(dependency)]
+    : configuration[`eigenschaft:${property.visibility.propertyId}`] ?? configuration[property.visibility.propertyId];
+  return property.visibility.operator === "not_equals"
+    ? actual !== property.visibility.value
+    : actual === property.visibility.value;
+}
+
+function sanitizeConfiguration(properties: ProductPricingProperty[], current: ProductConfiguration) {
+  let next: ProductConfiguration = { ...current };
+  let changed = false;
+
+  for (let pass = 0; pass < properties.length + 1; pass += 1) {
+    let passChanged = false;
+    for (const property of properties) {
+      const key = propertyKey(property);
+      const values = enabledValues(property);
+      const visible = isStudentPropertyVisible(property, properties, next);
+      if (!visible || !values.length) {
+        if (key in next) {
+          delete next[key];
+          changed = true;
+          passChanged = true;
+        }
+        continue;
+      }
+      const selected = next[key];
+      if (!selected || !values.some((value) => value.value === selected)) {
+        const fallback = values.find((value) => value.defaultSelected)?.value ?? (values.length === 1 ? values[0]?.value : "");
+        if (fallback) {
+          next[key] = fallback;
+          changed = true;
+          passChanged = true;
+        } else if (key in next) {
+          delete next[key];
+          changed = true;
+          passChanged = true;
+        }
+      }
+    }
+    if (!passChanged) break;
+  }
+
+  return changed ? next : current;
+}
+
+function sortedPricingProperties(product: ProductCatalogItem) {
+  return (product.pricingProperties ?? [])
+    .filter((property) => enabledValues(property).length > 0)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 }
 
 function isRuntimeUploadImage(src?: string) {
   return Boolean(src?.startsWith("/uploads/"));
 }
 
+function initialConfiguration(product: ProductCatalogItem) {
+  const config: ProductConfiguration = { auflage: "1" };
+  for (const property of sortedPricingProperties(product)) {
+    const values = enabledValues(property);
+    const defaultValue = values.find((value) => value.defaultSelected)?.value ?? (values.length === 1 ? values[0]?.value : "");
+    if (defaultValue) config[propertyKey(property)] = defaultValue;
+  }
+  return sanitizeConfiguration(sortedPricingProperties(product), config);
+}
+
+function resolveEmbossingSelection(config: ProductConfiguration) {
+  const entry = Object.entries(config).find(([key]) => /prägung|praegung/i.test(key));
+  if (!entry) return null;
+  return { key: entry[0], value: entry[1] };
+}
+
+function embossingActiveFromValue(value?: string) {
+  return Boolean(value && !/keine|ohne|nein|none|no/i.test(value));
+}
+
+function embossingColorFromValue(value?: string): EmbossingColor {
+  const normalized = String(value ?? "").toLowerCase();
+  if (normalized.includes("silber")) return "silber";
+  if (normalized.includes("blind")) return "blind";
+  return "gold";
+}
+
+function productWithEmbossingLinePricing(
+  product: ProductCatalogItem,
+  embossingSelection: { key: string; value: string } | null,
+  lineCount: number
+) {
+  if (!embossingSelection || lineCount <= 0) return product;
+  return {
+    ...product,
+    pricingProperties: (product.pricingProperties ?? []).map((property) => {
+      if (propertyKey(property) !== embossingSelection.key) return property;
+      return {
+        ...property,
+        values: (property.values ?? []).map((value) => value.value === embossingSelection.value
+          ? {
+            ...value,
+            production: {
+              ...(value.production ?? {}),
+              pricingQuantitySource: "embossing_lines" as const
+            }
+          }
+          : value)
+      };
+    })
+  };
+}
+
 export function StudentPrintConfigurator({ products }: { products: ProductCatalogItem[] }) {
-  const presets = STUDENT_PRINT_PRESETS.filter((preset) => products.some((product) => product.slug === preset.productSlug));
-  const [audience, setAudience] = useState<StudentPrintAudience>(initialAudience);
-  const defaultPreset = presets.find((preset) => preset.audience === initialAudience) ?? presets[0];
-  const [activePresetId, setActivePresetId] = useState(defaultPreset ? presetId(defaultPreset) : "");
-  const activePreset = presets.find((preset) => presetId(preset) === activePresetId) ?? defaultPreset;
-  const activeProduct = products.find((product) => product.slug === activePreset?.productSlug);
-  const [selection, setSelection] = useState<StudentPrintSelection>(() => activePreset ? selectionForPreset(activePreset) : selectionForPreset(STUDENT_PRINT_PRESETS[0]));
+  const product = products[0];
+  if (!product) return <StudentEmptyState />;
+  return <StudentConfigurator product={product} />;
+}
+
+export function StudentConfigurator({
+  product,
+  authenticated = false,
+  studentVerified = false,
+  studentDiscountPercent = 20
+}: {
+  product: ProductCatalogItem;
+  authenticated?: boolean;
+  studentVerified?: boolean;
+  studentDiscountPercent?: number;
+}) {
+  const properties = useMemo(() => sortedPricingProperties(product), [product]);
+  const [config, setConfig] = useState<ProductConfiguration>(() => initialConfiguration(product));
   const [analysis, setAnalysis] = useState<PdfAnalysis | null>(null);
   const [thumbnails, setThumbnails] = useState<Thumb[]>([]);
-  const [manualInput, setManualInput] = useState("");
-  const [manualError, setManualError] = useState("");
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "analyzing" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
   const [dragging, setDragging] = useState(false);
-  const [price, setPrice] = useState<PricePayload | null>(null);
-  const [pricing, setPricing] = useState(false);
-  const production = deriveStudentProductionQuantities(selection, analysis ?? undefined);
-  const pageCount = production.pageCount;
-  const sheets = production.sheetsPerCopy;
-  const bindings = getAvailableBindings({ pages: pageCount, sheets, format: selection.format, presetKey: selection.presetKey });
-  const availableBindings = bindings.filter((binding) => binding.available);
-  const blockThickness = estimateBlockThicknessMm(sheets, selection.paper);
-  const selectedProductConfig = activeProduct ? productPriceConfig(activeProduct, selection) : {};
-  const configurationPresets = useMemo(() => {
-    function firstAvailable(preferred: StudentPrintSelection["binding"], fallback: StudentPrintSelection["binding"]) {
-      if (bindings.some((binding) => binding.value === preferred && binding.available)) return preferred;
-      if (bindings.some((binding) => binding.value === fallback && binding.available)) return fallback;
-      return availableBindings[0]?.value ?? "keine";
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [cartMessage, setCartMessage] = useState("");
+  const [finalizedEmbossing, setFinalizedEmbossing] = useState<FinalizedEmbossing | null>(null);
+  const [draftEmbossingLineCount, setDraftEmbossingLineCount] = useState(0);
+  const pdfMode = resolvePdfAnalysisMode(product);
+  const pdfConfig = resolveProductPdfConfig(product);
+  const pdfRequired = pdfMode === "required";
+  const pdfEnabled = pdfMode !== "disabled";
+  const currentQuantity = Math.max(1, Math.round(Number(config.auflage) || 1));
+  const validConfig = useMemo(() => sanitizeConfiguration(properties, config), [config, properties]);
+
+  useEffect(() => {
+    if (validConfig !== config) setConfig(validConfig);
+  }, [config, validConfig]);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`dud_pending_student_config:${product.slug}`);
+    if (!stored) return;
+    try {
+      const restored = JSON.parse(stored) as ProductConfiguration;
+      setConfig((current) => sanitizeConfiguration(properties, { ...current, ...restored }));
+    } catch {
+      // Ignore invalid browser state.
     }
-    const recommendedPaper = recommendPaper(selection.presetKey, pageCount);
-    const recommendedBinding = firstAvailable(
-      recommendBinding({ presetKey: selection.presetKey, pages: pageCount, sheets, format: selection.format }),
-      selection.binding
-    );
-    const cheapBinding = firstAvailable("spiralbindung", "heftklammer");
-    const premiumBinding = firstAvailable("hardcover", recommendedBinding);
-    return [
-      {
-        id: "recommended",
-        title: "Empfohlen",
-        text: `${colorModeLabel("auto")}, ${paperLabel(recommendedPaper)}, ${bindingLabel(recommendedBinding)}`,
-        patch: { colorMode: "auto" as const, paper: recommendedPaper, binding: recommendedBinding }
-      },
-      {
-        id: "budget",
-        title: "Günstigste Variante",
-        text: `Alles Schwarz-Weiß, ${paperLabel("80g-weiss")}, beidseitig, ${bindingLabel(cheapBinding)}`,
-        patch: { colorMode: "bw" as const, paper: "80g-weiss" as const, printSides: "duplex" as const, binding: cheapBinding }
-      },
-      {
-        id: "premium",
-        title: "Premium",
-        text: `Alles Farbe, ${paperLabel("100g-weiss")}, ${bindingLabel(premiumBinding)}`,
-        patch: { colorMode: "color" as const, paper: "100g-weiss" as const, binding: premiumBinding }
-      }
-    ];
-  }, [availableBindings, bindings, pageCount, selection.binding, selection.format, selection.presetKey, sheets]);
-  function applyConfigurationPreset(patch: Partial<StudentPrintSelection>) {
-    setSelection((current) => ({ ...current, ...patch }));
-  }
-  function isConfigurationPresetActive(patch: Partial<StudentPrintSelection>) {
-    return Object.entries(patch).every(([key, value]) => selection[key as keyof StudentPrintSelection] === value);
-  }
-
-  const groupedPresets = useMemo(() => ({
-    student: presets.filter((preset) => preset.audience === "student"),
-    school: presets.filter((preset) => preset.audience === "school")
-  }), [presets]);
+    sessionStorage.removeItem(`dud_pending_student_config:${product.slug}`);
+  }, [product.slug, properties]);
 
   useEffect(() => {
-    if (!activePreset) return;
-    setSelection((current) => ({
-      ...selectionForPreset(activePreset),
-      quantity: current.quantity || 1,
-      manualPageCount: current.manualPageCount
-    }));
-  }, [activePresetId]);
-
-  useEffect(() => {
-    if (!analysis || !activePreset) return;
-    const detectedFormat = analysis.dominantFormat && activePreset.supportedFormats.includes(analysis.dominantFormat)
-      ? analysis.dominantFormat
-      : activePreset.defaults.format;
-    const nextSheets = calculateSheets(analysis.pages, activePreset.defaults.printSides);
-    const paper = recommendPaper(activePreset.key, analysis.pages);
-    const binding = recommendBinding({ presetKey: activePreset.key, pages: analysis.pages, sheets: nextSheets, format: detectedFormat });
-    setSelection((current) => ({
+    setConfig((current) => ({
       ...current,
-      format: detectedFormat,
-      paper,
-      binding,
-      colorMode: activePreset.defaults.colorMode,
-      printSides: activePreset.defaults.printSides,
-      manualPageCount: undefined
+      ...(analysis?.pages ? {
+        seitenanzahl: String(analysis.pages),
+        Seitenanzahl: String(analysis.pages),
+        "PDF-Seiten": String(analysis.pages),
+        "Seiten pro Exemplar": String(analysis.pages),
+        pdfAnalysisPageCount: String(analysis.pages),
+        pdfAnalysisFormat: analysis.dominantFormat ?? "",
+        pdfAnalysisOrientation: analysis.orientation ?? "",
+        pdfAnalysisColorPageCount: String(analysis.colorPages.length),
+        pdfAnalysisBwPageCount: String(analysis.bwPages.length),
+        pdfAnalysisColorPages: analysis.colorPages.join(","),
+        pdfAnalysisBwPages: analysis.bwPages.join(",")
+      } : {})
     }));
-  }, [analysis, activePresetId]);
+  }, [analysis]);
 
-  useEffect(() => {
-    if (!activeProduct || pageCount <= 0) {
-      setPrice(null);
-      setPricing(false);
-      return;
+  const normalizedConfig = useMemo(() => sanitizeConfiguration(properties, {
+    ...validConfig,
+    auflage: String(currentQuantity)
+  }), [currentQuantity, properties, validConfig]);
+  const embossingSelection = useMemo(() => resolveEmbossingSelection(normalizedConfig), [normalizedConfig]);
+  const embossingActive = embossingActiveFromValue(embossingSelection?.value);
+  const embossingColor = embossingColorFromValue(embossingSelection?.value);
+  const effectiveEmbossingLineCount = finalizedEmbossing?.lineCount ?? draftEmbossingLineCount;
+  const pricedProduct = useMemo(
+    () => productWithEmbossingLinePricing(product, embossingSelection, effectiveEmbossingLineCount),
+    [effectiveEmbossingLineCount, embossingSelection, product]
+  );
+  const pricingConfig = useMemo(() => ({
+    ...normalizedConfig,
+    ...(finalizedEmbossing?.cartConfig ?? {}),
+    resolvedEmbossingLineCount: effectiveEmbossingLineCount > 0 ? String(effectiveEmbossingLineCount) : normalizedConfig.resolvedEmbossingLineCount
+  }), [effectiveEmbossingLineCount, finalizedEmbossing, normalizedConfig]);
+  const pricingQuantities = useMemo(() => (
+    pdfEnabled
+      ? pricingQuantitiesForProductDocument(pricedProduct, [], pricingConfig, currentQuantity) ?? {
+        propertyQuantity: currentQuantity,
+        copies: currentQuantity,
+        frontCovers: currentQuantity,
+        backCovers: currentQuantity,
+        printedCoverSides: currentQuantity * 2,
+        embossingLines: effectiveEmbossingLineCount * currentQuantity,
+        perOrder: 1
+      }
+      : undefined
+  ), [currentQuantity, effectiveEmbossingLineCount, pdfEnabled, pricingConfig, pricedProduct]);
+  const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(pricedProduct, currentQuantity, pricingConfig, pricingQuantities), [currentQuantity, pricingConfig, pricingQuantities, pricedProduct]);
+  const embossingOptionPrice = useMemo(() => {
+    const line = priceSnapshot.lines.find((entry) => /prägung|praegung/i.test(entry.label));
+    return line?.price ?? 0;
+  }, [priceSnapshot.lines]);
+  const discount = useMemo(() => applyStudentDiscount({
+    subtotal: priceSnapshot.total,
+    product,
+    user: studentVerified ? { studentVerification: { status: "approved" } } : null,
+    percent: studentDiscountPercent
+  }), [priceSnapshot.total, product, studentDiscountPercent, studentVerified]);
+  const visibleProperties = properties.filter((property) => isStudentPropertyVisible(property, properties, normalizedConfig));
+  const standardProperties = visibleProperties.filter((property) => !property.display?.advanced);
+  const advancedProperties = visibleProperties.filter((property) => property.display?.advanced);
+  const summary = visibleProperties.map((property) => {
+    const selected = enabledValues(property).find((value) => value.value === normalizedConfig[propertyKey(property)]);
+    return selected ? { label: property.name, value: valueLabel(selected) } : null;
+  }).filter(Boolean) as Array<{ label: string; value: string }>;
+  const handleEmbossingFinalized = useCallback((design: FinalizedEmbossing | null) => {
+    setFinalizedEmbossing(design);
+  }, []);
+
+  function updateProperty(property: ProductPricingProperty, value: string) {
+    setConfig((current) => sanitizeConfiguration(properties, { ...current, [propertyKey(property)]: value }));
+    if (/prägung|praegung/i.test(property.name)) {
+      setFinalizedEmbossing(null);
+      setDraftEmbossingLineCount(0);
     }
-    let cancelled = false;
-    setPricing(true);
-    void fetch("/api/student-print/price", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selection, analysis })
-    })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => null);
-        if (!response.ok) throw new Error(payload?.message ?? "Preis konnte nicht berechnet werden.");
-        if (!cancelled) setPrice(payload as PricePayload);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setPrice(null);
-          setMessage(error instanceof Error ? error.message : "Preis konnte nicht berechnet werden.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPricing(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [analysis, activeProduct, pageCount, selection]);
+  }
 
-  function choosePreset(preset: StudentPrintPreset) {
-    setAudience(preset.audience);
-    setActivePresetId(presetId(preset));
+  function updateQuantity(value: string) {
+    setConfig((current) => ({ ...current, auflage: String(Math.max(1, Math.round(Number(value) || 1))) }));
   }
 
   async function handleFile(file?: File) {
     setMessage("");
-    setManualError("");
+    setCartMessage("");
     setThumbnails([]);
     if (!file) return;
     if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
@@ -218,7 +318,6 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
       setMessage("Bitte lade eine PDF-Datei hoch.");
       return;
     }
-
     setUploadState("uploading");
     try {
       const form = new FormData();
@@ -228,414 +327,347 @@ export function StudentPrintConfigurator({ products }: { products: ProductCatalo
       if (!response.ok) throw new Error(payload?.message ?? "PDF-Upload fehlgeschlagen.");
       const serverAnalysis = payload.analysis as PdfAnalysis;
       setUploadState("analyzing");
-      const browser = await analyzePdfInBrowser(file, serverAnalysis);
+      const browser = await analyzePdfInBrowser(file, serverAnalysis, pdfConfig.previewMode !== "none");
       setAnalysis(browser.analysis);
-      setSelection((current) => ({ ...current, manualPageCount: undefined }));
       setThumbnails(browser.thumbnails);
       setUploadState("done");
     } catch (error) {
       setUploadState("error");
+      setAnalysis(null);
       setMessage(error instanceof Error ? error.message : "Die PDF konnte nicht analysiert werden.");
     }
   }
 
-  function applyAutomaticConfiguration() {
-    if (!analysis || !activePreset) return;
-    const format = analysis.dominantFormat && activePreset.supportedFormats.includes(analysis.dominantFormat)
-      ? analysis.dominantFormat
-      : activePreset.defaults.format;
-    const printSides = activePreset.key === "poster" ? "simplex" : "duplex";
-    const nextSheets = calculateSheets(analysis.pages, printSides);
-    const paper = recommendPaper(activePreset.key, analysis.pages);
-    const binding = recommendBinding({ presetKey: activePreset.key, pages: analysis.pages, sheets: nextSheets, format });
-    setSelection((current) => ({
-      ...current,
-      format,
-      printSides,
-      paper,
-      binding,
-      colorMode: activePreset.key === "poster" ? "color" : "auto",
-      production: "standard"
-    }));
-  }
-
-  function updateManualPages(value: string) {
-    setManualInput(value);
-    const parsed = parsePageRange(value, pageCount);
-    setManualError(parsed.error);
-    setSelection((current) => ({ ...current, manualColorPages: parsed.error ? current.manualColorPages : parsed.pages }));
-  }
-
-  function updateManualPageCount(value: string) {
-    const pageValue = value === "" ? undefined : Math.max(1, Math.floor(Number(value) || 0));
-    setSelection((current) => ({ ...current, manualPageCount: pageValue }));
-    if (value !== "") setMessage("");
-  }
-
   function addToCart() {
-    if (!activeProduct || !price || pageCount <= 0) {
-      setMessage("Bitte gib eine Seitenanzahl ein oder lade eine PDF hoch und warte auf die Preisberechnung.");
+    setCartMessage("");
+    if (pdfRequired && !analysis?.valid) {
+      setCartMessage("Bitte lade zuerst eine geprüfte PDF hoch.");
       return;
     }
-    const config = {
-      ...studentProductConfig(selection, analysis ?? undefined),
-      ...price.config,
-      Produktpfad: `/produkt/${activeProduct.slug}`
-    };
+    if (embossingActive && !finalizedEmbossing) {
+      setCartMessage("Bitte schließe die Prägegestaltung ab, bevor du bestellst.");
+      return;
+    }
+    const authoritativeConfig: ProductConfiguration = { ...pricingConfig };
+    if (analysis?.valid) {
+      authoritativeConfig.pdfAnalysisStatus = "success";
+      authoritativeConfig.pdfAnalysisFileUrl = analysis.fileUrl ?? "";
+      authoritativeConfig.pdfAnalysisFileName = analysis.fileName;
+      authoritativeConfig.pdfAnalysisWidthMm = String(analysis.widthMm ?? "");
+      authoritativeConfig.pdfAnalysisHeightMm = String(analysis.heightMm ?? "");
+    }
+    const authoritativePrice = calculateConfiguredProductPrice(pricedProduct, currentQuantity, authoritativeConfig, pricingQuantities);
+    const authoritativeDiscount = applyStudentDiscount({
+      subtotal: authoritativePrice.total,
+      product,
+      user: studentVerified ? { studentVerification: { status: "approved" } } : null,
+      percent: studentDiscountPercent
+    });
+    const selectedConfig = Object.fromEntries([
+      ["Menge", String(currentQuantity)],
+      ...(analysis ? [
+        ["Datei", analysis.fileName],
+        ["PDF-Seiten", String(analysis.pages)],
+        ["Format", analysis.dominantFormat ?? "PDF"],
+        ["Farbseiten", String(analysis.colorPages.length)],
+        ["SW-Seiten", String(analysis.bwPages.length)]
+      ] as Array<[string, string]> : []),
+      ...(finalizedEmbossing ? [
+        ["Prägezeilen", String(finalizedEmbossing.lineCount)],
+        ["Prägung gespeichert", "Ja"],
+        ["Produktions-PDF", finalizedEmbossing.productionPdfUrl ?? "-"],
+        ["Prägetext", finalizedEmbossing.cartConfig.PraegungText ?? "-"]
+      ] as Array<[string, string]> : []),
+      ...authoritativePrice.lines.map((line) => [line.label, `${line.value}${line.price ? ` (+${formatEuro(line.price)})` : ""}`] as [string, string])
+    ]);
     const existing = JSON.parse(localStorage.getItem("dud_cart") || "[]") as Array<any>;
-    const itemId = `student-${Date.now()}`;
     existing.push({
-      itemId,
-      slug: `${activeProduct.slug}-${itemId}`,
-      productSlug: activeProduct.slug,
-      name: `${activePreset?.label ?? activeProduct.name}: ${activeProduct.name}`,
+      slug: product.slug,
+      name: product.name,
       quantity: 1,
-      category: "Schule & Studium",
-      unitPrice: price.unitPrice,
+      category: product.category,
+      unitPrice: authoritativeDiscount.total,
+      normalUnitPrice: authoritativePrice.total,
+      pricingConfig: authoritativeConfig,
+      studentDiscountEligible: product.studentDiscountEligible !== false,
       printCheckRequested: false,
       printCheckFee: 0,
       printCheckFileName: analysis?.fileName,
       printCheckFileUrl: analysis?.fileUrl,
-      studentPrint: { selection, analysis },
-      config
+      config: selectedConfig
     });
     localStorage.setItem("dud_cart", JSON.stringify(existing));
     window.dispatchEvent(new Event("dud-cart-updated"));
-    setMessage("Dein Druckauftrag wurde in den Warenkorb gelegt.");
-  }
-
-  if (!activePreset || !activeProduct) {
-    return (
-      <section className="container-page py-16">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm font-semibold text-amber-900">
-          Keine passenden Produkte für Schule & Studium gefunden. Bitte aktiviere mindestens ein bestehendes Druckprodukt im Admin.
-        </div>
-      </section>
-    );
+    setCartMessage("Dein Druckauftrag wurde in den Warenkorb gelegt.");
   }
 
   return (
-    <section id="konfigurator" className="bg-slate-50 py-16">
-      <div className="container-page">
-        <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-          <div className="space-y-6">
-            <div>
-              <Badge variant="outline" className="border-brand-blue/20 bg-white text-brand-blue">Schule & Studium</Badge>
-              <h2 className="mt-4 text-3xl font-black text-brand-ink md:text-5xl">PDF hochladen. Automatisch konfigurieren.</h2>
-              <p className="mt-4 max-w-2xl text-slate-600">Wähle deinen Drucktyp, lade eine PDF hoch und wir erkennen Seiten, Format, Farbe/SW und Blattzahl automatisch.</p>
+    <section className="min-h-screen bg-[#fafaf8] py-6 md:py-8">
+      <div className="mx-auto w-[min(100%-24px,1520px)]">
+        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-500">
+          <Link href="/studenten" className="hover:text-brand-blue">Schule & Studium</Link>
+          <span>/</span>
+          <span className="text-slate-900">{product.name}</span>
+        </div>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_390px]">
+          <div className="space-y-5">
+            <div className="rounded-lg border border-[#e8e8e5] bg-white p-5 md:p-7">
+              <Badge variant="outline" className="border-brand-blue/20 bg-brand-mist text-brand-blue">1 Datei</Badge>
+              <h1 className="mt-4 text-3xl font-semibold leading-tight text-[#181818] md:text-5xl">{product.name}</h1>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-[#6b6b6b]">PDF hochladen, wenige Optionen wählen und Preis sehen.</p>
+              {pdfEnabled ? (
+                <label
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setDragging(true);
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDragLeave={() => setDragging(false)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDragging(false);
+                    void handleFile(event.dataTransfer.files[0]);
+                  }}
+                  className={dragging ? "mt-6 block cursor-pointer rounded-lg border-2 border-dashed border-brand-blue bg-brand-mist p-8 text-center" : "mt-6 block cursor-pointer rounded-lg border-2 border-dashed border-slate-300 bg-[#fafaf8] p-8 text-center transition hover:border-brand-blue hover:bg-brand-mist/40"}
+                >
+                  <input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => void handleFile(event.target.files?.[0])} />
+                  {uploadState === "uploading" || uploadState === "analyzing" ? <Loader2 className="mx-auto h-10 w-10 animate-spin text-brand-blue" /> : <UploadCloud className="mx-auto h-10 w-10 text-brand-blue" />}
+                  <p className="mt-3 text-lg font-black text-brand-ink">PDF hochladen</p>
+                  <p className="mt-1 text-sm text-slate-600">oder Datei hierher ziehen</p>
+                  {uploadState === "analyzing" ? <p className="mt-3 text-sm font-bold text-brand-blue">PDF wird geprüft ...</p> : null}
+                </label>
+              ) : null}
+              {message ? <p className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{message}</p> : null}
+              {analysis ? <PdfAnalysisSummary analysis={analysis} thumbnails={thumbnails} /> : null}
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex gap-2">
-                {(["student", "school"] as const).map((item) => (
-                  <Button key={item} type="button" variant={audience === item ? "default" : "outline"} onClick={() => setAudience(item)}>
-                    {item === "student" ? "Für Studenten" : "Für Schüler"}
-                  </Button>
+            <div className="rounded-lg border border-[#e8e8e5] bg-white p-5 md:p-7">
+              <Badge variant="outline" className="border-brand-blue/20 bg-brand-mist text-brand-blue">2 Ausführung</Badge>
+              <div className="mt-5 grid gap-5">
+                {standardProperties.map((property) => (
+                  <PropertyControl key={property.name} property={property} value={normalizedConfig[propertyKey(property)] ?? ""} onChange={(value) => updateProperty(property, value)} />
                 ))}
+                <label className="grid gap-2">
+                  <span className="text-sm font-black text-brand-ink">Menge</span>
+                  <input type="number" min={1} value={currentQuantity} onChange={(event) => updateQuantity(event.target.value)} className="h-12 max-w-40 rounded-md border bg-white px-3 text-sm font-semibold" />
+                </label>
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {groupedPresets[audience].map((preset) => (
-                  <button
-                    key={presetId(preset)}
-                    type="button"
-                    onClick={() => choosePreset(preset)}
-                    className={presetId(preset) === activePresetId ? "rounded-lg border border-brand-blue bg-brand-mist p-4 text-left shadow-sm" : "rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-brand-blue/40"}
-                  >
-                    <p className="font-black text-brand-ink">{preset.label}</p>
-                    <p className="mt-1 text-xs font-semibold text-slate-500">Produkt: {products.find((product) => product.slug === preset.productSlug)?.name ?? preset.productSlug}</p>
+              {advancedProperties.length ? (
+                <div className="mt-6 border-t border-[#e8e8e5] pt-5">
+                  <button type="button" onClick={() => setAdvancedOpen((open) => !open)} className="flex w-full items-center justify-between text-left text-sm font-black text-brand-ink">
+                    Weitere Druckoptionen
+                    <ChevronDown className={advancedOpen ? "h-4 w-4 rotate-180 transition" : "h-4 w-4 transition"} />
                   </button>
-                ))}
-              </div>
-            </div>
-
-            <label
-              onDragEnter={(event) => {
-                event.preventDefault();
-                setDragging(true);
-              }}
-              onDragOver={(event) => event.preventDefault()}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault();
-                setDragging(false);
-                void handleFile(event.dataTransfer.files[0]);
-              }}
-              className={dragging ? "block cursor-pointer rounded-lg border-2 border-dashed border-brand-blue bg-white p-8 text-center ring-4 ring-brand-blue/10" : "block cursor-pointer rounded-lg border-2 border-dashed border-slate-300 bg-white p-8 text-center transition hover:border-brand-blue hover:bg-brand-mist/40"}
-            >
-              <input type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => void handleFile(event.target.files?.[0])} />
-              {uploadState === "uploading" || uploadState === "analyzing" ? (
-                <Loader2 className="mx-auto h-10 w-10 animate-spin text-brand-blue" />
-              ) : (
-                <UploadCloud className="mx-auto h-10 w-10 text-brand-blue" />
-              )}
-              <p className="mt-3 text-lg font-black text-brand-ink">PDF hochladen</p>
-              <p className="mt-1 text-sm text-slate-600">Ziehe deine Datei hierher oder wähle sie aus. Wir analysieren dein Dokument automatisch.</p>
-              {uploadState === "analyzing" ? <p className="mt-3 text-sm font-bold text-brand-blue">Farbseiten und Vorschau werden analysiert...</p> : null}
-            </label>
-
-            {message ? (
-              <div className={uploadState === "error" ? "rounded-lg border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700" : "rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"}>
-                {message}
-              </div>
-            ) : null}
-
-            {!analysis ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">Ohne PDF starten</p>
-                <h3 className="mt-1 text-xl font-black text-brand-ink">Seitenanzahl manuell eingeben</h3>
-                <p className="mt-2 text-sm text-slate-600">Für eine schnelle Preisberechnung kannst du die Seiten pro Exemplar selbst eintragen. Nach einem PDF-Upload wird die Seitenanzahl automatisch aus der Datei übernommen.</p>
-                <div className="mt-4 max-w-xs">
-                  <Control label="Seiten pro Exemplar">
-                    <input
-                      type="number"
-                      min={1}
-                      max={10000}
-                      value={selection.manualPageCount ?? ""}
-                      onChange={(event) => updateManualPageCount(event.target.value)}
-                      placeholder="z.B. 26"
-                      className="h-11 rounded-md border bg-white px-3 text-sm font-semibold"
-                    />
-                  </Control>
-                </div>
-              </div>
-            ) : null}
-
-            {analysis ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-black text-brand-ink">{analysis.fileName}</p>
-                    <p className="mt-1 text-xs font-bold text-emerald-700">PDF grundsätzlich druckbar</p>
-                  </div>
-                  <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-800">PDF OK</Badge>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <Metric label="Seiten" value={`${analysis.pages}`} sub="pro Exemplar" />
-                  <Metric label="Format" value={analysis.dominantFormat ?? "Sonderformat"} sub={analysis.widthMm && analysis.heightMm ? `${analysis.widthMm} x ${analysis.heightMm} mm` : undefined} />
-                  <Metric label="Ausrichtung" value={analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : "Quadratisch"} />
-                  <Metric label="Farbseiten" value={`${production.colorPagesPerCopy}`} sub={`${production.totalColorPages} gesamt`} />
-                  <Metric label="SW-Seiten" value={`${production.bwPagesPerCopy}`} sub={`${production.totalBwPages} gesamt`} />
-                  <Metric label="Blätter" value={`${production.sheetsPerCopy}`} sub={`${production.totalSheets} gesamt`} />
-                </div>
-                {analysis.warnings.length ? (
-                  <div className="mt-4 space-y-2">
-                    {analysis.warnings.map((warning, index) => (
-                      <div key={`${warning.type}-${index}`} className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                        {warning.message}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-4 flex gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Alle Seiten haben dasselbe Format.
-                  </div>
-                )}
-                {thumbnails.length ? (
-                  <div className="mt-5 grid gap-3 sm:grid-cols-4">
-                    {thumbnails.map((thumb) => (
-                      <div key={`${thumb.page}-${thumb.label}`} className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-                        <img src={thumb.url} alt={`Vorschau Seite ${thumb.page}`} className="h-32 w-full object-contain bg-white" />
-                        <p className="border-t px-2 py-1 text-xs font-bold text-slate-600">{thumb.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                <div className="mt-5">
-                  <p className="text-sm font-black text-brand-ink">Farbseiten erkannt: {analysis.colorPages.length}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {analysis.colorPages.slice(0, 40).map((page) => <span key={page} className="rounded bg-brand-blue px-2 py-1 text-xs font-bold text-white">{page} Farbe</span>)}
-                    {analysis.colorPages.length > 40 ? <span className="rounded bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600">+{analysis.colorPages.length - 40} weitere</span> : null}
-                    {!analysis.colorPages.length ? <span className="text-xs font-semibold text-slate-500">Keine Farbseiten erkannt.</span> : null}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {pageCount > 0 ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">Druck konfigurieren</p>
-                    <h3 className="text-2xl font-black text-brand-ink">{analysis ? "Automatische Empfehlung" : "Konfiguration"}</h3>
-                  </div>
-                  {analysis ? <Button type="button" onClick={applyAutomaticConfiguration}>Druck automatisch konfigurieren</Button> : null}
-                </div>
-                <div className="mt-5 grid gap-5 md:grid-cols-2">
-                  <Control label="Seiten pro Exemplar">
-                    <input
-                      type="number"
-                      min={1}
-                      max={10000}
-                      value={pageCount}
-                      disabled={Boolean(analysis)}
-                      onChange={(event) => updateManualPageCount(event.target.value)}
-                      className="h-11 rounded-md border bg-white px-3 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                    <p className="mt-1 text-xs text-slate-500">{analysis ? "Wird automatisch aus der PDF gelesen." : "Diese Zahl wird für Druckseiten, Papier und Preisstaffeln verwendet."}</p>
-                  </Control>
-                  <Control label="Format">
-                    <select value={selection.format} onChange={(event) => setSelection({ ...selection, format: event.target.value })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
-                      {activePreset.supportedFormats.map((format) => <option key={format} value={format}>{format}</option>)}
-                    </select>
-                  </Control>
-                  <Control label="Druckseiten">
-                    <select value={selection.printSides} onChange={(event) => setSelection({ ...selection, printSides: event.target.value as any })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
-                      <option value="duplex">Beidseitig</option>
-                      <option value="simplex">Einseitig</option>
-                    </select>
-                  </Control>
-                  <Control label="Papier">
-                    <select value={selection.paper} onChange={(event) => setSelection({ ...selection, paper: event.target.value as any })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
-                      {(["80g-weiss", "100g-weiss", "120g-weiss", "170g-bilderdruck"] as const).map((paper) => <option key={paper} value={paper}>{paperLabel(paper)}</option>)}
-                    </select>
-                    <p className="mt-1 text-xs text-slate-500">Empfohlen: {paperLabel(recommendPaper(selection.presetKey, pageCount))}</p>
-                  </Control>
-                  <Control label="Menge">
-                    <input type="number" min={1} value={selection.quantity} onChange={(event) => setSelection({ ...selection, quantity: Math.max(1, Number(event.target.value) || 1) })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold" />
-                  </Control>
-                  <Control label="Produktion">
-                    <select value={selection.production} onChange={(event) => setSelection({ ...selection, production: event.target.value as any })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
-                      <option value="standard">Standard</option>
-                      <option value="express">Express</option>
-                      {selectedProductConfig.lieferzeit === "sameday" || activeProduct.variants[0]?.attributes.some((attribute) => attribute.options?.some((option) => option.value === "sameday")) ? <option value="sameday">Same Day</option> : null}
-                    </select>
-                  </Control>
-                  <Control label="Bindung">
-                    <select value={selection.binding} onChange={(event) => setSelection({ ...selection, binding: event.target.value as any })} className="h-11 rounded-md border bg-white px-3 text-sm font-semibold">
-                      {bindings.map((binding) => <option key={binding.value} value={binding.value} disabled={!binding.available}>{binding.label}{binding.available ? "" : ` - ${binding.reason}`}</option>)}
-                    </select>
-                    <p className="mt-1 text-xs text-slate-500">Empfohlen: {bindingLabel(recommendBinding({ presetKey: selection.presetKey, pages: pageCount, sheets, format: selection.format }))}</p>
-                  </Control>
-                </div>
-
-                <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-black text-brand-ink">Druckfarbe</p>
-                  <div className="mt-3 grid gap-2 md:grid-cols-2">
-                    {(["auto", "bw", "color", "manual"] as const).map((mode) => (
-                      <label key={mode} className={selection.colorMode === mode ? "rounded-md border border-brand-blue bg-white p-3 ring-2 ring-brand-blue/10" : "rounded-md border border-slate-200 bg-white p-3"}>
-                        <input type="radio" className="mr-2 accent-brand-blue" checked={selection.colorMode === mode} onChange={() => setSelection({ ...selection, colorMode: mode })} />
-                        <span className="text-sm font-bold">{colorModeLabel(mode)}</span>
-                        {mode === "auto" ? <span className="ml-2 text-xs text-slate-500">{production.colorPagesPerCopy} Farbseiten · {production.bwPagesPerCopy} SW-Seiten</span> : null}
-                      </label>
-                    ))}
-                  </div>
-                  {selection.colorMode === "manual" ? (
-                    <div className="mt-3">
-                      <input value={manualInput} onChange={(event) => updateManualPages(event.target.value)} placeholder="z.B. 1,2,5-8,15" className="h-11 w-full rounded-md border bg-white px-3 text-sm font-semibold" />
-                      {manualError ? <p className="mt-2 text-xs font-bold text-red-600">{manualError}</p> : <p className="mt-2 text-xs text-slate-500">Aktuell ausgewählt: {selection.manualColorPages.length} Farbseiten.</p>}
+                  {advancedOpen ? (
+                    <div className="mt-5 grid gap-5">
+                      {advancedProperties.map((property) => (
+                        <PropertyControl key={property.name} property={property} value={normalizedConfig[propertyKey(property)] ?? ""} onChange={(value) => updateProperty(property, value)} />
+                      ))}
                     </div>
                   ) : null}
                 </div>
-
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  {configurationPresets.map((preset) => {
-                    const active = isConfigurationPresetActive(preset.patch);
-                    return (
-                      <VariantCard
-                        key={preset.id}
-                        title={preset.title}
-                        text={preset.text}
-                        price={active ? price?.unitPrice : undefined}
-                        active={active}
-                        onClick={() => applyConfigurationPreset(preset.patch)}
-                      />
-                    );
-                  })}
-                </div>
+              ) : null}
+            </div>
+            {embossingActive ? (
+              <div className="rounded-lg border border-[#e8e8e5] bg-white p-5 md:p-7">
+                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Grafik & Prägung</Badge>
+                <h2 className="mt-4 text-2xl font-semibold text-[#181818]">Prägung gestalten</h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6b6b6b]">Modernes Cover gestalten, Logo oder eigene Grafik hochladen und Produktionsdatei abschließen.</p>
+                {authenticated ? (
+                  <div className="mt-5">
+                    <EmbossingConfigurator
+                      productId={product.slug}
+                      embossingColor={embossingColor}
+                      authenticated={authenticated}
+                      currentEmbossingPrice={embossingOptionPrice}
+                      onFinalized={handleEmbossingFinalized}
+                      onLineCountChange={setDraftEmbossingLineCount}
+                      presentation="wide"
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4">
+                    <p className="text-sm font-black text-amber-950">Präge-Cover-Generator</p>
+                    <p className="mt-1 text-xs leading-5 text-amber-900">Für Grafik-Upload, Modern-Style und finale Produktionsdatei ist ein Kundenkonto erforderlich.</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-3 bg-amber-700 hover:bg-amber-800"
+                      onClick={() => {
+                        sessionStorage.setItem(`dud_pending_student_config:${product.slug}`, JSON.stringify(normalizedConfig));
+                        window.location.href = `/login?next=${encodeURIComponent(`/studenten/${product.slug}`)}`;
+                      }}
+                    >
+                      Prägung konfigurieren
+                    </Button>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
 
-          <aside className="lg:sticky lg:top-24 lg:h-fit">
-            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-md bg-brand-mist">
-                <Image src={activeProduct.heroImage || "/uploads/products/abschlussarbeiten.webp"} alt={activeProduct.name} fill unoptimized={isRuntimeUploadImage(activeProduct.heroImage)} className="object-cover" sizes="380px" />
-              </div>
-              <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">Deine Konfiguration</p>
-              <h3 className="mt-1 text-xl font-black text-brand-ink">{activePreset.label}</h3>
-              <div className="mt-4 space-y-2 text-sm text-slate-700">
-                <SummaryLine label="Produkt" value={activeProduct.name} />
-                <SummaryLine label="Format" value={selection.format} />
-                <SummaryLine label="Auflage" value={`${production.quantity} ${production.quantity === 1 ? "Exemplar" : "Exemplare"}`} />
-                <SummaryLine label="PDF-Seiten" value={pageCount ? `${production.pageCount} pro Exemplar` : "-"} />
-                <SummaryLine label="Druckseiten gesamt" value={pageCount ? String(production.totalPrintedPages) : "-"} />
-                <SummaryLine label="Blätter" value={pageCount ? `${production.sheetsPerCopy} pro Exemplar · ${production.totalSheets} gesamt` : "-"} />
-                <SummaryLine label="Farbe" value={`${production.colorPagesPerCopy} Farbe · ${production.bwPagesPerCopy} SW je Exemplar`} />
-                <SummaryLine label="Farbe gesamt" value={`${production.totalColorPages} Farbe · ${production.totalBwPages} SW`} />
-                <SummaryLine label="Druckseiten" value={selection.printSides === "duplex" ? "Beidseitig" : "Einseitig"} />
-                <SummaryLine label="Papier" value={paperLabel(selection.paper)} />
-                <SummaryLine label="Bindung" value={bindingLabel(selection.binding)} />
-                <SummaryLine label="Blockstärke" value={pageCount ? `ca. ${blockThickness} mm` : "-"} />
-                <SummaryLine label="Produktion" value={productionLabel(selection.production)} />
+          <aside className="xl:sticky xl:top-24 xl:h-fit">
+            <div className="rounded-lg border border-[#e8e8e5] bg-white p-5 shadow-sm">
+              {product.heroImage ? (
+                <div className="relative mb-4 aspect-[4/3] overflow-hidden rounded-md bg-brand-mist">
+                  <Image src={product.heroImage} alt={product.name} fill unoptimized={isRuntimeUploadImage(product.heroImage)} className="object-cover" sizes="360px" />
+                </div>
+              ) : null}
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-brand-blue">3 Prüfen</p>
+              <h2 className="mt-1 text-xl font-black text-brand-ink">Deine Bestellung</h2>
+              <div className="mt-4 grid gap-2 text-sm">
+                {analysis ? <SummaryLine label="PDF" value={`${analysis.pages} Seiten`} /> : null}
+                {summary.map((entry) => <SummaryLine key={`${entry.label}-${entry.value}`} label={entry.label} value={entry.value} />)}
+                {finalizedEmbossing ? <SummaryLine label="Prägezeilen" value={String(finalizedEmbossing.lineCount)} /> : null}
+                <SummaryLine label="Menge" value={`${currentQuantity} ${currentQuantity === 1 ? "Exemplar" : "Exemplare"}`} />
               </div>
               <div className="my-4 h-px bg-slate-200" />
+              {studentVerified && discount.discounts[0]?.amount ? (
+                <div className="mb-3 grid gap-1 text-sm">
+                  <SummaryLine label="Zwischensumme" value={formatEuro(priceSnapshot.total)} />
+                  <SummaryLine label="Studentenrabatt" value={`-${formatEuro(discount.discounts[0].amount)}`} />
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-slate-600">Zwischensumme</span>
-                <span className="text-2xl font-black text-brand-ink">{pricing ? "..." : price ? formatEuro(price.unitPrice) : "-"}</span>
+                <span className="text-sm font-bold text-slate-600">Gesamt</span>
+                <span className="text-3xl font-black text-brand-ink">{formatEuro(discount.total)}</span>
               </div>
-              <p className="mt-2 text-xs leading-5 text-slate-500">Der Preis wird serverseitig aus dem bestehenden Produkt berechnet. Versand, Gutschein und Zahlungsdetails kommen im bestehenden Checkout dazu.</p>
-              <Button type="button" className="mt-5 w-full" disabled={pageCount <= 0 || !price || Boolean(manualError)} onClick={addToCart}>
+              <Button type="button" className="mt-5 w-full" disabled={pdfRequired && !analysis?.valid} onClick={addToCart}>
                 In den Warenkorb <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button asChild variant="outline" className="mt-2 w-full">
-                <Link href="/warenkorb">Zum Warenkorb</Link>
-              </Button>
+              {cartMessage ? <p className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{cartMessage}</p> : null}
             </div>
           </aside>
+        </div>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white p-3 shadow-[0_-8px_30px_rgba(15,23,42,.12)] lg:hidden">
+        <div className="mx-auto flex w-[min(100%-16px,720px)] items-center justify-between gap-3">
+          <span className="text-xl font-black text-brand-ink">{formatEuro(discount.total)}</span>
+          <Button type="button" disabled={pdfRequired && !analysis?.valid} onClick={addToCart}>In den Warenkorb</Button>
         </div>
       </div>
     </section>
   );
 }
 
-function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function PropertyControl({ property, value, onChange }: { property: ProductPricingProperty; value: string; onChange: (value: string) => void }) {
+  const values = enabledValues(property);
+  const control = property.display?.control ?? (values.length <= 4 ? "cards" : "select");
+  const label = property.name;
+  if (!values.length) return null;
+  if (control === "cards") {
+    return (
+      <div className="grid gap-3">
+        <div>
+          <p className="text-sm font-black text-brand-ink">{label}</p>
+          {property.display?.helpText ? <p className="mt-1 text-xs text-slate-500">{property.display.helpText}</p> : null}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {values.map((option) => {
+            const selected = value === option.value;
+            return (
+              <button key={option.value} type="button" onClick={() => onChange(option.value)} className={selected ? "overflow-hidden rounded-lg border border-brand-blue bg-brand-mist text-left ring-2 ring-brand-blue/10" : "overflow-hidden rounded-lg border border-slate-200 bg-white text-left transition hover:border-brand-blue/40"}>
+                {option.image ? <img src={option.image} alt="" className="aspect-[4/3] w-full object-cover" /> : null}
+                <span className="block p-4">
+                  <span className="block font-black text-brand-ink">{valueLabel(option)}</span>
+                  {option.description ? <span className="mt-1 block text-sm leading-5 text-slate-600">{option.description}</span> : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  if (control === "buttons") {
+    return (
+      <div className="grid gap-2">
+        <p className="text-sm font-black text-brand-ink">{label}</p>
+        <div className="flex flex-wrap gap-2">
+          {values.map((option) => (
+            <button key={option.value} type="button" onClick={() => onChange(option.value)} className={value === option.value ? "rounded-md border border-brand-blue bg-brand-mist px-4 py-2 text-sm font-black text-brand-blue" : "rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:border-brand-blue"}>
+              {valueLabel(option)}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-black text-brand-ink">{value}</p>
-      {sub ? <p className="mt-0.5 text-xs text-slate-500">{sub}</p> : null}
+    <label className="grid gap-2">
+      <span className="text-sm font-black text-brand-ink">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-12 rounded-md border bg-white px-3 text-sm font-semibold">
+        {values.map((option) => <option key={option.value} value={option.value}>{valueLabel(option)}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function PdfAnalysisSummary({ analysis, thumbnails }: { analysis: PdfAnalysis; thumbnails: Thumb[] }) {
+  return (
+    <div className="mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="break-all text-sm font-black text-brand-ink">{analysis.fileName}</p>
+          <p className="mt-1 flex items-center gap-2 text-sm font-bold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> PDF geprüft</p>
+        </div>
+        <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-800">PDF OK</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <Metric label="Seiten" value={String(analysis.pages)} />
+        <Metric label="Format" value={analysis.dominantFormat ?? "PDF"} sub={analysis.widthMm && analysis.heightMm ? `${analysis.widthMm} x ${analysis.heightMm} mm` : undefined} />
+        <Metric label="Ausrichtung" value={analysis.orientation === "landscape" ? "Querformat" : analysis.orientation === "portrait" ? "Hochformat" : "Erkannt"} />
+      </div>
+      {thumbnails.length ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          {thumbnails.map((thumb) => (
+            <div key={`${thumb.page}-${thumb.label}`} className="overflow-hidden rounded-md border border-emerald-200 bg-white">
+              <img src={thumb.url} alt={`Vorschau Seite ${thumb.page}`} className="h-28 w-full object-contain" />
+              <p className="border-t px-2 py-1 text-xs font-bold text-slate-600">{thumb.label}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function Control({ label, children }: { label: string; children: ReactNode }) {
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <label className="grid gap-2">
-      <span className="text-sm font-black text-brand-ink">{label}</span>
-      {children}
-    </label>
+    <div className="rounded-md border border-emerald-200 bg-white p-3">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-brand-ink">{value}</p>
+      {sub ? <p className="text-xs text-slate-500">{sub}</p> : null}
+    </div>
   );
 }
 
 function SummaryLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex justify-between gap-3">
       <span className="text-slate-500">{label}</span>
       <span className="text-right font-bold text-slate-900">{value}</span>
     </div>
   );
 }
 
-function VariantCard({ title, text, price, active, onClick }: { title: string; text: string; price?: number; active?: boolean; onClick: () => void }) {
+function StudentEmptyState() {
   return (
-    <button type="button" onClick={onClick} className={active ? "rounded-lg border border-brand-blue bg-brand-mist p-4 text-left ring-2 ring-brand-blue/10" : "rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-brand-blue/50 hover:bg-brand-mist/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/30"}>
-      <p className="font-black text-brand-ink">{title}</p>
-      <p className="mt-2 min-h-10 text-sm leading-5 text-slate-600">{text}</p>
-      {price !== undefined ? <p className="mt-3 text-sm font-black text-brand-blue">{formatEuro(price)}</p> : <p className="mt-3 text-xs font-bold text-slate-500">Auswählen und Preis berechnen</p>}
-    </button>
+    <section className="container-page py-16">
+      <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm font-semibold text-slate-700">
+        Für diesen Bereich sind momentan keine Produkte verfügbar.
+      </div>
+    </section>
   );
 }
 
-async function analyzePdfInBrowser(file: File, serverAnalysis: PdfAnalysis): Promise<{ analysis: PdfAnalysis; thumbnails: Thumb[] }> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.mjs", import.meta.url).toString();
+async function analyzePdfInBrowser(file: File, serverAnalysis: PdfAnalysis, createPreview: boolean): Promise<{ analysis: PdfAnalysis; thumbnails: Thumb[] }> {
+  const pdfjs = getPdfjs();
   const data = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data }).promise;
   const colorPages: number[] = [];
   const thumbnails: Thumb[] = [];
-  const thumbPages = Array.from(new Set([1, Math.min(2, pdf.numPages), Math.max(1, Math.ceil(pdf.numPages / 2)), pdf.numPages])).filter((page) => page >= 1 && page <= pdf.numPages);
+  const thumbPages = createPreview ? Array.from(new Set([1, Math.min(2, pdf.numPages), pdf.numPages])).filter((page) => page >= 1 && page <= pdf.numPages) : [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);

@@ -17,6 +17,7 @@ import MailIcon from "@mui/icons-material/Mail";
 import CampaignIcon from "@mui/icons-material/Campaign";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import TuneIcon from "@mui/icons-material/Tune";
+import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import { Alert, Box, Button, Card, CardContent, Checkbox, Divider, Grid, IconButton, List as MuiList, ListItemButton, ListItemIcon, MenuItem, TextField as MuiTextField, Typography } from "@mui/material";
 import { createTheme } from "@mui/material/styles";
 import { ChangeEvent, ReactNode, useEffect, useMemo, useState } from "react";
@@ -216,6 +217,7 @@ const pricingQuantitySourceLabels = {
   front_covers: "Pro vorderem Umschlag",
   back_covers: "Pro hinterem Umschlag",
   printed_cover_sides: "Pro bedruckter Umschlagseite",
+  embossing_lines: "Pro Prägezeile",
   per_order: "Einmal pro Auftrag"
 } as const;
 
@@ -415,6 +417,12 @@ const dataProvider = {
     const merged = { ...(params.previousData ?? {}), ...params.data };
     const { id: _id, ...rest } = merged;
     const isCatalog = catalogResources.has(resource);
+    const modulePayload = resource === "usersRoles"
+      ? (() => {
+        const { role: _role, createdAt: _createdAt, updatedAt: _updatedAt, ...data } = rest;
+        return data;
+      })()
+      : rest;
     const payload = resource === "categories"
       ? { ...rest, slug: typeof rest.slug === "string" && rest.slug ? rest.slug : params.id, originalSlug: params.id }
       : resource === "products"
@@ -423,7 +431,7 @@ const dataProvider = {
           ? { ...rest, slug: typeof rest.slug === "string" && rest.slug ? rest.slug : params.id, originalSlug: params.id }
         : resource === "properties"
           ? { ...rest, slug: typeof rest.slug === "string" && rest.slug ? rest.slug : params.id, originalSlug: params.id }
-          : { id: params.id, data: rest };
+          : { id: params.id, data: modulePayload };
     const data = await fetchJson<AdminRecord>(isCatalog ? `${catalogApiUrl}/${resource}` : `/api/admin/modules/${resource}`, {
       method: isCatalog ? "POST" : "PUT",
       headers: { "Content-Type": "application/json" },
@@ -604,6 +612,8 @@ function csvPropertyPayloads(rows: Record<string, string>[]) {
           id: valueId,
           value,
           label: csvCell(row, "label", "Label") || undefined,
+          image: csvCell(row, "image", "bild", "imageUrl", "bildUrl") || undefined,
+          description: csvCell(row, "description", "beschreibung") || undefined,
           sortOrder: property.values.length,
           active: csvBool(csvCell(row, "valueActive", "active", "aktiv"), true),
           pricingMode: (csvCell(row, "pricingMode", "preisart") || "included") as GlobalProperty["values"][number]["pricingMode"],
@@ -613,6 +623,10 @@ function csvPropertyPayloads(rows: Record<string, string>[]) {
         };
         property.values.push(entry);
       }
+      const image = csvCell(row, "image", "bild", "imageUrl", "bildUrl");
+      const description = csvCell(row, "description", "beschreibung");
+      if (image) entry.image = image;
+      if (description) entry.description = description;
       const fromQuantity = csvOptionalNumber(csvCell(row, "from_quantity", "fromQuantity", "von"));
       const unitPrice = csvOptionalNumber(csvCell(row, "unit_price", "unitPrice", "stkpreis"));
       if (fromQuantity && unitPrice !== undefined) {
@@ -640,7 +654,7 @@ function csvEscape(value: unknown) {
 }
 
 function globalPropertiesToCsv(properties: GlobalProperty[]) {
-  const header = ["slug", "name", "value", "label", "pricingMode", "fixedPrice", "multiplier", "from_quantity", "to_quantity", "unit_price", "active", "sortOrder"];
+  const header = ["slug", "name", "value", "label", "image", "description", "pricingMode", "fixedPrice", "multiplier", "from_quantity", "to_quantity", "unit_price", "active", "sortOrder"];
   const rows = properties.flatMap((property) => (property.values ?? []).flatMap((value) => {
     if (value.pricingMode === "tiered" && value.tierPrices?.length) {
       return value.tierPrices.map((tier) => [
@@ -648,6 +662,8 @@ function globalPropertiesToCsv(properties: GlobalProperty[]) {
         property.name,
         value.value,
         value.label ?? "",
+        value.image ?? "",
+        value.description ?? "",
         "tiered",
         "",
         "",
@@ -663,6 +679,8 @@ function globalPropertiesToCsv(properties: GlobalProperty[]) {
       property.name,
       value.value,
       value.label ?? "",
+      value.image ?? "",
+      value.description ?? "",
       value.pricingMode ?? "included",
       value.fixedPrice ?? "",
       value.multiplier ?? "",
@@ -1198,10 +1216,27 @@ function InvoicesList() {
         <NumberField source="amount" label="Betrag" options={{ style: "currency", currency: "EUR" }} />
         <TextField source="status" label="Status" />
         <DateField source="issuedAt" label="Ausgestellt" />
-        <EditButton />
-        <DeleteButton mutationMode="pessimistic" />
+        <InvoiceRowActions />
       </Datagrid>
     </List>
+  );
+}
+
+function InvoiceRowActions() {
+  const record = useRecordContext<AdminRecord & { source?: string }>();
+  const source = String(record?.source ?? "local").toLowerCase();
+  if (source && source !== "local") {
+    return (
+      <Button size="small" variant="outlined" disabled>
+        Extern
+      </Button>
+    );
+  }
+  return (
+    <Box sx={{ display: "flex", gap: 0.5 }}>
+      <EditButton />
+      <DeleteButton mutationMode="pessimistic" />
+    </Box>
   );
 }
 
@@ -1270,6 +1305,59 @@ function QuoteEdit() {
 
 function QuoteCreate() {
   return <Create><SimpleForm><QuoteForm /></SimpleForm></Create>;
+}
+
+function UsersRolesList() {
+  return (
+    <List filters={searchFilters} sort={{ field: "createdAt", order: "DESC" }}>
+      <Datagrid rowClick="edit">
+        <TextField source="email" label="E-Mail" />
+        <TextField source="name" label="Name" />
+        <TextField source="role.name" label="Rolle" />
+        <BooleanField source="active" label="Aktiv" />
+        <DateField source="createdAt" label="Erstellt" />
+        <EditButton />
+        <DeleteButton mutationMode="pessimistic" />
+      </Datagrid>
+    </List>
+  );
+}
+
+function RoleSelectInput() {
+  const notify = useNotify();
+  const [roles, setRoles] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const response = await fetch("/api/admin/roles");
+        if (!response.ok) throw new Error();
+        const payload = await response.json() as Array<{ id: string; name: string }>;
+        setRoles(payload);
+      } catch {
+        notify("Rollen konnten nicht geladen werden.", { type: "error" });
+      }
+    })();
+  }, [notify]);
+  return <SelectInput source="roleId" label="Rolle" choices={roles.map((role) => ({ id: role.id, name: role.name }))} validate={[required()]} />;
+}
+
+function UsersRolesForm() {
+  return (
+    <>
+      <TextInput source="email" label="E-Mail" type="email" validate={[required()]} />
+      <TextInput source="name" label="Name" />
+      <RoleSelectInput />
+      <BooleanInput source="active" label="Aktiv" defaultValue />
+    </>
+  );
+}
+
+function UsersRolesEdit() {
+  return <Edit><SimpleForm><UsersRolesForm /></SimpleForm></Edit>;
+}
+
+function UsersRolesCreate() {
+  return <Create><SimpleForm><UsersRolesForm /></SimpleForm></Create>;
 }
 
 function FileUploadsList() {
@@ -2420,6 +2508,18 @@ function ProductPricingManager() {
                             }}>Deaktivieren</Button>
                           </Box>
                         </Box>
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "220px 1fr" }, gap: 1, borderTop: "1px dashed #cbd5e1", pt: 1 }}>
+                          <MuiTextField size="small" label="Bild URL" value={value.image ?? ""} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            next[propertyIndex].values[valueIndex].image = event.target.value || undefined;
+                            updateProperties(next);
+                          }} />
+                          <MuiTextField size="small" label="Beschreibung" value={value.description ?? ""} onChange={(event) => {
+                            const next = structuredClone(pricingProperties);
+                            next[propertyIndex].values[valueIndex].description = event.target.value || undefined;
+                            updateProperties(next);
+                          }} />
+                        </Box>
                         {usesBindingProductionLogic ? (
                         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, minmax(140px, 1fr))" }, gap: 1, borderTop: "1px dashed #cbd5e1", pt: 1 }}>
                           <MuiTextField
@@ -3423,6 +3523,11 @@ function PropertyValuesInput() {
             <TextInput source="value" label="Interner Wert" validate={[required()]} helperText="Technischer Wert, z.B. 250g oder A3. Möglichst stabil halten." fullWidth />
             <TextInput source="label" label="Anzeigename" helperText="Text im Konfigurator. Leer lassen, wenn der interne Wert gut lesbar ist." fullWidth />
             <BooleanInput source="active" label="Aktiv" defaultValue helperText={false} />
+          </Box>
+
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "240px 1fr" }, gap: 1.25, alignItems: "start" }}>
+            <TextInput source="image" label="Bild URL" helperText="Optional für Karten-Darstellung, z.B. Bindungsart." fullWidth />
+            <TextInput source="description" label="Beschreibung" helperText="Optionaler Kurztext für Karten." fullWidth />
           </Box>
 
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "240px 180px 180px" }, gap: 1.25, alignItems: "start" }}>
@@ -5976,7 +6081,8 @@ const adminMenuGroups = [
   {
     label: "Betrieb",
     items: [
-      { href: "#/shipping", label: "Versandarten", description: "Liefermethoden und Preise", icon: <LocalShippingIcon /> }
+      { href: "#/shipping", label: "Versandarten", description: "Liefermethoden und Preise", icon: <LocalShippingIcon /> },
+      { href: "#/usersRoles", label: "Benutzer & Rollen", description: "Admin-Zugänge und Rollen", icon: <ManageAccountsIcon /> }
     ]
   }
 ];
@@ -6099,6 +6205,7 @@ export function ReactAdminDashboard() {
       <Resource name="newsletter" options={{ label: "Newsletter Kontakte" }} list={NewsletterList} edit={NewsletterEdit} create={NewsletterCreate} />
       <Resource name="newsletterCampaigns" options={{ label: "Newsletter" }} list={NewsletterCampaignList} edit={NewsletterCampaignEdit} create={NewsletterCampaignCreate} />
       <Resource name="shipping" options={{ label: "Versandarten" }} list={ShippingList} edit={ShippingEdit} create={ShippingCreate} />
+      <Resource name="usersRoles" options={{ label: "Benutzer & Rollen" }} list={UsersRolesList} edit={UsersRolesEdit} create={UsersRolesCreate} icon={ManageAccountsIcon} />
     </Admin>
     </div>
   );

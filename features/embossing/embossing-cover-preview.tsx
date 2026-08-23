@@ -9,6 +9,10 @@ function previewFill(color: EmbossingColor) {
   return "#c9982f";
 }
 
+function canPreviewLogo(url: string) {
+  return /\.(svg|png|jpe?g|webp|gif)(?:[?#].*)?$/i.test(url);
+}
+
 export function EmbossingCoverPreview({ layout, color, showGuides = true }: { layout: EmbossingResolvedLayout; color: EmbossingColor; showGuides?: boolean }) {
   const fill = previewFill(color);
   const { coverGeometry } = layout;
@@ -26,7 +30,26 @@ export function EmbossingCoverPreview({ layout, color, showGuides = true }: { la
       ) : null}
       {layout.elements.map((element, index) => {
         if (element.type === "logo") {
-          return <rect key={index} x={element.xMm} y={element.yMm} width={element.widthMm} height={element.heightMm} fill={fill} opacity="0.85" />;
+          return (
+            <g key={index}>
+              {canPreviewLogo(element.url) ? (
+                <image
+                  href={element.url}
+                  x={element.xMm}
+                  y={element.yMm}
+                  width={element.widthMm}
+                  height={element.heightMm}
+                  preserveAspectRatio="xMidYMid meet"
+                  opacity="0.95"
+                />
+              ) : (
+                <>
+                  <rect x={element.xMm} y={element.yMm} width={element.widthMm} height={element.heightMm} fill="none" stroke={fill} strokeWidth="0.5" opacity="0.85" />
+                  <text x={element.xMm + element.widthMm / 2} y={element.yMm + element.heightMm / 2} textAnchor="middle" dominantBaseline="middle" fontFamily="Helvetica, Arial, sans-serif" fontSize="3.6" fontWeight="700" fill={fill}>Logo-Datei</text>
+                </>
+              )}
+            </g>
+          );
         }
         const textAnchor = element.alignment === "left" ? "start" : element.alignment === "right" ? "end" : "middle";
         const x = element.alignment === "left" ? element.xMm : element.alignment === "right" ? element.xMm + element.widthMm : element.xMm + element.widthMm / 2;

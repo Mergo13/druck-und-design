@@ -1,6 +1,6 @@
 import { strict as assert } from "assert";
 import { calculateConfiguredProductPrice, calculateTierPrice } from "@/lib/print-workflow";
-import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
+import { productPropertyFromGlobal, resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
 import type { GlobalProperty, ProductCatalogItem } from "@/types/print-platform";
 
 const paper: GlobalProperty = {
@@ -45,6 +45,67 @@ const product = {
 const resolved = resolveGlobalPropertyPricing(product, [paper]);
 assert.equal(calculateConfiguredProductPrice(resolved, 1, { "eigenschaft:Papier": "120g" }).total, 125);
 assert.equal(calculateConfiguredProductPrice(resolved, 3, { "eigenschaft:Papier": "120g" }).total, 375);
+assert.equal(resolved.pricingProperties?.[0].values[0].image, undefined);
+
+const bindingProperty: GlobalProperty = {
+  slug: "bindungsart",
+  name: "Bindungsart",
+  active: true,
+  sortOrder: 0,
+  values: [
+    {
+      id: "bindungsart-hardcover",
+      value: "hardcover",
+      label: "Hardcover",
+      image: "/images/bindings/hardcover.jpg",
+      description: "Fester Einband",
+      active: true,
+      sortOrder: 0,
+      pricingMode: "fixed",
+      fixedPrice: 10
+    }
+  ]
+};
+const bindingProduct = {
+  ...product,
+  pricingProperties: [productPropertyFromGlobal(bindingProperty)]
+} as ProductCatalogItem;
+const resolvedBindingProduct = resolveGlobalPropertyPricing(bindingProduct, [bindingProperty]);
+assert.equal(resolvedBindingProduct.pricingProperties?.[0].values[0].image, "/images/bindings/hardcover.jpg");
+assert.equal(resolvedBindingProduct.pricingProperties?.[0].values[0].description, "Fester Einband");
+
+const thesisProduct = {
+  ...product,
+  basePrice: 0,
+  pricingProperties: [
+    {
+      propertyId: "bindungsart",
+      name: "Bindungsart",
+      display: { control: "cards" as const, section: "binding" as const },
+      values: [
+        { value: "hardcover", label: "Hardcover", image: "/hardcover.jpg", description: "Fester Einband", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 10 },
+        { value: "spiral", label: "Spiralbindung", image: "/spiral.jpg", description: "Flexible Bindung", enabled: true, pricingMode: "fixed" as const, fixedPrice: 5 },
+        { value: "softcover", label: "Softcover", image: "/softcover.jpg", description: "Weicher Umschlag", enabled: true, pricingMode: "fixed" as const, fixedPrice: 7 }
+      ]
+    },
+    {
+      propertyId: "hardcover-farbe",
+      name: "Hardcover Farbe",
+      visibility: { propertyId: "bindungsart", operator: "equals" as const, value: "hardcover" },
+      values: [{ value: "schwarz", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 3 }]
+    },
+    {
+      propertyId: "spiral-farbe",
+      name: "Spiral Farbe",
+      visibility: { propertyId: "bindungsart", operator: "equals" as const, value: "spiral" },
+      values: [{ value: "weiss", enabled: true, defaultSelected: true, pricingMode: "fixed" as const, fixedPrice: 2 }]
+    }
+  ]
+} as ProductCatalogItem;
+const spiralThesisPrice = calculateConfiguredProductPrice(thesisProduct, 1, { "eigenschaft:Bindungsart": "spiral" });
+assert.equal(spiralThesisPrice.total, 7);
+assert.equal(spiralThesisPrice.lines.some((line) => line.label === "Hardcover Farbe"), false);
+assert.equal(spiralThesisPrice.lines.some((line) => line.label === "Spiral Farbe"), true);
 
 const override = {
   ...product,
@@ -240,7 +301,6 @@ assert.equal(documentQuantityPrice.total, 25.65);
 // ---------------------------------------------------------------------------
 // Tests for CSV Product Import with pricingProperties and Flyer Verification
 // ---------------------------------------------------------------------------
-import { productPropertyFromGlobal } from "@/lib/product-property-pricing";
 
 const globalPropertiesList: GlobalProperty[] = [
   {

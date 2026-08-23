@@ -34,13 +34,17 @@ export function EmbossingConfigurator({
   embossingColor,
   authenticated,
   currentEmbossingPrice,
-  onFinalized
+  onFinalized,
+  onLineCountChange,
+  presentation = "compact"
 }: {
   productId: string;
   embossingColor: EmbossingColor;
   authenticated: boolean;
   currentEmbossingPrice: number;
   onFinalized: (design: FinalizedDesign | null) => void;
+  onLineCountChange?: (lineCount: number) => void;
+  presentation?: "compact" | "wide";
 }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"auto" | "advanced">("auto");
@@ -65,10 +69,15 @@ export function EmbossingConfigurator({
     advancedAdjustments: mode === "advanced" ? { middle: { offsetYMm: advancedOffset, alignment: "center" } } : undefined
   }), [advancedOffset, fontStyle, mode, sourceContent, template]);
   const preflight = useMemo(() => validateEmbossingLayout(layout, defaultEmbossingProductionRules), [layout]);
+  const effectiveLineCount = uploadedCoverLineCount || layout.lineCount;
 
   useEffect(() => {
     onFinalized(null);
   }, [advancedOffset, embossingColor, fontStyle, mode, onFinalized, sourceContent, template]);
+
+  useEffect(() => {
+    onLineCountChange?.(effectiveLineCount);
+  }, [effectiveLineCount, onLineCountChange]);
 
   useEffect(() => {
     if (!open || !authenticated) return;
@@ -232,7 +241,7 @@ export function EmbossingConfigurator({
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={presentation === "wide" ? "rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:p-6" : "rounded-lg border border-slate-200 bg-white p-4 shadow-sm"}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-700">Prägung gestalten</p>
@@ -242,7 +251,7 @@ export function EmbossingConfigurator({
         <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>Schließen</Button>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_180px]">
+      <div className={presentation === "wide" ? "mt-5 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]" : "mt-4 grid gap-4 lg:grid-cols-[1fr_180px]"}>
         <div className="grid gap-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <Select label="Vorlage" value={template} onChange={(value) => setTemplate(value as EmbossingTemplate)} options={[["classic", "Klassisch"], ["modern", "Modern"], ["minimal", "Minimal"], ["logo", "Mit Logo"]]} />
@@ -291,14 +300,14 @@ export function EmbossingConfigurator({
           ))}
           <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs font-semibold text-slate-700">
             <UploadCloud className="h-4 w-4 text-amber-700" />
-            <span>Logo hochladen · SVG oder Vektor-PDF empfohlen</span>
-            <input type="file" accept=".svg,.pdf,.png,image/svg+xml,application/pdf,image/png" className="sr-only" onChange={(event) => void uploadLogo(event.target.files?.[0])} />
+            <span>Logo hochladen · SVG, AI, PDF oder PNG</span>
+            <input type="file" accept=".svg,.ai,.pdf,.png,image/svg+xml,application/postscript,application/illustrator,application/pdf,image/png" className="sr-only" onChange={(event) => void uploadLogo(event.target.files?.[0])} />
           </label>
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
             <label className="flex cursor-pointer items-center gap-3 text-xs font-semibold text-amber-950">
               <UploadCloud className="h-4 w-4 text-amber-700" />
-              <span>Eigenes Cover hochladen · PDF, SVG oder PNG</span>
-              <input type="file" accept=".svg,.pdf,.png,image/svg+xml,application/pdf,image/png" className="sr-only" onChange={(event) => void uploadCover(event.target.files?.[0])} />
+              <span>Eigenes Cover hochladen · PDF, SVG, AI oder PNG</span>
+              <input type="file" accept=".svg,.ai,.pdf,.png,image/svg+xml,application/postscript,application/illustrator,application/pdf,image/png" className="sr-only" onChange={(event) => void uploadCover(event.target.files?.[0])} />
             </label>
             <p className="mt-1 text-xs leading-5 text-amber-900">
               Bei PDF/SVG wird lesbarer Text analysiert. Wenn Text als Pfad oder Bild angelegt ist, trägst du die Prägezeilen manuell ein.
@@ -351,12 +360,12 @@ export function EmbossingConfigurator({
             </label>
           ) : null}
         </div>
-        <div>
-          <div className="aspect-[210/297] w-full">
+        <div className={presentation === "wide" ? "xl:sticky xl:top-24 xl:h-fit" : ""}>
+          <div className={presentation === "wide" ? "mx-auto aspect-[210/297] w-full max-w-[360px]" : "aspect-[210/297] w-full"}>
             <EmbossingCoverPreview layout={layout} color={embossingColor} />
           </div>
           <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
-            <p className="font-black">Prägezeilen: {uploadedCoverLineCount || layout.lineCount}</p>
+            <p className="font-black">Prägezeilen: {effectiveLineCount}</p>
             <p className="mt-1 text-slate-600">Prägung: {formatEuro(currentEmbossingPrice)}</p>
             <p className="mt-1 text-slate-500">{uploadedCoverLineCount ? "Zählung aus eigener Cover-Datei" : saving ? "Speichert..." : "Entwurf automatisch gespeichert"}</p>
           </div>

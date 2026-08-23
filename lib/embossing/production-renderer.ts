@@ -1,4 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { promises as fs } from "fs";
+import path from "path";
 import { saveGeneratedUploadFile } from "@/lib/file-storage";
 import { fontSizeMm } from "./typography";
 import type { EmbossingColor, EmbossingLayoutElement, EmbossingResolvedLayout } from "./types";
@@ -20,6 +22,9 @@ function productionSvg(layout: EmbossingResolvedLayout, color: "preview" | "mask
   const font = layout.fontStyle === "classic" ? "Times New Roman, Times, serif" : "Helvetica, Arial, sans-serif";
   const body = layout.elements.map((element) => {
     if (element.type === "logo") {
+      if (color === "preview" && /\.(svg|png|jpe?g|webp|gif)(?:[?#].*)?$/i.test(element.url)) {
+        return `<image href="${escapeXml(element.url)}" x="${element.xMm.toFixed(3)}" y="${element.yMm.toFixed(3)}" width="${element.widthMm.toFixed(3)}" height="${element.heightMm.toFixed(3)}" preserveAspectRatio="xMidYMid meet" opacity="0.95"/>`;
+      }
       return `<rect x="${element.xMm.toFixed(3)}" y="${element.yMm.toFixed(3)}" width="${element.widthMm.toFixed(3)}" height="${element.heightMm.toFixed(3)}" fill="${fill}" opacity="${color === "mask" ? "1" : "0.85"}"/>`;
     }
     return element.lines.map((line, index) => {
@@ -68,6 +73,54 @@ async function drawTextElement(page: any, element: Extract<EmbossingLayoutElemen
   }
 }
 
+function publicUploadPathFromUrl(url: string) {
+  if (!url.startsWith("/uploads/") || url.includes("\0") || url.includes("..")) return null;
+  const relative = decodeURIComponent(url).replace(/^\/+/, "");
+  const absolute = path.resolve(process.cwd(), "public", relative);
+  const uploadsRoot = path.resolve(process.cwd(), "public", "uploads");
+  return absolute.startsWith(`${uploadsRoot}${path.sep}`) ? absolute : null;
+}
+
+async function logoImageBytes(url: string) {
+  const filePath = publicUploadPathFromUrl(url);
+  if (!filePath) return null;
+  const input = await fs.readFile(filePath).catch(() => null);
+  if (!input) return null;
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".png")) return { bytes: input, type: "png" as const };
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return { bytes: input, type: "jpg" as const };
+  if (lower.endsWith(".svg") || lower.endsWith(".webp")) {
+    try {
+      const sharp = (await import("sharp")).default;
+      return { bytes: await sharp(input, { failOn: "none" }).png().toBuffer(), type: "png" as const };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function drawLogoElement(pdf: PDFDocument, page: any, element: Extract<EmbossingLayoutElement, { type: "logo" }>, pageHeightPt: number) {
+  const image = await logoImageBytes(element.url);
+  if (image) {
+    const embedded = image.type === "jpg" ? await pdf.embedJpg(image.bytes) : await pdf.embedPng(image.bytes);
+    page.drawImage(embedded, {
+      x: mm(element.xMm),
+      y: pageHeightPt - mm(element.yMm + element.heightMm),
+      width: mm(element.widthMm),
+      height: mm(element.heightMm)
+    });
+    return;
+  }
+  page.drawRectangle({
+    x: mm(element.xMm),
+    y: pageHeightPt - mm(element.yMm + element.heightMm),
+    width: mm(element.widthMm),
+    height: mm(element.heightMm),
+    color: rgb(0, 0, 0)
+  });
+}
+
 export async function renderEmbossingProductionFiles(params: {
   designId: string;
   layout: EmbossingResolvedLayout;
@@ -83,13 +136,7 @@ export async function renderEmbossingProductionFiles(params: {
     if (element.type === "text") {
       await drawTextElement(page, element, font, heightPt);
     } else {
-      page.drawRectangle({
-        x: mm(element.xMm),
-        y: heightPt - mm(element.yMm + element.heightMm),
-        width: mm(element.widthMm),
-        height: mm(element.heightMm),
-        color: rgb(0, 0, 0)
-      });
+      await drawLogoElement(pdf, page, element, heightPt);
     }
   }
 

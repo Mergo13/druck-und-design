@@ -1,3 +1,4 @@
+import { resolvedEmbossingLineCountFromConfig } from "@/lib/embossing/pricing-adapter";
 import type { ProductCatalogItem, ProductCategoryProperty, ProductPropertyValue } from "@/types/print-platform";
 
 export type PrintSideMode = "simplex" | "duplex";
@@ -102,6 +103,7 @@ export function pricingQuantitiesForDocument(config: Record<string, string>, qua
       frontCovers: production.quantity,
       backCovers: production.quantity,
       printedCoverSides: production.quantity * 2,
+      embossingLines: resolvedEmbossingLineCountFromConfig(config) * production.quantity,
       perOrder: 1
     }
     : undefined;
@@ -249,6 +251,7 @@ export function pricingQuantitiesForProductDocument(
       frontCovers: production.quantity,
       backCovers: production.quantity,
       printedCoverSides: "totalPrintedCoverSides" in production ? production.totalPrintedCoverSides : production.quantity * 2,
+      embossingLines: resolvedEmbossingLineCountFromConfig(config) * production.quantity,
       perOrder: 1
     }
     : undefined;

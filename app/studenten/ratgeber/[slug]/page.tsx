@@ -9,6 +9,7 @@ import { StructuredData } from "@/components/structured-data";
 import { getPublicProducts } from "@/lib/catalog-repository";
 import { getProductStartingPriceLabel } from "@/lib/print-workflow";
 import { getStudentArticleBySlug, getStudentArticleProfile, getStudentArticles } from "@/lib/student-content";
+import { studentProductHref, studentProductsFromCatalog } from "@/lib/student-products";
 
 export async function generateStaticParams() {
   const articles = await getStudentArticles();
@@ -42,10 +43,11 @@ export default async function StudentenArticlePage({ params }: { params: Promise
   ]);
   if (!article) notFound();
 
-  const productBySlug = new Map(products.map((product) => [product.slug, product]));
+  const studentProducts = studentProductsFromCatalog(products);
+  const productBySlug = new Map(studentProducts.map((product) => [product.slug, product]));
   const profile = getStudentArticleProfile(article);
-  const primaryProduct = productBySlug.get(profile.targetProductSlug) ?? productBySlug.get(article.relatedProducts[0] ?? "");
-  const relatedProducts = article.relatedProducts.map((productSlug) => productBySlug.get(productSlug)).filter(Boolean).slice(0, 3);
+  const primaryProduct = productBySlug.get(profile.targetProductSlug) ?? productBySlug.get(article.relatedProducts[0] ?? "") ?? studentProducts[0];
+  const relatedProducts = (article.relatedProducts.length ? article.relatedProducts.map((productSlug) => productBySlug.get(productSlug)).filter(Boolean) : studentProducts).slice(0, 3);
   const relatedArticles = article.relatedArticles.map((relatedSlug) => allArticles.find((item) => item.slug === relatedSlug)).filter(Boolean).slice(0, 3);
   const blocks = parseArticleBody(article.body);
   const headings = blocks.filter((block): block is Extract<ArticleBodyBlock, { type: "heading" }> => block.type === "heading").slice(0, 5);
@@ -115,7 +117,7 @@ export default async function StudentenArticlePage({ params }: { params: Promise
               <p className="mt-2 text-sm leading-6 text-slate-600">{primaryProduct.short}</p>
             </div>
             <Button asChild className="mt-4 shrink-0 md:mt-0">
-              <Link href={`/produkt/${primaryProduct.slug}`}>{profile.ctaLabel}</Link>
+              <Link href={studentProductHref(primaryProduct)}>{profile.ctaLabel}</Link>
             </Button>
           </div>
         ) : null}
@@ -139,7 +141,7 @@ export default async function StudentenArticlePage({ params }: { params: Promise
           <p className="font-black text-brand-ink">Nächster Schritt</p>
           <p className="mt-2 text-sm leading-6 text-slate-600">Lade deine PDF-Datei im bestehenden Produktkonfigurator hoch. Seitenanzahl, Auflage, Druckart, Papier und Bindung fließen dort in die echte Preisberechnung ein.</p>
           {primaryProduct ? (
-            <Link href={`/produkt/${primaryProduct.slug}`} className="mt-3 inline-flex items-center gap-2 text-sm font-black text-brand-blue">
+            <Link href={studentProductHref(primaryProduct)} className="mt-3 inline-flex items-center gap-2 text-sm font-black text-brand-blue">
               {profile.ctaLabel} <ArrowRight className="h-4 w-4" />
             </Link>
           ) : null}
@@ -152,7 +154,7 @@ export default async function StudentenArticlePage({ params }: { params: Promise
               {relatedProducts.map((product) => product ? (
                 <Card key={product.slug} className="border-slate-200">
                   <CardContent className="p-5">
-                    <Link href={`/produkt/${product.slug}`} className="font-black text-brand-ink hover:text-brand-blue">{product.name}</Link>
+                    <Link href={studentProductHref(product)} className="font-black text-brand-ink hover:text-brand-blue">{product.name}</Link>
                     <p className="mt-2 line-clamp-2 text-sm leading-6 text-muted-foreground">{product.short}</p>
                     <p className="mt-3 text-sm font-black text-brand-blue">{getProductStartingPriceLabel(product)}</p>
                   </CardContent>
@@ -193,7 +195,7 @@ export default async function StudentenArticlePage({ params }: { params: Promise
         <div className="mt-12 rounded-lg bg-slate-950 p-7 text-white">
           <h2 className="text-2xl font-black">Druckauftrag starten</h2>
           <p className="mt-2 text-white/70">{primaryProduct ? `${primaryProduct.name} direkt konfigurieren und mit deiner PDF den Preis berechnen.` : "Konfiguriere Abschlussarbeit, Bindung oder Poster im bestehenden Shop."}</p>
-          <Button asChild className="mt-5"><Link href={primaryProduct ? `/produkt/${primaryProduct.slug}` : "/studenten"}>{primaryProduct ? profile.ctaLabel : "Zum Studenten-Shop"}</Link></Button>
+          <Button asChild className="mt-5"><Link href={primaryProduct ? studentProductHref(primaryProduct) : "/studenten"}>{primaryProduct ? profile.ctaLabel : "Zum Studenten-Shop"}</Link></Button>
         </div>
       </article>
     </main>

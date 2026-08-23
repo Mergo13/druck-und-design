@@ -41,8 +41,8 @@ export default async function StudentenRatgeberPage() {
           <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-tight text-[#181818] md:text-6xl">Drucken, binden und abgeben. Ohne Rätselraten.</h1>
           <p className="mt-5 max-w-2xl text-lg leading-8 text-[#6b6b6b]">Klare Leitfäden für Bachelorarbeit, Masterarbeit, Skripten, Poster und druckfertige PDFs. Jeder Ratgeber führt dich zum passenden Produkt und zur echten Preisberechnung.</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/produkt/abschlussarbeiten" className="inline-flex h-11 items-center justify-center rounded-md bg-brand-blue px-5 text-sm font-bold text-white transition hover:bg-[#2c70b8]">
-              Abschlussarbeit konfigurieren
+            <Link href="/studenten" className="inline-flex h-11 items-center justify-center rounded-md bg-brand-blue px-5 text-sm font-bold text-white transition hover:bg-[#2c70b8]">
+              Produkt wählen
             </Link>
             <Link href="/studenten" className="inline-flex h-11 items-center justify-center rounded-md border border-[#e8e8e5] bg-white px-5 text-sm font-bold text-[#181818] transition hover:border-brand-blue/35 hover:text-brand-blue">
               Studentenservice ansehen
@@ -107,7 +107,7 @@ export default async function StudentenRatgeberPage() {
             <h2 className="mt-3 text-3xl font-semibold text-[#181818]">PDF fertig? Dann berechne den Preis mit deiner echten Datei.</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6b6b6b]">Der Produktkonfigurator übernimmt Seitenanzahl, Auflage, Druckart, Bindung und Datei-Upload in einem Ablauf.</p>
           </div>
-          <Link href="/produkt/abschlussarbeiten" className="inline-flex h-11 items-center justify-center rounded-md bg-brand-blue px-5 text-sm font-bold text-white transition hover:bg-[#2c70b8]">
+          <Link href="/studenten" className="inline-flex h-11 items-center justify-center rounded-md bg-brand-blue px-5 text-sm font-bold text-white transition hover:bg-[#2c70b8]">
             PDF hochladen & Preis berechnen
           </Link>
         </div>

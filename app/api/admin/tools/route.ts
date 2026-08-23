@@ -354,6 +354,7 @@ export async function GET(request: Request) {
       { key: "products", label: "Product Images", relative: path.join("public", "uploads", "products") },
       { key: "site-images", label: "Website Images", relative: path.join("public", "uploads", "site-images") },
       { key: "industries", label: "Industry Images", relative: path.join("public", "uploads", "industries") },
+      { key: "embossing", label: "Prägung / Cover", relative: path.join("public", "uploads", "embossing") },
       { key: "documents", label: "Documents", relative: path.join("public", "uploads", "documents") },
       { key: "contact", label: "Kontakt Form", relative: path.join("public", "uploads", "contact") }
     ];
