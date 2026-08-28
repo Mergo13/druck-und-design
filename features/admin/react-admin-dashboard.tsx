@@ -414,7 +414,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     const errorBody = await response.json().catch(() => ({} as { message?: string }));
     const message = typeof errorBody?.message === "string" && errorBody.message
       ? errorBody.message
-      : `Request failed: ${response.status}`;
+      : `Anfrage fehlgeschlagen: ${response.status}`;
     throw new Error(message);
   }
   return response.json() as Promise<T>;
@@ -580,29 +580,29 @@ function calculateProductHealth(product: Partial<ProductCatalogItem>): ProductHe
   const requiredWithoutDefault = enabledRequiredProperties.filter((property) => !(property.values ?? []).some((value) => value.enabled !== false && value.defaultSelected));
   const publishedLive = product.productStatus === "active" ? product.visible !== false && product.published !== false : true;
   const items: ProductHealthCheck[] = [
-    { key: "pricing", label: "Pricing configured", state: pricingErrors.length ? "missing" : "ok", detail: pricingErrors[0] },
-    { key: "requiredProperties", label: "Required properties configured", state: requiredWithoutDefault.length ? "warning" : "ok", detail: requiredWithoutDefault.map((property) => property.name).join(", ") },
-    { key: "image", label: "Product image exists", state: product.heroImage ? "ok" : "missing" },
-    { key: "category", label: "Category exists", state: product.category ? "ok" : "missing" },
-    { key: "production", label: "Production settings configured", state: (product as any).production || product.productBindingConfig?.enabledSystems?.length || product.deliveryText ? "ok" : "warning" },
-    { key: "seo", label: "SEO configured", state: product.seo?.trim() ? "ok" : "warning", detail: "SEO description missing" },
-    { key: "published", label: "Product published correctly", state: publishedLive ? "ok" : "missing", detail: "Live product is hidden or unpublished" },
-    { key: "pricingErrors", label: "Pricing has no obvious errors", state: pricingErrors.length ? "warning" : "ok", detail: pricingErrors[0] }
+    { key: "pricing", label: "Preise konfiguriert", state: pricingErrors.length ? "missing" : "ok", detail: pricingErrors[0] },
+    { key: "requiredProperties", label: "Pflichteigenschaften konfiguriert", state: requiredWithoutDefault.length ? "warning" : "ok", detail: requiredWithoutDefault.map((property) => property.name).join(", ") },
+    { key: "image", label: "Produktbild vorhanden", state: product.heroImage ? "ok" : "missing" },
+    { key: "category", label: "Kategorie vorhanden", state: product.category ? "ok" : "missing" },
+    { key: "production", label: "Produktionseinstellungen konfiguriert", state: (product as any).production || product.productBindingConfig?.enabledSystems?.length || product.deliveryText ? "ok" : "warning" },
+    { key: "seo", label: "SEO konfiguriert", state: product.seo?.trim() ? "ok" : "warning", detail: "SEO-Beschreibung fehlt" },
+    { key: "published", label: "Produkt korrekt veröffentlicht", state: publishedLive ? "ok" : "missing", detail: "Live-Produkt ist versteckt oder nicht veröffentlicht" },
+    { key: "pricingErrors", label: "Preislogik ohne offensichtliche Fehler", state: pricingErrors.length ? "warning" : "ok", detail: pricingErrors[0] }
   ];
   const missing = items.some((item) => item.state === "missing");
   const warning = items.some((item) => item.state === "warning");
   return missing
-    ? { status: "incomplete", label: "Incomplete", tone: "red", items }
+    ? { status: "incomplete", label: "Unvollständig", tone: "red", items }
     : warning
-      ? { status: "warning", label: "Warning", tone: "amber", items }
-      : { status: "healthy", label: "Healthy", tone: "green", items };
+      ? { status: "warning", label: "Warnung", tone: "amber", items }
+      : { status: "healthy", label: "Gesund", tone: "green", items };
 }
 
 function ProductHealthBadge({ product }: { product: ProductCatalogItem }) {
   const health = calculateProductHealth(product);
   function showDetails() {
     window.alert([
-      "Product Health",
+      "Produktgesundheit",
       "",
       ...health.items.map((item) => `${item.state === "ok" ? "✓" : "⚠"} ${item.label}${item.detail ? `\n  ${item.detail}` : ""}`)
     ].join("\n"));
@@ -611,10 +611,25 @@ function ProductHealthBadge({ product }: { product: ProductCatalogItem }) {
 }
 
 function publicationLabel(product: Partial<ProductCatalogItem>) {
-  if (product.productStatus === "draft") return { label: "Draft", tone: "gray" as const };
-  if (product.productStatus === "inactive" || product.purchaseMode === "disabled") return { label: "Inactive", tone: "gray" as const };
-  if (product.visible === false || product.published === false) return { label: "Hidden", tone: "amber" as const };
+  if (product.productStatus === "draft") return { label: "Entwurf", tone: "gray" as const };
+  if (product.productStatus === "inactive" || product.purchaseMode === "disabled") return { label: "Inaktiv", tone: "gray" as const };
+  if (product.visible === false || product.published === false) return { label: "Versteckt", tone: "amber" as const };
   return { label: "Live", tone: "green" as const };
+}
+
+function displayOrderStatus(status: string) {
+  const labels: Record<string, string> = {
+    "File Check": "Dateiprüfung",
+    "Ready for Print": "Druckbereit",
+    Printing: "Im Druck",
+    Finishing: "Weiterverarbeitung",
+    Ready: "Bereit",
+    Completed: "Abgeschlossen",
+    Paid: "Bezahlt",
+    New: "Neu",
+    Processing: "In Bearbeitung"
+  };
+  return labels[status] ?? status;
 }
 
 function parseCsvRows(input: string): Record<string, string>[] {
@@ -873,41 +888,41 @@ function AdminDashboardHome() {
   ].filter(Boolean) as Array<{ text: string; path: string; tone: "amber" | "red" }>;
 
   const quickLinks = [
-    { label: "Products", path: "/products" },
+    { label: "Produkte", path: "/products" },
     { label: "CRM / Rechnungen", path: "/tools/crm" },
-    { label: "Files", path: "/fileUploads" },
-    { label: "Email", path: "/tools/email" }
+    { label: "Dateien", path: "/fileUploads" },
+    { label: "E-Mail", path: "/tools/email" }
   ];
 
   return (
     <Grid container spacing={2.25}>
       <Grid size={{ xs: 12 }}>
-        <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: 0 }}>Overview</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35, fontWeight: 650 }}>Orders, pricing health and CRM transfer status.</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 950, letterSpacing: 0 }}>Übersicht</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35, fontWeight: 650 }}>Bestellungen, Preisgesundheit und CRM-Übertragungsstatus.</Typography>
       </Grid>
       <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Revenue" value={formatCurrency(stats?.grossRevenue ?? 0)} />
+        <DashboardCard label="Umsatz" value={formatCurrency(stats?.grossRevenue ?? 0)} />
       </Grid>
       <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Orders" value={String(stats?.revenueOrderCount ?? 0)} />
+        <DashboardCard label="Bestellungen" value={String(stats?.revenueOrderCount ?? 0)} />
       </Grid>
       <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Open Requests" value={String(stats?.openRequestCount ?? 0)} />
+        <DashboardCard label="Offene Anfragen" value={String(stats?.openRequestCount ?? 0)} />
       </Grid>
       <Grid size={{ xs: 12, md: 3 }}>
-        <DashboardCard label="Products" value={String(stats?.productsTotal ?? 0)} />
+        <DashboardCard label="Produkte" value={String(stats?.productsTotal ?? 0)} />
       </Grid>
 
       <Grid size={{ xs: 12 }}>
         <Card sx={{ borderRadius: 2 }}>
           <CardContent sx={{ display: "grid", gap: 1.25 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Needs Attention</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Benötigt Aufmerksamkeit</Typography>
             {loadingStats ? <Skeleton height={44} /> : attention.length ? attention.map((item) => (
               <Box key={item.text} onClick={() => redirect(item.path)} sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, py: 0.75, borderTop: `1px solid ${adminColors.border}`, cursor: "pointer", "&:hover": { color: adminColors.blue } }}>
                 <Typography variant="body2" sx={{ fontWeight: 800 }}>{item.text}</Typography>
-                <AdminStatusBadge label={item.tone === "red" ? "Problem" : "Check"} tone={item.tone} />
+                <AdminStatusBadge label={item.tone === "red" ? "Problem" : "Prüfen"} tone={item.tone} />
               </Box>
-            )) : <EmptyState title="No open requests." text="Everything is currently processed." />}
+            )) : <EmptyState title="Keine offenen Punkte." text="Aktuell ist alles verarbeitet." />}
           </CardContent>
         </Card>
       </Grid>
@@ -915,7 +930,7 @@ function AdminDashboardHome() {
       <Grid size={{ xs: 12 }}>
         <Card sx={{ borderRadius: 2 }}>
           <CardContent sx={{ display: "grid", gap: 1.25 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Recent Orders</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Letzte Bestellungen</Typography>
             {loadingStats ? <Skeleton height={96} /> : recentOrders.length ? (
               <Box sx={{ display: "grid" }}>
                 {recentOrders.map((order) => {
@@ -928,12 +943,12 @@ function AdminDashboardHome() {
                       <Typography variant="body2" sx={{ fontWeight: 900 }}>{order.id}</Typography>
                       <Typography variant="body2" sx={{ color: adminColors.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{String(label)}</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 900 }}>{formatCurrency(Number(order.total || 0))}</Typography>
-                      <AdminStatusBadge label={status} tone={tone} />
+                      <AdminStatusBadge label={displayOrderStatus(status)} tone={tone} />
                     </Box>
                   );
                 })}
               </Box>
-            ) : <EmptyState title="No recent orders." text="New webshop orders will appear here." />}
+            ) : <EmptyState title="Keine neuen Bestellungen." text="Neue Webshop-Bestellungen erscheinen hier." />}
           </CardContent>
         </Card>
       </Grid>
@@ -984,7 +999,7 @@ function AdminDashboardHome() {
       <Grid size={{ xs: 12, md: 5 }}>
         <Card sx={{ borderRadius: 2, height: "100%" }}>
           <CardContent sx={{ display: "grid", gap: 1.25 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Quick Access</Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>Schnellzugriff</Typography>
             {quickLinks.map((item) => (
               <Button key={item.path} variant="outlined" onClick={() => redirect(item.path)} sx={{ justifyContent: "flex-start", py: 1 }}>
                 {item.label}
@@ -993,11 +1008,11 @@ function AdminDashboardHome() {
             <Divider />
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
               <Box>
-                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 900 }}>Net revenue</Typography>
+                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 900 }}>Netto-Umsatz</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 950 }}>{formatCurrency(stats?.netRevenue ?? 0)}</Typography>
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 900 }}>Avg order</Typography>
+                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 900 }}>Ø Bestellung</Typography>
                 <Typography variant="body2" sx={{ fontWeight: 950 }}>{formatCurrency(stats?.averageOrder ?? 0)}</Typography>
               </Box>
             </Box>
@@ -1280,15 +1295,15 @@ function OrderEdit() {
         <TextInput source="email" label="E-Mail" />
         <NumberInput source="total" label="Summe" disabled />
         <SelectInput source="status" choices={[
-          { id: "Anfrage", name: "Request" },
-          { id: "Neu", name: "New" },
-          { id: "Bezahlt", name: "Paid" },
-          { id: "File Check", name: "File Check" },
-          { id: "Ready for Print", name: "Ready for Print" },
-          { id: "Printing", name: "Printing" },
-          { id: "Finishing", name: "Finishing" },
-          { id: "Ready", name: "Ready" },
-          { id: "Completed", name: "Completed" },
+          { id: "Anfrage", name: "Anfrage" },
+          { id: "Neu", name: "Neu" },
+          { id: "Bezahlt", name: "Bezahlt" },
+          { id: "File Check", name: "Dateiprüfung" },
+          { id: "Ready for Print", name: "Druckbereit" },
+          { id: "Printing", name: "Im Druck" },
+          { id: "Finishing", name: "Weiterverarbeitung" },
+          { id: "Ready", name: "Bereit" },
+          { id: "Completed", name: "Abgeschlossen" },
           { id: "Versendet", name: "Versendet" },
           { id: "Storniert", name: "Storniert" }
         ]} />
@@ -1306,14 +1321,14 @@ function OrderCommunicationHistory() {
   const paid = /bezahlt|paid/i.test(String(record.status ?? ""));
   const entries = [
     { label: "Bestellbestätigung", sent: true, date: created },
-    { label: "Zahlungsbestätigung", sent: paid, date: paid ? created : "Not sent" },
-    { label: "Rechnung", sent: Boolean((record as any).invoiceNumber), date: (record as any).invoiceNumber ? created : "Not sent" },
-    { label: "Ready-for-pickup email", sent: /ready|completed|abhol/i.test(String(record.status ?? "")), date: /ready|completed|abhol/i.test(String(record.status ?? "")) ? new Date(record.updatedAt ?? record.createdAt ?? Date.now()).toLocaleString("de-DE") : "Not sent" }
+    { label: "Zahlungsbestätigung", sent: paid, date: paid ? created : "Nicht gesendet" },
+    { label: "Rechnung", sent: Boolean((record as any).invoiceNumber), date: (record as any).invoiceNumber ? created : "Nicht gesendet" },
+    { label: "Abholbereitschaft E-Mail", sent: /ready|completed|abhol/i.test(String(record.status ?? "")), date: /ready|completed|abhol/i.test(String(record.status ?? "")) ? new Date(record.updatedAt ?? record.createdAt ?? Date.now()).toLocaleString("de-DE") : "Nicht gesendet" }
   ];
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
       <CardContent sx={{ display: "grid", gap: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Customer Communication</Typography>
+        <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Kundenkommunikation</Typography>
         {entries.map((entry) => (
           <Box key={entry.label} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "260px 1fr" }, gap: 1, py: 0.6, borderTop: `1px solid ${adminColors.border}` }}>
             <Typography variant="body2" sx={{ fontWeight: 850 }}>{entry.sent ? "✓" : "○"} {entry.label}</Typography>
@@ -1336,21 +1351,21 @@ function OrderFileStatus() {
     const bw = config.pdfAnalysisBwPageCount || config["SW-Seiten"];
     const color = config.pdfAnalysisColorPageCount || config.Farbseiten;
     const uploaded = Boolean(fileUrl && fileUrl !== "-");
-    const status = !uploaded ? "Missing" : config.pdfAnalysisStatus === "success" ? "Uploaded" : config.pdfAnalysisStatus === "invalid" ? "Invalid format" : "Check required";
+    const status = !uploaded ? "Fehlt" : config.pdfAnalysisStatus === "success" ? "Hochgeladen" : config.pdfAnalysisStatus === "invalid" ? "Ungültiges Format" : "Prüfung erforderlich";
     return { index, fileUrl, fileName, pages, bw, color, status };
-  }).filter((row) => row.fileUrl || row.pages || row.status !== "Missing");
+  }).filter((row) => row.fileUrl || row.pages || row.status !== "Fehlt");
   if (!fileRows.length) return null;
   return (
     <Card variant="outlined" sx={{ borderRadius: 2, mb: 2 }}>
       <CardContent sx={{ display: "grid", gap: 1 }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>PDF / File Status</Typography>
+        <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>PDF- / Dateistatus</Typography>
         {fileRows.map((row) => (
           <Box key={`${row.index}-${row.fileName ?? ""}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 160px 120px 120px 120px" }, gap: 1, alignItems: "center", py: 0.75, borderTop: `1px solid ${adminColors.border}` }}>
             <Typography variant="body2" sx={{ fontWeight: 850, overflowWrap: "anywhere" }}>{row.fileName || row.fileUrl || "PDF"}</Typography>
-            <AdminStatusBadge label={row.status} tone={row.status === "Uploaded" ? "green" : row.status === "Missing" || row.status === "Invalid format" ? "red" : "amber"} />
-            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.pages ? `${row.pages} pages` : "-"}</Typography>
+            <AdminStatusBadge label={row.status} tone={row.status === "Hochgeladen" ? "green" : row.status === "Fehlt" || row.status === "Ungültiges Format" ? "red" : "amber"} />
+            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.pages ? `${row.pages} Seiten` : "-"}</Typography>
             <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.bw ? `${row.bw} BW` : "-"}</Typography>
-            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.color ? `${row.color} Color` : "-"}</Typography>
+            <Typography variant="body2" sx={{ color: adminColors.muted }}>{row.color ? `${row.color} Farbe` : "-"}</Typography>
           </Box>
         ))}
       </CardContent>
@@ -1878,10 +1893,10 @@ function StudentVerificationEdit() {
         <TextInput source="university" label="Uni/FH" disabled />
         <TextInput source="documentPath" label="Interner Dokumentpfad" disabled fullWidth helperText="Nicht öffentlich auslieferbar; Datei liegt unter data/private." />
         <SelectInput source="status" label="Status" choices={[
-          { id: "pending", name: "Pending" },
-          { id: "approved", name: "Approved" },
-          { id: "rejected", name: "Rejected" },
-          { id: "expired", name: "Expired" }
+          { id: "pending", name: "Ausstehend" },
+          { id: "approved", name: "Freigegeben" },
+          { id: "rejected", name: "Abgelehnt" },
+          { id: "expired", name: "Abgelaufen" }
         ]} />
         <TextInput source="validUntil" label="Gültig bis" helperText="Optional, z.B. 2027-09-30" />
         <TextInput source="reviewNote" label="Notiz" multiline fullWidth />
@@ -2983,12 +2998,12 @@ function ProductPricingManager() {
           <CardContent sx={{ display: "grid", gap: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
               <Box>
-                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 950, textTransform: "uppercase", letterSpacing: ".08em" }}>Price Test</Typography>
+                <Typography variant="caption" sx={{ color: adminColors.muted, fontWeight: 950, textTransform: "uppercase", letterSpacing: ".08em" }}>Preis-Test</Typography>
                 <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Live Preisberechnung</Typography>
               </Box>
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                <Button size="small" variant="outlined" onClick={() => notify("Preis wurde mit der aktuellen Konfiguration neu berechnet.", { type: "info" })}>Recalculate</Button>
-                <Button size="small" variant="outlined" disabled={!previewProduct.slug} onClick={() => previewProduct.slug && window.open(`/produkt/${previewProduct.slug}`, "_blank", "noopener,noreferrer")}>Open customer preview</Button>
+                <Button size="small" variant="outlined" onClick={() => notify("Preis wurde mit der aktuellen Konfiguration neu berechnet.", { type: "info" })}>Neu berechnen</Button>
+                <Button size="small" variant="outlined" disabled={!previewProduct.slug} onClick={() => previewProduct.slug && window.open(`/produkt/${previewProduct.slug}`, "_blank", "noopener,noreferrer")}>Kundenseite öffnen</Button>
               </Box>
             </Box>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "160px 1fr" }, gap: 1 }}>
@@ -3004,9 +3019,9 @@ function ProductPricingManager() {
                 ) : null}
                 {previewProduct.pdfAnalysisMode !== "disabled" || ["brochure", "document", "thesis", "simple-print"].includes(previewProfile) ? (
                   <>
-                    <MuiTextField size="small" label="Pages" type="number" value={previewConfig["PDF-Seiten"] ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, "PDF-Seiten": event.target.value, seitenanzahl: event.target.value }))} sx={{ width: 120 }} />
-                    <MuiTextField size="small" label="BW pages" type="number" value={previewConfig.pdfAnalysisBwPageCount ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, pdfAnalysisBwPageCount: event.target.value, "SW-Seiten": event.target.value }))} sx={{ width: 120 }} />
-                    <MuiTextField size="small" label="Color pages" type="number" value={previewConfig.pdfAnalysisColorPageCount ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, pdfAnalysisColorPageCount: event.target.value, Farbseiten: event.target.value }))} sx={{ width: 120 }} />
+                    <MuiTextField size="small" label="Seiten" type="number" value={previewConfig["PDF-Seiten"] ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, "PDF-Seiten": event.target.value, seitenanzahl: event.target.value }))} sx={{ width: 120 }} />
+                    <MuiTextField size="small" label="SW-Seiten" type="number" value={previewConfig.pdfAnalysisBwPageCount ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, pdfAnalysisBwPageCount: event.target.value, "SW-Seiten": event.target.value }))} sx={{ width: 120 }} />
+                    <MuiTextField size="small" label="Farbseiten" type="number" value={previewConfig.pdfAnalysisColorPageCount ?? ""} onChange={(event) => setPreviewConfig((current) => ({ ...current, pdfAnalysisColorPageCount: event.target.value, Farbseiten: event.target.value }))} sx={{ width: 120 }} />
                   </>
                 ) : null}
                 {pricingProperties.map((property) => {
@@ -3052,15 +3067,15 @@ function ProductPricingManager() {
               </Box>
             ) : null}
             <Box sx={{ mt: 1.25, borderTop: "1px solid #e2e8f0", pt: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Pricing breakdown</Typography>
-              <Typography variant="body2" sx={{ color: "#334155", fontWeight: 800 }}>Selling price: {formatCurrency(universalPreview.customerPrice)}</Typography>
+              <Typography variant="subtitle2" sx={{ fontWeight: 900, color: "#0f172a" }}>Preisaufschlüsselung</Typography>
+              <Typography variant="body2" sx={{ color: "#334155", fontWeight: 800 }}>Verkaufspreis: {formatCurrency(universalPreview.customerPrice)}</Typography>
               {universalPreview.productionCost !== undefined ? (
                 <>
-                  <Typography variant="body2" sx={{ color: "#475569" }}>Estimated cost: {formatCurrency(universalPreview.productionCost)}</Typography>
-                  <Typography variant="body2" sx={{ color: "#475569" }}>Contribution: {formatCurrency(universalPreview.contribution ?? 0)}</Typography>
-                  <Typography variant="body2" sx={{ color: "#475569" }}>Margin: {(universalPreview.marginPercent ?? 0).toLocaleString("de-DE")} %</Typography>
+                  <Typography variant="body2" sx={{ color: "#475569" }}>Geschätzte Kosten: {formatCurrency(universalPreview.productionCost)}</Typography>
+                  <Typography variant="body2" sx={{ color: "#475569" }}>Deckungsbeitrag: {formatCurrency(universalPreview.contribution ?? 0)}</Typography>
+                  <Typography variant="body2" sx={{ color: "#475569" }}>Marge: {(universalPreview.marginPercent ?? 0).toLocaleString("de-DE")} %</Typography>
                 </>
-              ) : <Typography variant="body2" sx={{ color: "#64748b" }}>Cost data incomplete</Typography>}
+              ) : <Typography variant="body2" sx={{ color: "#64748b" }}>Kostendaten unvollständig</Typography>}
               {universalPreview.minimumPriceApplied || universalPreview.marginGuardApplied ? (
                 <Typography variant="body2" sx={{ color: "#b45309", fontWeight: 800 }}>Profitability guard angewendet</Typography>
               ) : null}
@@ -3073,7 +3088,7 @@ function ProductPricingManager() {
                 <Typography key={`${warning.code}-${warning.componentId ?? warning.message}`} variant="caption" sx={{ display: "block", color: "#b45309", fontWeight: 800 }}>{warning.message}</Typography>
               ))}
             </Box>
-            <Typography variant="h5" sx={{ mt: 1, fontWeight: 900, color: "#0f172a" }}>Calculated price: {formatCurrency(preview.total)}</Typography>
+            <Typography variant="h5" sx={{ mt: 1, fontWeight: 900, color: "#0f172a" }}>Berechneter Preis: {formatCurrency(preview.total)}</Typography>
             </Box>
           </CardContent>
         </Card>
@@ -4462,7 +4477,7 @@ function useStoreSettings() {
     });
     if (!res.ok) {
       const payload = await res.json().catch(() => ({}));
-      throw new Error(typeof payload?.message === "string" ? payload.message : "Update failed");
+      throw new Error(typeof payload?.message === "string" ? payload.message : "Aktualisierung fehlgeschlagen");
     }
     const payload = await res.json() as { storeControl: StoreSettingsResponse["storeControl"] };
     setSettings({ storeControl: payload.storeControl });
@@ -4484,9 +4499,9 @@ function MaintenanceToolPage() {
   async function toggle() {
     try {
       await updateStoreControl({ maintenanceMode: !maintenanceOn, maintenanceAvailableAt: availableAt });
-      notify(`Maintenance mode ${!maintenanceOn ? "enabled" : "disabled"}.`, { type: "success" });
+      notify(`Wartungsmodus ${!maintenanceOn ? "aktiviert" : "deaktiviert"}.`, { type: "success" });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Aktualisierung fehlgeschlagen", { type: "error" });
     }
   }
 
@@ -4495,7 +4510,7 @@ function MaintenanceToolPage() {
       await updateStoreControl({ maintenanceAvailableAt: availableAt });
       notify("Wiederverfügbarkeit gespeichert.", { type: "success" });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Aktualisierung fehlgeschlagen", { type: "error" });
     }
   }
 
@@ -4536,9 +4551,9 @@ function VacationToolPage() {
   async function toggle() {
     try {
       await updateStoreControl({ vacationMode: !vacationOn });
-      notify(`Urlaub mode ${!vacationOn ? "enabled" : "disabled"}.`, { type: "success" });
+      notify(`Urlaubsmodus ${!vacationOn ? "aktiviert" : "deaktiviert"}.`, { type: "success" });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Aktualisierung fehlgeschlagen", { type: "error" });
     }
   }
 
@@ -4571,7 +4586,7 @@ function OnlineShopToolPage() {
         type: shopActive ? "warning" : "success"
       });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Aktualisierung fehlgeschlagen", { type: "error" });
     }
   }
 
@@ -4580,7 +4595,7 @@ function OnlineShopToolPage() {
       await updateStoreControl({ studentDiscountPercent: Math.min(100, Math.max(0, value)) });
       notify("Studentenrabatt gespeichert.", { type: "success" });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Update failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Aktualisierung fehlgeschlagen", { type: "error" });
     }
   }
 
@@ -4662,11 +4677,11 @@ function EmailConfigToolPage() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        throw new Error(typeof payload?.message === "string" ? payload.message : "Save failed");
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Speichern fehlgeschlagen");
       }
       notify("Email configuration saved to .env.local", { type: "success" });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Save failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Speichern fehlgeschlagen", { type: "error" });
     } finally {
       setSaving(false);
     }
@@ -5630,13 +5645,13 @@ function ShutdownToolPage() {
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        throw new Error(typeof payload?.message === "string" ? payload.message : "Shutdown request failed");
+        throw new Error(typeof payload?.message === "string" ? payload.message : "Shutdown-Anforderung fehlgeschlagen");
       }
       const payload = await res.json() as { shutdownRequest: { requestedAt: string; requestedBy: string; reason: string } };
       setState(payload.shutdownRequest);
-      notify("Shutdown request recorded. Maintenance and checkout lock enabled.", { type: "warning" });
+      notify("Shutdown-Anforderung gespeichert. Wartungsmodus und Checkout-Sperre wurden aktiviert.", { type: "warning" });
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Shutdown request failed", { type: "error" });
+      notify(error instanceof Error ? error.message : "Shutdown-Anforderung fehlgeschlagen", { type: "error" });
     } finally {
       setSaving(false);
     }
@@ -5682,7 +5697,7 @@ function LayoutStudioPage() {
   return (
     <AdminToolShell
       title="Layout Studio"
-      description="1 von 3 Layouts wählen und Module (News, Highlights, CTA) interaktiv umschalten."
+      description="1 von 3 Layouts wählen und Module (Neuigkeiten, Highlights, CTA) interaktiv umschalten."
     >
       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
         <Button variant={layout === "magazine" ? "contained" : "outlined"} onClick={() => setLayout("magazine")}>Layout 1</Button>
@@ -5691,31 +5706,31 @@ function LayoutStudioPage() {
       </Box>
 
       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
-        <Button size="small" variant={showNews ? "contained" : "outlined"} onClick={() => setShowNews((v) => !v)}>News</Button>
+        <Button size="small" variant={showNews ? "contained" : "outlined"} onClick={() => setShowNews((v) => !v)}>Neuigkeiten</Button>
         <Button size="small" variant={showHighlights ? "contained" : "outlined"} onClick={() => setShowHighlights((v) => !v)}>Highlights</Button>
         <Button size="small" variant={showCta ? "contained" : "outlined"} onClick={() => setShowCta((v) => !v)}>CTA</Button>
       </Box>
 
       {layout === "magazine" ? (
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, md: 8 }}>{showNews ? <DashboardCard label="News" value="Hero + list" /> : null}</Grid>
-          <Grid size={{ xs: 12, md: 4 }}>{showHighlights ? <DashboardCard label="Highlights" value="Sidebar cards" /> : null}</Grid>
-          <Grid size={{ xs: 12 }}>{showCta ? <DashboardCard label="CTA" value="Bottom banner" /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 8 }}>{showNews ? <DashboardCard label="Neuigkeiten" value="Hero + Liste" /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 4 }}>{showHighlights ? <DashboardCard label="Highlights" value="Seitenleiste" /> : null}</Grid>
+          <Grid size={{ xs: 12 }}>{showCta ? <DashboardCard label="CTA" value="Unterer Banner" /> : null}</Grid>
         </Grid>
       ) : null}
 
       {layout === "split" ? (
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, md: 6 }}>{showNews ? <DashboardCard label="News Feed" value="Left column" /> : null}</Grid>
-          <Grid size={{ xs: 12, md: 6 }}>{showHighlights ? <DashboardCard label="Highlights + CTA" value={showCta ? "Right stacked modules" : "Right highlights only"} /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 6 }}>{showNews ? <DashboardCard label="Neuigkeiten-Feed" value="Linke Spalte" /> : null}</Grid>
+          <Grid size={{ xs: 12, md: 6 }}>{showHighlights ? <DashboardCard label="Highlights + CTA" value={showCta ? "Rechte Modulspalte" : "Nur rechte Highlights"} /> : null}</Grid>
         </Grid>
       ) : null}
 
       {layout === "grid" ? (
         <Grid container spacing={2}>
-          {showNews ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="News Cards" value="3-column grid" /></Grid> : null}
-          {showHighlights ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Highlights" value="KPI cards" /></Grid> : null}
-          {showCta ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="CTA Block" value="Action module" /></Grid> : null}
+          {showNews ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Neuigkeiten-Karten" value="3-Spalten-Raster" /></Grid> : null}
+          {showHighlights ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="Highlights" value="KPI-Karten" /></Grid> : null}
+          {showCta ? <Grid size={{ xs: 12, md: 4 }}><DashboardCard label="CTA-Block" value="Aktionsmodul" /></Grid> : null}
         </Grid>
       ) : null}
     </AdminToolShell>
@@ -5947,14 +5962,14 @@ function SettingsToolPage() {
   }
 
   return (
-    <AdminToolShell title="Settings" description="Globale Admin-Konfigurationen, die nicht in den täglichen Dashboard-Workflow gehören.">
+    <AdminToolShell title="Einstellungen" description="Globale Admin-Konfigurationen, die nicht in den täglichen Dashboard-Workflow gehören.">
       <Card variant="outlined" sx={{ borderRadius: 2 }}>
         <CardContent sx={{ display: "grid", gap: 1.5, maxWidth: 460 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>VAT configuration</Typography>
+          <Typography variant="subtitle1" sx={{ fontWeight: 950 }}>MwSt-Konfiguration</Typography>
           <MuiTextField
             size="small"
             type="number"
-            label="VAT %"
+            label="MwSt %"
             value={vatPercent}
             disabled={loading || saving}
             onChange={(event) => setVatPercent(Number(event.target.value))}
@@ -5962,7 +5977,7 @@ function SettingsToolPage() {
           />
           <Box>
             <Button variant="contained" onClick={() => void saveTax()} disabled={loading || saving}>
-              {saving ? "Saving..." : "Save change"}
+              {saving ? "Speichert..." : "Änderung speichern"}
             </Button>
           </Box>
         </CardContent>
@@ -6097,12 +6112,12 @@ function CRMToolPage() {
           <CardContent sx={{ display: "grid", gap: 1.5 }}>
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
               <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Connection</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Verbindung</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
-                  Ziel-Endpoint für Webshop-Bestellungen. Requests werden als JSON mit Bearer Token gesendet.
+                  Ziel-Endpoint für Webshop-Bestellungen. Anfragen werden als JSON mit Bearer-Token gesendet.
                 </Typography>
               </Box>
-              <AdminStatusBadge label={crmConfigured.url && crmConfigured.token ? "Connected" : "Not configured"} tone={crmConfigured.url && crmConfigured.token ? "green" : "red"} />
+              <AdminStatusBadge label={crmConfigured.url && crmConfigured.token ? "Verbunden" : "Nicht konfiguriert"} tone={crmConfigured.url && crmConfigured.token ? "green" : "red"} />
             </Box>
             <Box sx={{ mt: 1.5, display: "grid", gap: 1.25 }}>
               <MuiTextField
@@ -6131,9 +6146,9 @@ function CRMToolPage() {
               />
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                 <Button variant="contained" onClick={() => void saveConfig()} disabled={configLoading || configSaving}>
-                  {configSaving ? "Speichert..." : "Save connection"}
+                  {configSaving ? "Speichert..." : "Verbindung speichern"}
                 </Button>
-                <Button variant="outlined" onClick={() => void load()} disabled={loading}>Test connection</Button>
+                <Button variant="outlined" onClick={() => void load()} disabled={loading}>Verbindung testen</Button>
               </Box>
             </Box>
           </CardContent>
@@ -6141,9 +6156,9 @@ function CRMToolPage() {
 
         <Card variant="outlined" sx={{ borderRadius: 2 }}>
           <CardContent sx={{ display: "grid", gap: 1 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Used for</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Verwendet für</Typography>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 0.75 }}>
-              {["Invoice creation", "Invoice storage", "Invoice PDF", "Credit note", "Cancellation", "Reminder"].map((item) => (
+              {["Rechnungserstellung", "Rechnungsspeicherung", "Rechnungs-PDF", "Gutschrift", "Storno", "Mahnung"].map((item) => (
                 <Typography key={item} variant="body2" sx={{ color: adminColors.ink, fontWeight: 800 }}>✓ {item}</Typography>
               ))}
             </Box>
@@ -6152,24 +6167,24 @@ function CRMToolPage() {
 
         <Grid container spacing={1.25}>
           <Grid size={{ xs: 12, md: 4 }}>
-            <DashboardCard label="Paid webshop orders" value={String(payload?.summary.stripeOrders ?? 0)} />
+            <DashboardCard label="Bezahlte Webshop-Bestellungen" value={String(payload?.summary.stripeOrders ?? 0)} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <DashboardCard label="Synced" value={String(payload?.summary.crmSynced ?? 0)} />
+            <DashboardCard label="Synchronisiert" value={String(payload?.summary.crmSynced ?? 0)} />
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
-            <DashboardCard label="Pending" value={String(payload?.summary.crmPending ?? 0)} />
+            <DashboardCard label="Ausstehend" value={String(payload?.summary.crmPending ?? 0)} />
           </Grid>
         </Grid>
 
         <Card variant="outlined" sx={{ borderRadius: 2 }}>
           <CardContent>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, flexWrap: "wrap" }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Invoice Transfer Problems</Typography>
-              <Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>Refresh</Button>
+              <Typography variant="subtitle2" sx={{ fontWeight: 950 }}>Probleme bei Rechnungsübertragung</Typography>
+              <Button variant="outlined" size="small" onClick={() => void load()} disabled={loading}>Aktualisieren</Button>
             </Box>
             {(payload?.pending ?? []).length === 0 ? (
-              <EmptyState title="No invoice transfer problems." text="Paid webshop orders are synced to CRM." />
+              <EmptyState title="Keine Probleme bei Rechnungsübertragung." text="Bezahlte Webshop-Bestellungen sind mit dem CRM synchronisiert." />
             ) : (
               <Box sx={{ mt: 1, display: "grid", gap: 0.6 }}>
                 {(payload?.pending ?? []).slice(0, 15).map((row) => (
@@ -6185,7 +6200,7 @@ function CRMToolPage() {
                         disabled={actionLoadingId !== null}
                         onClick={() => void handleAction(row.id, "retry")}
                       >
-                        Retry
+                        Erneut versuchen
                       </Button>
                     </Box>
                   </Box>
@@ -6352,7 +6367,7 @@ function ProductionBindingConfigToolPage() {
                   <input hidden type="file" accept=".json,application/json" onChange={readImportFile} />
                 </Button>
                 <Button variant="outlined" onClick={exportJson} disabled={!configText.trim()}>Export</Button>
-                <Button variant="outlined" color="warning" onClick={() => void resetDefaults()} disabled={saving}>Defaults</Button>
+                <Button variant="outlined" color="warning" onClick={() => void resetDefaults()} disabled={saving}>Standards</Button>
                 <Button variant="contained" onClick={() => void save()} disabled={saving || loading || !configText.trim()}>
                   {saving ? "Speichert..." : "Speichern"}
                 </Button>
@@ -6423,67 +6438,67 @@ const adminMenuGroups = [
   {
     label: "",
     items: [
-      { href: "#/", label: "Dashboard", description: "Operations overview", icon: <DashboardIcon /> }
+      { href: "#/", label: "Dashboard", description: "Betriebsübersicht", icon: <DashboardIcon /> }
     ]
   },
   {
-    label: "STORE",
+    label: "SHOP",
     items: [
-      { href: "#/products", label: "Products", description: "Catalog, health and pricing", icon: <Inventory2Icon /> },
-      { href: "#/categories", label: "Categories", description: "Shop structure", icon: <CategoryIcon /> },
-      { href: "#/properties", label: "Properties", description: "Global values and prices", icon: <LocalOfferIcon /> },
-      { href: "#/tools/production-bindings", label: "Bindings", description: "Binding production data", icon: <TuneIcon /> },
-      { href: "#/fileUploads", label: "Files", description: "Customer uploads", icon: <UploadFileIcon /> }
+      { href: "#/products", label: "Produkte", description: "Katalog, Gesundheit und Preise", icon: <Inventory2Icon /> },
+      { href: "#/categories", label: "Kategorien", description: "Shop-Struktur", icon: <CategoryIcon /> },
+      { href: "#/properties", label: "Eigenschaften", description: "Globale Werte und Preise", icon: <LocalOfferIcon /> },
+      { href: "#/tools/production-bindings", label: "Bindungen", description: "Produktionsdaten für Bindungen", icon: <TuneIcon /> },
+      { href: "#/fileUploads", label: "Dateien", description: "Kunden-Uploads", icon: <UploadFileIcon /> }
     ]
   },
   {
-    label: "SALES",
+    label: "VERKAUF",
     items: [
-      { href: "#/orders", label: "Orders", description: "Webshop orders and status", icon: <ReceiptLongIcon /> },
-      { href: "#/quotes", label: "Requests", description: "Customer requests and quotes", icon: <RequestQuoteIcon /> }
+      { href: "#/orders", label: "Bestellungen", description: "Webshop-Aufträge und Status", icon: <ReceiptLongIcon /> },
+      { href: "#/quotes", label: "Anfragen", description: "Kundenanfragen und Angebote", icon: <RequestQuoteIcon /> }
     ]
   },
   {
-    label: "CONTENT",
+    label: "INHALTE",
     items: [
-      { href: "#/tools/homepage", label: "Homepage", description: "Homepage content", icon: <ArticleIcon /> },
-      { href: "#/tools/site-images", label: "Website Images", description: "Global image slots", icon: <UploadFileIcon /> },
-      { href: "#/tools/werbung", label: "Advertising", description: "Tracking and campaigns", icon: <CampaignIcon /> },
-      { href: "#/tools/layouts", label: "Layout Studio", description: "Visual layouts", icon: <TuneIcon /> },
+      { href: "#/tools/homepage", label: "Homepage", description: "Homepage-Inhalte", icon: <ArticleIcon /> },
+      { href: "#/tools/site-images", label: "Website-Bilder", description: "Globale Bildplätze", icon: <UploadFileIcon /> },
+      { href: "#/tools/werbung", label: "Werbung", description: "Tracking und Kampagnen", icon: <CampaignIcon /> },
+      { href: "#/tools/layouts", label: "Layout Studio", description: "Visuelle Layouts", icon: <TuneIcon /> },
       { href: "#/industries", label: "Branchen", description: "Landingpages", icon: <BusinessIcon /> },
-      { href: "#/studentArticles", label: "Ratgeber", description: "Student SEO content", icon: <SchoolIcon /> }
+      { href: "#/studentArticles", label: "Ratgeber", description: "Studenten-SEO-Inhalte", icon: <SchoolIcon /> }
     ]
   },
   {
-    label: "INTEGRATIONS",
+    label: "INTEGRATIONEN",
     items: [
-      { href: "#/tools/crm", label: "CRM / Rechnungen", description: "Invoices and sync", icon: <ReceiptLongIcon /> },
-      { href: "#/tools/email", label: "Email", description: "SMTP settings", icon: <MailIcon /> }
+      { href: "#/tools/crm", label: "CRM / Rechnungen", description: "Rechnungen und Sync", icon: <ReceiptLongIcon /> },
+      { href: "#/tools/email", label: "E-Mail", description: "SMTP-Einstellungen", icon: <MailIcon /> }
     ]
   },
   {
-    label: "TOOLS",
+    label: "WERKZEUGE",
     items: [
-      { href: "#/tools/catalog-csv", label: "CSV Import", description: "Catalog CSV import", icon: <UploadFileIcon /> },
-      { href: "#/tools/image-import", label: "Image Import", description: "Assign catalog images", icon: <UploadFileIcon /> }
+      { href: "#/tools/catalog-csv", label: "CSV Import", description: "Katalog per CSV importieren", icon: <UploadFileIcon /> },
+      { href: "#/tools/image-import", label: "Bildimport", description: "Katalogbilder zuweisen", icon: <UploadFileIcon /> }
     ]
   },
   {
     label: "SYSTEM",
     items: [
-      { href: "#/tools/backup", label: "Backup", description: "Database backups", icon: <TuneIcon /> },
-      { href: "#/tools/maintenance", label: "Maintenance", description: "Maintenance mode", icon: <TuneIcon /> },
-      { href: "#/tools/vacation", label: "Vacation Mode", description: "Delivery notices", icon: <LocalShippingIcon /> },
-      { href: "#/tools/online-shop", label: "Shop Control", description: "Checkout controls", icon: <TuneIcon /> },
-      { href: "#/tools/settings", label: "Settings", description: "Global settings", icon: <ManageAccountsIcon /> },
-      { href: "#/studentVerifications", label: "Studentenprüfung", description: "Student verification", icon: <SchoolIcon /> },
-      { href: "#/coupons", label: "Gutscheine", description: "Discounts", icon: <CardGiftcardIcon /> },
-      { href: "#/reviews", label: "Bewertungen", description: "Reviews", icon: <StarIcon /> },
-      { href: "#/newsletter", label: "Kontakte", description: "Newsletter contacts", icon: <MailIcon /> },
-      { href: "#/newsletterCampaigns", label: "Newsletter", description: "Campaigns", icon: <CampaignIcon /> },
-      { href: "#/shipping", label: "Versandarten", description: "Shipping methods", icon: <LocalShippingIcon /> },
-      { href: "#/usersRoles", label: "Benutzer & Rollen", description: "Admin access", icon: <ManageAccountsIcon /> },
-      { href: "#/tools/shutdown", label: "Shutdown", description: "Destructive system action", icon: <DeleteOutlineIcon />, destructive: true }
+      { href: "#/tools/backup", label: "Backup", description: "Datenbank-Backups", icon: <TuneIcon /> },
+      { href: "#/tools/maintenance", label: "Wartung", description: "Wartungsmodus", icon: <TuneIcon /> },
+      { href: "#/tools/vacation", label: "Urlaubsmodus", description: "Lieferhinweise", icon: <LocalShippingIcon /> },
+      { href: "#/tools/online-shop", label: "Shop-Steuerung", description: "Checkout steuern", icon: <TuneIcon /> },
+      { href: "#/tools/settings", label: "Einstellungen", description: "Globale Einstellungen", icon: <ManageAccountsIcon /> },
+      { href: "#/studentVerifications", label: "Studentenprüfung", description: "Studentenstatus prüfen", icon: <SchoolIcon /> },
+      { href: "#/coupons", label: "Gutscheine", description: "Rabatte", icon: <CardGiftcardIcon /> },
+      { href: "#/reviews", label: "Bewertungen", description: "Kundenbewertungen", icon: <StarIcon /> },
+      { href: "#/newsletter", label: "Kontakte", description: "Newsletter-Kontakte", icon: <MailIcon /> },
+      { href: "#/newsletterCampaigns", label: "Newsletter", description: "Kampagnen", icon: <CampaignIcon /> },
+      { href: "#/shipping", label: "Versandarten", description: "Versandmethoden", icon: <LocalShippingIcon /> },
+      { href: "#/usersRoles", label: "Benutzer & Rollen", description: "Admin-Zugänge", icon: <ManageAccountsIcon /> },
+      { href: "#/tools/shutdown", label: "Shutdown", description: "Destruktive Systemaktion", icon: <DeleteOutlineIcon />, destructive: true }
     ]
   }
 ];
@@ -6502,7 +6517,7 @@ function AdminMenu() {
     <Box sx={{ width: "100%", maxWidth: "100%", boxSizing: "border-box", overflowX: "hidden", px: 1, py: 1.5, bgcolor: "#f8fafc", minHeight: "100%" }}>
       <Box sx={{ px: 1.25, pb: 1.5 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 950, color: "#0f172a", lineHeight: 1.1 }}>DUD Studio</Typography>
-        <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>Admin Navigation</Typography>
+        <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>Admin-Navigation</Typography>
       </Box>
       {adminMenuGroups.map((group, groupIndex) => (
         <Box key={group.label} sx={{ mb: 1.25 }}>
@@ -6570,7 +6585,7 @@ function AdminGlobalAppBar() {
             size="small"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search orders, products, customers, invoices..."
+            placeholder="Bestellungen, Produkte, Kunden, Rechnungen suchen..."
             fullWidth
           />
         </Box>

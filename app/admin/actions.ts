@@ -15,7 +15,7 @@ export async function saveTaxSettingAction(input: { vatPercent: number }) {
   await ensureAdminBootstrap();
   const parsed = taxSchema.safeParse(input);
   if (!parsed.success) {
-    throw new Error("Invalid tax payload");
+    throw new Error("Ungültige Steuerdaten");
   }
   const sessionUser = await getSessionUser();
   const updated = await prisma.taxSetting.update({

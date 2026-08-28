@@ -5,7 +5,7 @@ import type { AdminModuleKey, ModulePermission } from "@/types/admin";
 export async function requireModulePermission(module: AdminModuleKey, permission: ModulePermission) {
   const sessionUser = await getSessionUser();
 
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && process.env.DUD_ADMIN_DEV_BYPASS === "true") {
     return {
       ok: true as const,
       sessionUser: sessionUser ?? { email: "system@local.dev", id: "system", company: "Local" }

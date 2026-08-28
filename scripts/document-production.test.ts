@@ -24,6 +24,7 @@ assert.deepEqual(pricingQuantitiesForDocument(duplexConfig, 3), {
   frontCovers: 3,
   backCovers: 3,
   printedCoverSides: 6,
+  embossingLines: 0,
   perOrder: 1
 });
 

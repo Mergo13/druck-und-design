@@ -45,7 +45,7 @@ export function usePdfSession(file: File | null): PdfClientSession {
     setStatus("loading");
     void (async () => {
       try {
-        const pdfjs = getPdfjs();
+        const pdfjs = await getPdfjs();
         const bytes = await file.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data: bytes }).promise;
         if (cancelled) {

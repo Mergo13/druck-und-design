@@ -39,7 +39,8 @@ export async function GET(request: Request) {
   const [orders, productsTotal, categoriesTotal, customersTotal] = await Promise.all([
     prisma.adminOrder.findMany({
       where: { createdAt: { gte: fromDate } },
-      select: { id: true, total: true, status: true, createdAt: true }
+      orderBy: { createdAt: "desc" },
+      select: { id: true, customer: true, total: true, status: true, createdAt: true, items: true }
     }),
     prisma.catalogProduct.count(),
     prisma.catalogCategory.count(),
@@ -67,6 +68,23 @@ export async function GET(request: Request) {
     values[index].value += Number(order.total || 0);
   }
   const max = Math.max(1, ...values.map((bucket) => bucket.value));
+  const ordersByStatus = Array.from(orders.reduce((map, order) => {
+    map.set(order.status, (map.get(order.status) ?? 0) + 1);
+    return map;
+  }, new Map<string, number>()).entries()).map(([status, count]) => ({ status, count }));
+  const productRevenue = new Map<string, { name: string; quantity: number; revenue: number }>();
+  for (const order of revenueOrders) {
+    const items = Array.isArray(order.items) ? order.items : [];
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as Record<string, unknown>;
+      const slug = String(row.productSlug ?? row.slug ?? row.name ?? "unbekannt");
+      const current = productRevenue.get(slug) ?? { name: String(row.name ?? slug), quantity: 0, revenue: 0 };
+      current.quantity += Number(row.quantity ?? row.qty ?? 0) || 0;
+      current.revenue += Number(row.finalPrice ?? row.price ?? 0) || 0;
+      productRevenue.set(slug, current);
+    }
+  }
 
   return NextResponse.json({
     period,
@@ -82,6 +100,9 @@ export async function GET(request: Request) {
     netRevenue,
     taxAmount,
     averageOrder,
+    ordersByStatus,
+    recentOrders: orders.slice(0, 10),
+    topProducts: Array.from(productRevenue.values()).sort((left, right) => right.revenue - left.revenue).slice(0, 10),
     chartBuckets: values.map((bucket) => ({
       ...bucket,
       height: Math.max(6, (bucket.value / max) * 100)

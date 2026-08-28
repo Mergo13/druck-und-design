@@ -703,7 +703,7 @@ function StudentEmptyState() {
 }
 
 async function analyzePdfInBrowser(file: File, serverAnalysis: PdfAnalysis, createPreview: boolean): Promise<{ analysis: PdfAnalysis; thumbnails: Thumb[] }> {
-  const pdfjs = getPdfjs();
+  const pdfjs = await getPdfjs();
   const data = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data }).promise;
   const colorPages: number[] = [];
