@@ -7,6 +7,7 @@ const modules: AdminModuleKey[] = [
   "quotes",
   "invoices",
   "fileUploads",
+  "customers",
   "coupons",
   "reviews",
   "newsletter",

@@ -18,6 +18,7 @@ const supportedModules: AdminModuleKey[] = [
   "quotes",
   "invoices",
   "fileUploads",
+  "customers",
   "coupons",
   "reviews",
   "newsletter",
@@ -462,6 +463,34 @@ export async function GET(request: Request, { params }: { params: Promise<{ modu
     return NextResponse.json({ items, total, page, pageSize });
   }
 
+  if (module === "customers") {
+    const where: Prisma.CustomerAccountWhereInput = q
+      ? { OR: [{ email: containsQ }] }
+      : {};
+    const [items, total] = await Promise.all([
+      prisma.customerAccount.findMany({ where, skip, take: pageSize, orderBy: { updatedAt: "desc" } }),
+      prisma.customerAccount.count({ where })
+    ]);
+    return NextResponse.json({
+      items: items.map((item) => {
+        const data = item.data as Record<string, unknown>;
+        return {
+          id: item.id,
+          email: item.email,
+          fullName: String(data.fullName ?? data.name ?? ""),
+          company: String(data.company ?? ""),
+          phone: String(data.phone ?? ""),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          data
+        };
+      }),
+      total,
+      page,
+      pageSize
+    });
+  }
+
   if (module === "coupons") {
     const where: Prisma.CouponWhereInput = {
       AND: [
@@ -903,6 +932,33 @@ export async function PUT(request: Request, { params }: { params: Promise<{ modu
     await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.id, payload: data });
     return NextResponse.json(item);
   }
+  if (module === "customers") {
+    const current = await prisma.customerAccount.findUnique({ where: { id: payload.id } });
+    if (!current) return NextResponse.json({ message: "Kunde nicht gefunden." }, { status: 404 });
+    const currentData = current.data as Record<string, unknown>;
+    const nextEmail = typeof data.email === "string" && data.email.trim() ? data.email.trim().toLowerCase() : current.email;
+    const nextData = {
+      ...currentData,
+      ...(typeof data.fullName === "string" ? { fullName: data.fullName } : {}),
+      ...(typeof data.company === "string" ? { company: data.company } : {}),
+      ...(typeof data.phone === "string" ? { phone: data.phone } : {})
+    };
+    const item = await prisma.customerAccount.update({
+      where: { id: payload.id },
+      data: { email: nextEmail, data: nextData as Prisma.InputJsonValue }
+    });
+    await writeAuditLog({ actorEmail: permission.sessionUser.email, module, action: "update", entityId: item.id, payload: { ...data, data: undefined } });
+    return NextResponse.json({
+      id: item.id,
+      email: item.email,
+      fullName: String(nextData.fullName ?? ""),
+      company: String(nextData.company ?? ""),
+      phone: String(nextData.phone ?? ""),
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      data: nextData
+    });
+  }
   if (module === "coupons") {
     const couponData = { ...data };
     if (typeof couponData.code === "string") couponData.code = await uniqueVoucherCode(couponData.code);
@@ -1015,6 +1071,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ m
   else if (module === "quotes") await prisma.adminQuote.deleteMany({ where: { id: { in: ids } } });
   else if (module === "invoices") await prisma.adminInvoice.deleteMany({ where: { id: { in: ids } } });
   else if (module === "fileUploads") await prisma.contactFileUpload.deleteMany({ where: { id: { in: ids } } });
+  else if (module === "customers") await prisma.customerAccount.deleteMany({ where: { id: { in: ids } } });
   else if (module === "coupons") await prisma.coupon.deleteMany({ where: { id: { in: ids } } });
   else if (module === "reviews") await prisma.review.deleteMany({ where: { id: { in: ids } } });
   else if (module === "newsletter") await prisma.newsletterSubscriber.deleteMany({ where: { id: { in: ids } } });

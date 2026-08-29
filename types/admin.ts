@@ -3,6 +3,7 @@ export type AdminModuleKey =
   | "quotes"
   | "invoices"
   | "fileUploads"
+  | "customers"
   | "coupons"
   | "reviews"
   | "newsletter"
