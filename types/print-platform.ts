@@ -224,6 +224,10 @@ export type PricingComponentResult = {
   unitCost?: number;
   sellingTotal: number;
   costTotal?: number;
+  pricingMode?: ProductPropertyPriceMode;
+  factor?: number;
+  lineTotal?: number;
+  monetaryEffect?: number;
 };
 
 export type PricingWarning = {
@@ -243,6 +247,7 @@ export type PricingResult = {
   customerPrice: number;
   vat?: number;
   total: number;
+  unitNet?: number;
   productionCost?: number;
   contribution?: number;
   marginPercent?: number;

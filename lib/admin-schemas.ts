@@ -60,6 +60,28 @@ const pricingComponentSchema = z.object({
   enabled: z.boolean().optional()
 });
 
+const productPropertyProductionSchema = z.object({
+  thicknessMm: z.number().nonnegative().optional(),
+  caliperMm: z.number().nonnegative().optional(),
+  grammageGsm: z.number().nonnegative().optional(),
+  caliperSource: z.enum(["manufacturer", "supplier", "measured", "estimated"]).optional(),
+  coverThicknessMm: z.number().nonnegative().optional(),
+  bindingSystemId: z.string().optional(),
+  bindingSeries: z.string().optional(),
+  bindingColor: z.string().optional(),
+  format: z.string().optional(),
+  pricingQuantitySource: pricingQuantitySourceSchema.optional(),
+  printColorMode: z.enum(["black_white", "full_color", "auto"]).optional()
+});
+
+const productPropertyTierPriceSchema = z.object({
+  quantity: z.number().int().positive(),
+  fromQuantity: z.number().int().positive().optional(),
+  toQuantity: z.number().int().positive().optional(),
+  price: z.number().nonnegative(),
+  unitPrice: z.number().nonnegative().optional()
+});
+
 export const moduleCreateSchemas = {
   quotes: z.object({
     customer: z.string().min(1),
@@ -173,13 +195,8 @@ export const moduleCreateSchemas = {
           fixedPrice: z.number().nonnegative().optional(),
           costPrice: z.number().nonnegative().optional(),
           multiplier: z.number().nonnegative().optional(),
-          tierPrices: z.array(z.object({
-            quantity: z.number().int().positive(),
-            fromQuantity: z.number().int().positive().optional(),
-            toQuantity: z.number().int().positive().optional(),
-            price: z.number().nonnegative(),
-            unitPrice: z.number().nonnegative().optional()
-          })).optional()
+          tierPrices: z.array(productPropertyTierPriceSchema).optional(),
+          production: productPropertyProductionSchema.optional()
         })
       ])),
       basePrice: z.number().nonnegative().optional(),
@@ -249,10 +266,8 @@ export const moduleCreateSchemas = {
         costOverride: z.number().nonnegative().optional(),
         markupOverride: z.number().nonnegative().optional(),
         multiplier: z.number().nonnegative().optional(),
-        tierPrices: z.array(z.object({
-          quantity: z.number().int().positive(),
-          price: z.number().nonnegative()
-        })).optional()
+        tierPrices: z.array(productPropertyTierPriceSchema).optional(),
+        production: productPropertyProductionSchema.optional()
       }))
     })).optional(),
     deliveryText: z.string(),

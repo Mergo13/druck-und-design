@@ -1,4 +1,13 @@
-import type { AutomationJob, FileCheckResult, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty, ProductPropertyProductionMetadata } from "@/types/print-platform";
+import type {
+  AutomationJob,
+  FileCheckResult,
+  PricingQuantitySource,
+  ProductCatalogItem,
+  ProductCategoryProperty,
+  ProductPricingProperty,
+  ProductPropertyPriceMode,
+  ProductPropertyProductionMetadata
+} from "@/types/print-platform";
 import { resolvePricingQuantity, type PricingProductionContext } from "@/lib/pricing-quantity";
 
 function money(value: number) {
@@ -82,7 +91,7 @@ function areaDimensions(product: ProductCatalogItem, selectedOptions: Record<str
 function areaM2(product: ProductCatalogItem, selectedOptions: Record<string, string>) {
   const { widthCm, heightCm } = areaDimensions(product, selectedOptions);
   const rawArea = Math.max(0, widthCm) * Math.max(0, heightCm) / 10000;
-  return money(Math.max(rawArea, Number(product.areaPricing?.minAreaM2 || 0)));
+  return Math.round(Math.max(rawArea, Number(product.areaPricing?.minAreaM2 || 0)) * 10000) / 10000;
 }
 
 function normalizePropertyKey(value: string) {
@@ -130,9 +139,13 @@ export function calculateConfiguredProductPrice(
     value: string;
     price: number;
     type?: "base" | "factor" | "print" | "surcharge" | "flat";
+    pricingMode?: ProductPropertyPriceMode;
+    quantitySource?: PricingQuantitySource;
     factor?: number;
     unitPrice?: number;
     quantity?: number;
+    lineTotal?: number;
+    monetaryEffect?: number;
   }> = [];
   const isTotalPrice = product.tierPriceMode === "totalPrice";
   let baseUnitPrice = 0;
@@ -164,6 +177,7 @@ export function calculateConfiguredProductPrice(
     (property.values ?? []).some((value) => value.enabled !== false)
   ));
   let totalFactor = 1;
+  let factoredBase = basePrintBase;
   const factorLines: typeof lines = [];
   const surchargeLines: typeof lines = [];
   let surchargeTotal = 0;
@@ -177,22 +191,31 @@ export function calculateConfiguredProductPrice(
     if (match.pricingMode === "multiplier") {
       const factor = Number(match.multiplier ?? 1);
       const safeFactor = Number.isFinite(factor) && factor >= 0 ? factor : 1;
+      const previousBase = factoredBase;
+      factoredBase = money(factoredBase * safeFactor);
+      const monetaryEffect = money(factoredBase - previousBase);
       totalFactor *= safeFactor;
       factorLines.push({
         label: property.name,
         value: displayValue,
         price: 0,
         type: "factor",
-        factor: safeFactor
+        pricingMode: match.pricingMode,
+        quantitySource: "copies",
+        factor: safeFactor,
+        quantity: baseQty,
+        lineTotal: factoredBase,
+        monetaryEffect
       });
     } else {
-      const quantityForValue = resolvePropertyPricingQuantity(match.production, pricingQuantities, propertyQty);
+      const { quantity: quantityForValue, source: quantitySource } = resolvePropertyPricingQuantity(match.production, product, selectedOptions, pricingQuantities, propertyQty);
       const propertyStepUnitPrice = Math.max(0, Number(property.stepPrice) || 0);
       const valueUnitPrice = match.pricingMode === "tiered"
         ? (quantityForValue > 0 ? calculateTierPrice(quantityForValue, match.tierPrices).unitPrice : 0)
         : 0;
+      const fixedUnitPrice = match.pricingMode === "fixed" ? Math.max(0, Number(match.fixedPrice) || 0) : 0;
       const valuePrice = match.pricingMode === "fixed"
-        ? money(Math.max(0, Number(match.fixedPrice) || 0) * quantityForValue)
+        ? money(fixedUnitPrice * quantityForValue)
         : match.pricingMode === "flat"
           ? Math.max(0, Number(match.fixedPrice) || 0)
           : match.pricingMode === "tiered"
@@ -206,8 +229,16 @@ export function calculateConfiguredProductPrice(
         value: displayValue,
         price,
         type: match.pricingMode === "flat" ? "flat" : "surcharge",
-        unitPrice: match.pricingMode === "fixed" ? Number(match.fixedPrice) : valueUnitPrice || undefined,
-        quantity: quantityForValue
+        pricingMode: match.pricingMode,
+        quantitySource,
+        unitPrice: match.pricingMode === "fixed"
+          ? money(propertyStepUnitPrice + fixedUnitPrice)
+          : match.pricingMode === "tiered"
+            ? money(propertyStepUnitPrice + valueUnitPrice)
+            : undefined,
+        quantity: quantityForValue,
+        lineTotal: price,
+        monetaryEffect: price
       });
     }
   }
@@ -229,23 +260,28 @@ export function calculateConfiguredProductPrice(
     totalFactor,
     surchargeTotal: money(surchargeTotal),
     lines,
-    total: finalTotal
+    total: finalTotal,
+    unitNet: qty > 0 ? money(finalTotal / qty) : finalTotal
   };
 }
 
 function resolvePropertyPricingQuantity(
   production: ProductPropertyProductionMetadata | undefined,
+  product: ProductCatalogItem,
+  selectedOptions: Record<string, string>,
   pricingQuantities: Parameters<typeof calculateConfiguredProductPrice>[3],
   fallbackQuantity: number
 ) {
   const source = production?.pricingQuantitySource;
-  if (!source) return fallbackQuantity;
+  if (!source) return { source: "copies" as const, quantity: fallbackQuantity };
   const quantity = resolvePricingQuantity({
     source,
+    product,
+    configuration: selectedOptions,
     productionContext: pricingQuantities,
     fallbackQuantity
   });
-  return Number.isInteger(quantity) ? quantity : Math.round(quantity);
+  return { source, quantity };
 }
 
 export function getProductStartingPriceLabel(product: ProductCatalogItem) {
@@ -353,13 +389,20 @@ export function validateProductPricing(product: ProductCatalogItem) {
       if (value.pricingMode === "multiplier" && Number(value.multiplier ?? 1) < 0) errors.push(`Der Multiplikator für ${valueName} darf nicht negativ sein.`);
       if (value.pricingMode === "tiered") {
         const surchargeQuantities = new Set((value.tierPrices ?? []).map((tier) => Number(tier.fromQuantity ?? tier.quantity)));
-        for (const quantity of tierQuantities) {
-          if (!surchargeQuantities.has(quantity)) errors.push(`Für ${propertyName} / ${valueName} fehlt die Staffel ${quantity}.`);
-        }
         for (const tier of value.tierPrices ?? []) {
           const quantity = Number(tier.fromQuantity ?? tier.quantity);
-          if (!tierQuantities.has(quantity)) errors.push(`Die Staffel ${quantity} existiert nicht im Produkt.`);
+          const toQuantity = tier.toQuantity === undefined ? undefined : Number(tier.toQuantity);
+          if (!Number.isFinite(quantity) || quantity <= 0) errors.push(`Die Staffelmenge für ${valueName} muss größer als 0 sein.`);
+          if (toQuantity !== undefined && toQuantity < quantity) errors.push(`Die Bis-Menge ${toQuantity} für ${valueName} darf nicht kleiner als ${quantity} sein.`);
           if (Number(tier.unitPrice ?? tier.price) < 0) errors.push(`Der Staffel-Aufpreis für ${valueName} darf nicht negativ sein.`);
+        }
+        if (!value.production?.pricingQuantitySource) {
+          for (const quantity of tierQuantities) {
+            if (!surchargeQuantities.has(quantity)) errors.push(`Für ${propertyName} / ${valueName} fehlt die Staffel ${quantity}.`);
+          }
+          for (const quantity of surchargeQuantities) {
+            if (!tierQuantities.has(quantity)) errors.push(`Die Staffel ${quantity} existiert nicht im Produkt.`);
+          }
         }
       }
     }

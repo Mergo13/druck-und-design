@@ -1,4 +1,6 @@
 import { strict as assert } from "assert";
+import { moduleCreateSchemas } from "@/lib/admin-schemas";
+import { pricingQuantitiesForProductDocument } from "@/lib/document-production";
 import { calculateConfiguredProductPrice } from "@/lib/print-workflow";
 import { calculateProductPricingResult } from "@/lib/universal-pricing";
 import type { GlobalProperty, ProductCatalogItem } from "@/types/print-platform";
@@ -159,5 +161,117 @@ assert.equal(
   calculateProductPricingResult({ product: legacyProduct, quantity: 10, configuration: {} }).total,
   calculateConfiguredProductPrice(legacyProduct, 10, {}).total
 );
+
+const flyerQuantitySourceProduct: ProductCatalogItem = {
+  ...baseProduct,
+  slug: "flyer-quantity-source",
+  pricingType: "tiered",
+  priceTiers: [{ quantity: 500, fromQuantity: 500, toQuantity: 999, price: 0.11, unitPrice: 0.11 }],
+  pricingProperties: [
+    {
+      name: "Format",
+      values: [{ value: "A5", enabled: true, defaultSelected: true, pricingMode: "multiplier", multiplier: 1.4 }]
+    },
+    {
+      name: "Druckseiten",
+      values: [{ value: "Beidseitig", enabled: true, defaultSelected: true, pricingMode: "multiplier", multiplier: 1.55 }]
+    },
+    {
+      name: "Papier",
+      values: [{ value: "Standard", enabled: true, defaultSelected: true, pricingMode: "fixed", fixedPrice: 0.02, production: { pricingQuantitySource: "copies" } }]
+    },
+    {
+      name: "Laminierung",
+      values: [{ value: "Matt", enabled: true, defaultSelected: true, pricingMode: "fixed", fixedPrice: 0.05, production: { pricingQuantitySource: "copies" } }]
+    }
+  ]
+};
+const flyerQuantitySource = calculateConfiguredProductPrice(flyerQuantitySourceProduct, 500, {});
+assert.equal(flyerQuantitySource.basePrice, 55);
+assert.equal(flyerQuantitySource.total, 154.35);
+assert.equal(flyerQuantitySource.lines.find((line) => line.label === "Papier")?.quantitySource, "copies");
+assert.equal(flyerQuantitySource.lines.find((line) => line.label === "Papier")?.quantity, 500);
+assert.equal(flyerQuantitySource.lines.find((line) => line.label === "Papier")?.lineTotal, 10);
+assert.equal(flyerQuantitySource.lines.find((line) => line.label === "Format")?.monetaryEffect, 22);
+assert.equal(flyerQuantitySource.lines.find((line) => line.label === "Druckseiten")?.monetaryEffect, 42.35);
+
+const hardcoverQuantitySourceProduct: ProductCatalogItem = {
+  ...baseProduct,
+  slug: "hardcover-quantity-source",
+  pricingType: "fixed",
+  basePrice: 15,
+  configuratorProfile: "thesis",
+  pricingProperties: [
+    {
+      name: "SW Druck",
+      values: [{ value: "sw", enabled: true, defaultSelected: true, pricingMode: "fixed", fixedPrice: 0.08, production: { pricingQuantitySource: "black_white_pages" } }]
+    },
+    {
+      name: "Farbdruck",
+      values: [{ value: "farbe", enabled: true, defaultSelected: true, pricingMode: "fixed", fixedPrice: 0.45, production: { pricingQuantitySource: "color_pages" } }]
+    },
+    {
+      name: "Papier",
+      values: [{ value: "papier", enabled: true, defaultSelected: true, pricingMode: "fixed", fixedPrice: 0.02, production: { pricingQuantitySource: "sheets" } }]
+    },
+    {
+      name: "Bindung",
+      values: [{ value: "hardcover", enabled: true, defaultSelected: true, pricingMode: "fixed", fixedPrice: 5, production: { pricingQuantitySource: "copies" } }]
+    }
+  ]
+};
+const hardcoverConfig = {
+  "Seiten pro Exemplar": "66",
+  Druckseiten: "Beidseitig",
+  printColorMode: "auto",
+  pdfAnalysisColorPageCount: "10",
+  pdfAnalysisBwPageCount: "56"
+};
+const hardcoverProduction = pricingQuantitiesForProductDocument(hardcoverQuantitySourceProduct, [], hardcoverConfig, 2);
+assert.deepEqual(hardcoverProduction, {
+  baseQuantity: 2,
+  propertyQuantity: 2,
+  copies: 2,
+  printedPages: 132,
+  sheets: 66,
+  blackWhitePages: 112,
+  colorPages: 20,
+  frontCovers: 2,
+  backCovers: 2,
+  printedCoverSides: 4,
+  embossingLines: 0,
+  perOrder: 1
+});
+const hardcoverPrice = calculateConfiguredProductPrice(hardcoverQuantitySourceProduct, 2, hardcoverConfig, hardcoverProduction);
+assert.equal(hardcoverPrice.baseQuantity, 2);
+assert.equal(hardcoverPrice.basePrice, 30);
+assert.equal(hardcoverPrice.lines.find((line) => line.label === "SW Druck")?.quantity, 112);
+assert.equal(hardcoverPrice.lines.find((line) => line.label === "Farbdruck")?.quantity, 20);
+assert.equal(hardcoverPrice.lines.find((line) => line.label === "Papier")?.quantity, 66);
+assert.equal(hardcoverPrice.lines.find((line) => line.label === "Bindung")?.quantity, 2);
+assert.equal(hardcoverPrice.total, 59.28);
+
+const bannerQuantitySourceProduct: ProductCatalogItem = {
+  ...baseProduct,
+  slug: "banner-quantity-source",
+  pricingType: "area",
+  basePrice: 34.9,
+  pricingProperties: [
+    {
+      name: "Material",
+      values: [{ value: "premium", enabled: true, defaultSelected: true, pricingMode: "multiplier", multiplier: 1.08 }]
+    }
+  ]
+};
+const bannerPrice = calculateConfiguredProductPrice(bannerQuantitySourceProduct, 1, {
+  areaWidthCm: "200",
+  areaHeightCm: "100"
+});
+assert.equal(bannerPrice.basePrice, 69.8);
+assert.equal(bannerPrice.total, 75.38);
+assert.equal(bannerPrice.unitNet, 75.38);
+
+const parsedProduct = moduleCreateSchemas.products.parse(flyerQuantitySourceProduct);
+assert.equal(parsedProduct.pricingProperties?.[2]?.values[0]?.production?.pricingQuantitySource, "copies");
 
 console.log("universal-pricing tests passed");

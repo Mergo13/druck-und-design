@@ -56,7 +56,7 @@ export function usePdfSession(file: File | null): PdfClientSession {
         setDocument(pdf);
         setStatus("ready");
         const firstPages = await Promise.all(
-          Array.from({ length: Math.min(pdf.numPages, 12) }, async (_, index) => {
+          Array.from({ length: Math.min(pdf.numPages, 6) }, async (_, index) => {
             const page = await pdf.getPage(index + 1);
             const viewport = page.getViewport({ scale: 1 });
             page.cleanup();
@@ -88,14 +88,14 @@ export function usePdfSession(file: File | null): PdfClientSession {
     if (cached) return cached;
     const promise = (async () => {
       const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: 0.28 });
+      const viewport = page.getViewport({ scale: 0.2 });
       const canvas = window.document.createElement("canvas");
       canvas.width = Math.ceil(viewport.width);
       canvas.height = Math.ceil(viewport.height);
       const context = canvas.getContext("2d");
       if (!context) return "";
       await page.render({ canvas, canvasContext: context, viewport }).promise;
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.68);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
       page.cleanup();
       canvas.width = 0;
       canvas.height = 0;

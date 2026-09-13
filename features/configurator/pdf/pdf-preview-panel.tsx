@@ -15,7 +15,7 @@ export function PdfPreviewPanel({ session, pdfConfig, totalPages }: { session: P
   }
 
   const pages = Array.from(
-    { length: mode === "first-page" ? 1 : mode === "front-back" ? Math.min(2, totalPages) : Math.min(totalPages, 24) },
+    { length: mode === "first-page" ? 1 : mode === "front-back" ? Math.min(2, totalPages) : Math.min(totalPages, 8) },
     (_, index) => index + 1
   );
 

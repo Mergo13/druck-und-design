@@ -14,7 +14,7 @@ assert.equal(duplex.totalPrintedPages, 78);
 assert.equal(duplex.sheetsPerCopy, 13);
 assert.equal(duplex.totalSheets, 39);
 assert.deepEqual(pricingQuantitiesForDocument(duplexConfig, 3), {
-  baseQuantity: 78,
+  baseQuantity: 3,
   propertyQuantity: 3,
   copies: 3,
   printedPages: 78,
@@ -24,6 +24,38 @@ assert.deepEqual(pricingQuantitiesForDocument(duplexConfig, 3), {
   frontCovers: 3,
   backCovers: 3,
   printedCoverSides: 6,
+  embossingLines: 0,
+  perOrder: 1
+});
+
+const hardcoverConfig = {
+  "Seiten pro Exemplar": "66",
+  Druckseiten: "Beidseitig",
+  printColorMode: "auto",
+  pdfAnalysisColorPageCount: "10",
+  pdfAnalysisBwPageCount: "56"
+};
+const hardcover = deriveDocumentProduction(hardcoverConfig, 2);
+assert.equal(hardcover.quantity, 2);
+assert.equal(hardcover.pagesPerCopy, 66);
+assert.equal(hardcover.colorPagesPerCopy, 10);
+assert.equal(hardcover.blackWhitePagesPerCopy, 56);
+assert.equal(hardcover.totalPrintedPages, 132);
+assert.equal(hardcover.totalColorPages, 20);
+assert.equal(hardcover.totalBlackWhitePages, 112);
+assert.equal(hardcover.sheetsPerCopy, 33);
+assert.equal(hardcover.totalSheets, 66);
+assert.deepEqual(pricingQuantitiesForDocument(hardcoverConfig, 2), {
+  baseQuantity: 2,
+  propertyQuantity: 2,
+  copies: 2,
+  printedPages: 132,
+  sheets: 66,
+  blackWhitePages: 112,
+  colorPages: 20,
+  frontCovers: 2,
+  backCovers: 2,
+  printedCoverSides: 4,
   embossingLines: 0,
   perOrder: 1
 });

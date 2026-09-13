@@ -68,7 +68,7 @@ function resolveUnitPrices(component: ProductPricingComponent, globalProperties:
   return { sellingPrice: undefined, costPrice };
 }
 
-function applyGuards(result: PricingResult, guards: PricingGuardConfig | undefined) {
+function applyGuards(result: PricingResult, guards: PricingGuardConfig | undefined, quantity = 1) {
   let customerPrice = result.customerPrice;
   const warnings: PricingWarning[] = [...(result.warnings ?? [])];
   let minimumPriceApplied = false;
@@ -96,6 +96,7 @@ function applyGuards(result: PricingResult, guards: PricingGuardConfig | undefin
     ...result,
     customerPrice,
     total: customerPrice,
+    unitNet: money(customerPrice / Math.max(1, quantity)),
     productionCost,
     contribution,
     marginPercent,
@@ -117,22 +118,29 @@ export function legacyPricingResult(
     discount: 0,
     customerPrice: legacy.total,
     total: legacy.total,
+    unitNet: quantity > 0 ? money(legacy.total / quantity) : legacy.total,
     components: [
       {
-        id: "legacy",
-        label: "Legacy pricing",
+        id: "legacy-base",
+        label: "Product base",
         quantity: legacy.baseQuantity,
         quantitySource: "copies",
         unitSellingPrice: legacy.baseUnitPrice,
-        sellingTotal: legacy.total
+        sellingTotal: legacy.basePrice,
+        lineTotal: legacy.basePrice,
+        monetaryEffect: legacy.basePrice
       },
       ...legacy.lines.map((line, index) => ({
         id: `legacy-${index}`,
         label: line.label,
         quantity: line.quantity ?? legacy.propertyQuantity,
-        quantitySource: "copies" as const,
+        quantitySource: line.quantitySource ?? "copies" as const,
         unitSellingPrice: line.unitPrice ?? 0,
-        sellingTotal: line.price
+        sellingTotal: line.lineTotal ?? line.price,
+        pricingMode: line.pricingMode,
+        factor: line.factor,
+        lineTotal: line.lineTotal ?? line.price,
+        monetaryEffect: line.monetaryEffect ?? line.price
       }))
     ]
   };
@@ -195,11 +203,12 @@ export function calculateProductPricingResult(params: {
     discount,
     customerPrice,
     total: customerPrice,
+    unitNet: qty > 0 ? money(customerPrice / qty) : customerPrice,
     productionCost,
     contribution,
     marginPercent,
     components: componentResults,
     warnings: warnings.length ? warnings : undefined
   };
-  return applyGuards(result, profile.guards);
+  return applyGuards(result, profile.guards, qty);
 }

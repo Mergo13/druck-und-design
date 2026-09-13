@@ -93,7 +93,7 @@ export function pricingQuantitiesForDocument(config: Record<string, string>, qua
   const production = deriveDocumentProduction(config, quantity);
   return production.pagesPerCopy > 0
     ? {
-      baseQuantity: production.totalPrintedPages,
+      baseQuantity: production.quantity,
       propertyQuantity: production.quantity,
       copies: production.quantity,
       printedPages: production.totalPrintedPages,
@@ -241,7 +241,7 @@ export function pricingQuantitiesForProductDocument(
   const production = deriveProductDocumentProduction(product, categoryProperties, config, quantity);
   return production.pagesPerCopy > 0
     ? {
-      baseQuantity: production.totalPrintedPages,
+      baseQuantity: production.quantity,
       propertyQuantity: production.quantity,
       copies: production.quantity,
       printedPages: production.totalPrintedPages,

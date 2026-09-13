@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, ChevronDown, Loader2, UploadCloud } from "lucide-react";
@@ -217,6 +217,7 @@ export function StudentConfigurator({
   const [cartAdded, setCartAdded] = useState(false);
   const [finalizedEmbossing, setFinalizedEmbossing] = useState<FinalizedEmbossing | null>(null);
   const [draftEmbossingLineCount, setDraftEmbossingLineCount] = useState(0);
+  const uploadRunRef = useRef(0);
   const pdfMode = resolvePdfAnalysisMode(product);
   const pdfConfig = resolveProductPdfConfig(product);
   const pdfRequired = pdfMode === "required";
@@ -324,6 +325,9 @@ export function StudentConfigurator({
   }
 
   async function handleFile(file?: File) {
+    if (uploadState === "uploading" || uploadState === "analyzing") return;
+    const uploadRun = uploadRunRef.current + 1;
+    uploadRunRef.current = uploadRun;
     setMessage("");
     setCartMessage("");
     setCartAdded(false);
@@ -342,8 +346,19 @@ export function StudentConfigurator({
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.message ?? "PDF-Upload fehlgeschlagen.");
       const serverAnalysis = payload.analysis as PdfAnalysis;
+      if (uploadRunRef.current !== uploadRun) return;
+      const needsBrowserAnalysis = pdfConfig.showColorAnalysis || pdfConfig.previewMode !== "none";
+      if (!needsBrowserAnalysis) {
+        setAnalysis(serverAnalysis);
+        setUploadState("done");
+        return;
+      }
       setUploadState("analyzing");
-      const browser = await analyzePdfInBrowser(file, serverAnalysis, pdfConfig.previewMode !== "none");
+      const browser = await analyzePdfInBrowser(file, serverAnalysis, {
+        createPreview: pdfConfig.previewMode !== "none",
+        detectColor: Boolean(pdfConfig.showColorAnalysis)
+      });
+      if (uploadRunRef.current !== uploadRun) return;
       setAnalysis(browser.analysis);
       setThumbnails(browser.thumbnails);
       setUploadState("done");
@@ -702,44 +717,70 @@ function StudentEmptyState() {
   );
 }
 
-async function analyzePdfInBrowser(file: File, serverAnalysis: PdfAnalysis, createPreview: boolean): Promise<{ analysis: PdfAnalysis; thumbnails: Thumb[] }> {
+async function analyzePdfInBrowser(
+  file: File,
+  serverAnalysis: PdfAnalysis,
+  options: { createPreview: boolean; detectColor: boolean }
+): Promise<{ analysis: PdfAnalysis; thumbnails: Thumb[] }> {
+  if (!options.createPreview && !options.detectColor) {
+    return { analysis: serverAnalysis, thumbnails: [] };
+  }
   const pdfjs = await getPdfjs();
   const data = await file.arrayBuffer();
   const pdf = await pdfjs.getDocument({ data }).promise;
   const colorPages: number[] = [];
   const thumbnails: Thumb[] = [];
-  const thumbPages = createPreview ? Array.from(new Set([1, Math.min(2, pdf.numPages), pdf.numPages])).filter((page) => page >= 1 && page <= pdf.numPages) : [];
+  const thumbPages = options.createPreview ? Array.from(new Set([1, Math.min(2, pdf.numPages), pdf.numPages])).filter((page) => page >= 1 && page <= pdf.numPages) : [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: 0.22 });
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    if (!context) continue;
-    canvas.width = Math.max(1, Math.floor(viewport.width));
-    canvas.height = Math.max(1, Math.floor(viewport.height));
-    await page.render({ canvas, canvasContext: context, viewport }).promise;
-    if (pageHasColor(context, canvas.width, canvas.height)) colorPages.push(pageNumber);
-    if (thumbPages.includes(pageNumber)) {
-      thumbnails.push({
-        page: pageNumber,
-        label: pageNumber === 1 ? "Erste Seite" : pageNumber === pdf.numPages ? "Letzte Seite" : `Seite ${pageNumber}`,
-        url: canvas.toDataURL("image/jpeg", 0.72)
-      });
+  try {
+    const pagesToRender = options.detectColor
+      ? Array.from({ length: pdf.numPages }, (_, index) => index + 1)
+      : thumbPages;
+    for (const pageNumber of pagesToRender) {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 0.18 });
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d", { willReadFrequently: options.detectColor });
+      try {
+        if (!context) continue;
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
+        await page.render({ canvas, canvasContext: context, viewport }).promise;
+        if (options.detectColor && pageHasColor(context, canvas.width, canvas.height)) colorPages.push(pageNumber);
+        if (thumbPages.includes(pageNumber)) {
+          thumbnails.push({
+            page: pageNumber,
+            label: pageNumber === 1 ? "Erste Seite" : pageNumber === pdf.numPages ? "Letzte Seite" : `Seite ${pageNumber}`,
+            url: canvas.toDataURL("image/jpeg", 0.68)
+          });
+        }
+      } finally {
+        page.cleanup();
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      if (pageNumber % 8 === 0) {
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      }
     }
-  }
 
-  const bwPages = Array.from({ length: pdf.numPages }, (_, index) => index + 1).filter((page) => !colorPages.includes(page));
-  return {
-    analysis: {
-      ...serverAnalysis,
-      pages: pdf.numPages,
-      colorPages,
-      bwPages,
-      warnings: serverAnalysis.warnings
-    },
-    thumbnails
-  };
+    const bwPages = options.detectColor
+      ? Array.from({ length: pdf.numPages }, (_, index) => index + 1).filter((page) => !colorPages.includes(page))
+      : serverAnalysis.bwPages;
+    return {
+      analysis: {
+        ...serverAnalysis,
+        pages: pdf.numPages,
+        colorPages: options.detectColor ? colorPages : serverAnalysis.colorPages,
+        bwPages,
+        warnings: serverAnalysis.warnings
+      },
+      thumbnails
+    };
+  } finally {
+    await pdf.cleanup();
+    await (pdf as { destroy?: () => Promise<void> | void }).destroy?.();
+  }
 }
 
 function pageHasColor(context: CanvasRenderingContext2D, width: number, height: number) {

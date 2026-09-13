@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -199,6 +199,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const [uploadError, setUploadError] = useState("");
   const [isAnalyzingPdf, setIsAnalyzingPdf] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const uploadBusyRef = useRef(false);
+  const uploadRunRef = useRef(0);
   const [cartMessage, setCartMessage] = useState("");
   const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
   const [bindingConfig, setBindingConfig] = useState<{ bindingSystems: BindingSystem[]; bindingVariants: BindingVariant[] } | null>(null);
@@ -213,9 +215,10 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const currentQuantity = Math.max(1, Math.round(Number(config.auflage ?? fixedQuantitySteps[0]) || 1));
   const configForPricing = useMemo(() => isBrochure ? withBrochureDefaults(config, pdfAnalysis, product, globalProperties) : config, [config, globalProperties, isBrochure, pdfAnalysis, product]);
   const pdfConfig = useMemo(() => resolveProductPdfConfig(product), [product]);
-  const pdfSession = usePdfSession(uploadedFile);
   const pdfAnalysisMode = resolvePdfAnalysisMode(product);
   const pdfAnalysisEnabled = pdfAnalysisMode !== "disabled";
+  const pdfNeedsClientPreview = pdfAnalysisEnabled && (pdfConfig.previewMode !== "none" || isBrochure);
+  const pdfSession = usePdfSession(pdfNeedsClientPreview ? uploadedFile : null);
   const pdfAnalysisRequired = pdfAnalysisMode === "required";
   const pdfAnalysisBlocking = pdfAnalysisRequired && !pdfAnalysis?.valid;
   const normalizedConfig = useMemo(() => normalizeAreaConfig(product, configForPricing), [configForPricing, product]);
@@ -437,52 +440,62 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   }
 
   async function validateAndSetFile(file?: File) {
-    setUploadError("");
+    if (uploadBusyRef.current) return;
     if (!file) return;
+    const uploadRun = uploadRunRef.current + 1;
+    uploadRunRef.current = uploadRun;
+    uploadBusyRef.current = true;
+    setUploadError("");
 
-    const fileName = file.name.toLowerCase();
-    const isAllowed = acceptedExtensions.some((extension) => fileName.endsWith(extension));
+    try {
+      const fileName = file.name.toLowerCase();
+      const isAllowed = acceptedExtensions.some((extension) => fileName.endsWith(extension));
 
-    if (!isAllowed) {
-      setUploadedFile(null);
-      setUploadError("Bitte laden Sie eine PDF-, AI-, PSD-, EPS-, PNG-, JPG-, TIFF-, HEIC- oder WebP-Datei hoch.");
-      return;
-    }
+      if (!isAllowed) {
+        setUploadedFile(null);
+        setUploadError("Bitte laden Sie eine PDF-, AI-, PSD-, EPS-, PNG-, JPG-, TIFF-, HEIC- oder WebP-Datei hoch.");
+        return;
+      }
 
-    if (file.size > maxFileSize) {
-      setUploadedFile(null);
-      setUploadError("Die Datei ist zu groß. Maximal 50 MB erlaubt.");
-      return;
-    }
+      if (file.size > maxFileSize) {
+        setUploadedFile(null);
+        setUploadError("Die Datei ist zu groß. Maximal 50 MB erlaubt.");
+        return;
+      }
 
-    setUploadedFile(file);
-    setUploadedFileUrl(undefined);
-    setPdfAnalysis(null);
-    const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
-    if (pdfAnalysisRequired && !isPdf) {
-      setUploadedFile(null);
-      setUploadError("Für dieses Produkt ist eine gültige PDF-Analyse erforderlich. Bitte laden Sie eine PDF-Datei hoch.");
-      return;
-    }
+      setUploadedFile(file);
+      setUploadedFileUrl(undefined);
+      setPdfAnalysis(null);
+      const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
+      if (pdfAnalysisRequired && !isPdf) {
+        setUploadedFile(null);
+        setUploadError("Für dieses Produkt ist eine gültige PDF-Analyse erforderlich. Bitte laden Sie eine PDF-Datei hoch.");
+        return;
+      }
 
-    if (pdfAnalysisEnabled && isPdf) {
-      setIsAnalyzingPdf(true);
-      try {
+      if (pdfAnalysisEnabled && isPdf) {
+        setIsAnalyzingPdf(true);
         const form = new FormData();
         form.append("file", file);
         const response = await fetch("/api/uploads/student-document", { method: "POST", body: form });
         const payload = await response.json().catch(() => null);
         if (!response.ok) throw new Error(payload?.message ?? "PDF konnte nicht analysiert werden.");
+        if (uploadRunRef.current !== uploadRun) return;
         applyPdfAnalysis(payload.analysis as PdfAnalysis);
-      } catch (error) {
+      }
+      if (uploadRunRef.current !== uploadRun) return;
+      await readFilePreview(file);
+    } catch (error) {
+      if (uploadRunRef.current === uploadRun) {
         setUploadedFile(null);
         setUploadError(error instanceof Error ? error.message : "PDF konnte nicht analysiert werden.");
-        return;
-      } finally {
+      }
+    } finally {
+      if (uploadRunRef.current === uploadRun) {
+        uploadBusyRef.current = false;
         setIsAnalyzingPdf(false);
       }
     }
-    await readFilePreview(file);
   }
 
   async function uploadPrintFile(file: File) {
@@ -1276,6 +1289,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         onDragLeave={() => setIsDragging(false)}
         onDrop={(event) => {
           event.preventDefault();
+          event.stopPropagation();
           setIsDragging(false);
           validateAndSetFile(event.dataTransfer.files[0]);
         }}
@@ -1286,7 +1300,11 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           type="file"
           className="sr-only"
           accept=".pdf,.ai,.psd,.png,.jpg,.jpeg,.tif,.tiff,.heic,.heif,application/pdf,image/png,image/jpeg,image/tiff,image/heic,image/heif,image/x-adobe-photoshop,application/postscript"
-          onChange={(event) => validateAndSetFile(event.target.files?.[0])}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.currentTarget.value = "";
+            validateAndSetFile(file);
+          }}
         />
         <UploadCloud className="mx-auto h-7 w-7 text-primary" />
         <p className="mt-2 text-sm font-bold">{uploadedFile ? uploadedFile.name : "Druckdaten / Dokument hochladen"}</p>
@@ -1306,6 +1324,8 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
                 setUploadedFile(null);
                 setUploadedFileUrl(undefined);
                 setPdfAnalysis(null);
+                uploadBusyRef.current = false;
+                uploadRunRef.current += 1;
                 setIsAnalyzingPdf(false);
                 if (mockupUrl) URL.revokeObjectURL(mockupUrl);
                 setMockupUrl("");
