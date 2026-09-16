@@ -24,6 +24,7 @@ type CartEntry = {
   unitPrice?: number;
   normalUnitPrice?: number;
   pricingConfig?: Record<string, string>;
+  selectedOptionIds?: Record<string, string>;
   studentDiscountEligible?: boolean;
   config?: Record<string, string>;
   printCheckRequested?: boolean;
@@ -360,7 +361,13 @@ export function CartQuoteView() {
           PrintCheck: item.printCheckRequested ? `Ja (+${formatEuro(item.printCheckFee ?? PRINT_CHECK_FEE)})` : "Nein",
           PrintDatei: item.printCheckFileUrl ?? "-",
           Hinweis: notes.trim() || "-"
-        }
+        },
+        pricingConfig: item.pricingConfig,
+        selectedOptionIds: item.selectedOptionIds,
+        printCheckFileName: item.printCheckFileName,
+        printCheckFileUrl: item.printCheckFileUrl,
+        printCheckRequested: item.printCheckRequested,
+        printCheckFee: item.printCheckFee
       })),
       total: grandTotal,
       couponCode: appliedCoupon?.code,

@@ -393,7 +393,9 @@ async function renderState(input: AICommerceStateInput, catalog: CommerceCatalog
         slug: product.slug,
         name: product.name,
         href: `/produkt/${encodeURIComponent(product.slug)}`,
-        category: product.category
+        category: product.category,
+        heroImage: product.heroImage,
+        gallery: Array.from(new Set((product.gallery ?? []).filter(Boolean))).slice(0, 8)
       },
       quantity,
       quantityRules: quantityRules(product),

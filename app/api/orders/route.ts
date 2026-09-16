@@ -8,6 +8,7 @@ import { priceCartItems } from "@/lib/cart-pricing";
 import { getUserByEmail } from "@/lib/catalog-repository";
 import { prisma } from "@/lib/prisma";
 import { canApplyCouponWithStudentDiscount } from "@/lib/student-discount";
+import { configurationErrorPayload } from "@/lib/product-configuration";
 
 const orderItemSchema = z.object({
   id: z.string().optional(),
@@ -17,6 +18,7 @@ const orderItemSchema = z.object({
   price: z.number().nonnegative().max(1_000_000),
   config: z.record(z.string(), z.string()).default({}),
   pricingConfig: z.record(z.string(), z.string()).optional(),
+  selectedOptionIds: z.record(z.string(), z.string()).optional(),
   printCheckFileName: z.string().optional(),
   printCheckFileUrl: z.string().optional(),
   printCheckRequested: z.boolean().optional(),
@@ -114,6 +116,7 @@ export async function POST(request: Request) {
         quantity: item.quantity,
         config: item.config,
         pricingConfig: item.pricingConfig,
+        selectedOptionIds: item.selectedOptionIds,
         printCheckFileName: item.printCheckFileName,
         printCheckFileUrl: item.printCheckFileUrl,
         printCheckRequested: item.printCheckRequested,
@@ -123,7 +126,7 @@ export async function POST(request: Request) {
       studentDiscountPercent: storeControl?.studentDiscountPercent
     });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "Warenkorb konnte nicht berechnet werden." }, { status: 400 });
+    return NextResponse.json(configurationErrorPayload(error) ?? { message: error instanceof Error ? error.message : "Warenkorb konnte nicht berechnet werden." }, { status: 400 });
   }
   const itemsTotal = pricedCart.subtotalAfterDiscount;
   let coupon;
@@ -163,6 +166,7 @@ export async function POST(request: Request) {
         normalUnitPrice: item.normalUnitPrice,
         unitPrice: item.unitPrice,
         studentDiscount: item.studentDiscount,
+        selectedOptionIds: item.selectedOptionIds,
         production: item.production,
         embossingDesign: item.embossingDesign,
         config: {

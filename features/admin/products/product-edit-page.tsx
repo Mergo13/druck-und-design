@@ -561,7 +561,7 @@ export function ProductEditPage({ slug }: ProductEditPageProps) {
                       </Button>
                     </div>
                     <div className="overflow-x-auto rounded-md border bg-white">
-                      <table className="w-full min-w-[920px] text-sm">
+                      <table className="w-full min-w-[1120px] text-sm">
                         <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
                           <tr>
                             <th className="px-3 py-2 text-left">Wert</th>
@@ -569,6 +569,7 @@ export function ProductEditPage({ slug }: ProductEditPageProps) {
                             <th className="px-3 py-2 text-left">Preisart</th>
                             <th className="px-3 py-2 text-left">Preis</th>
                             <th className="px-3 py-2 text-left">Faktor</th>
+                            <th className="px-3 py-2 text-left">Verfügbar wenn</th>
                             <th className="px-3 py-2 text-left">Standard</th>
                             <th className="px-3 py-2 text-left">Aktiv</th>
                             <th className="px-3 py-2" />
@@ -593,6 +594,7 @@ export function ProductEditPage({ slug }: ProductEditPageProps) {
                               </td>
                               <td className="px-3 py-2"><Input className="h-8" type="number" step="0.01" value={String(value.fixedPrice ?? 0)} onChange={(event) => updatePricingPropertyValue(propertyIndex, valueIndex, { fixedPrice: Number(event.target.value) })} /></td>
                               <td className="px-3 py-2"><Input className="h-8" type="number" step="0.01" value={String(value.multiplier ?? 1)} onChange={(event) => updatePricingPropertyValue(propertyIndex, valueIndex, { multiplier: Number(event.target.value) })} /></td>
+                              <td className="px-3 py-2"><Input className="h-8 min-w-44" placeholder="format=A3" value={formatAvailabilityRules(value.availability)} onChange={(event) => updatePricingPropertyValue(propertyIndex, valueIndex, { availability: parseAvailabilityRules(event.target.value) })} /></td>
                               <td className="px-3 py-2"><input type="checkbox" checked={Boolean(value.defaultSelected)} onChange={(event) => updatePricingProperty(propertyIndex, { values: property.values.map((entry, index) => ({ ...entry, defaultSelected: index === valueIndex ? event.target.checked : false })) })} className="h-5 w-5 accent-slate-950" /></td>
                               <td className="px-3 py-2"><input type="checkbox" checked={value.enabled !== false} onChange={(event) => updatePricingPropertyValue(propertyIndex, valueIndex, { enabled: event.target.checked })} className="h-5 w-5 accent-slate-950" /></td>
                               <td className="px-3 py-2 text-right">
@@ -790,6 +792,18 @@ function CheckField({ label, checked, onChange }: { label: string; checked: bool
 
 function splitList(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function formatAvailabilityRules(rules: ProductPropertyValue["availability"]) {
+  return (rules ?? []).map((rule) => `${rule.propertyId}${rule.operator === "not_equals" ? "!=" : "="}${rule.value}`).join(", ");
+}
+
+function parseAvailabilityRules(value: string): ProductPropertyValue["availability"] {
+  return value.split(",").map((entry) => entry.trim()).filter(Boolean).flatMap((entry) => {
+    const match = entry.match(/^(.+?)(!=|=)(.+)$/);
+    if (!match) return [];
+    return [{ propertyId: match[1].trim(), operator: match[2] === "!=" ? "not_equals" as const : "equals" as const, value: match[3].trim() }];
+  });
 }
 
 function Summary({ label, value }: { label: string; value: React.ReactNode }) {

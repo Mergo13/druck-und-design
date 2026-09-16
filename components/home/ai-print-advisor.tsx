@@ -1,22 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, KeyboardEvent, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
-  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   LoaderCircle,
-  Minus,
   PackageSearch,
-  Plus,
-  RotateCcw,
-  Send,
-  ShoppingCart,
-  SlidersHorizontal,
-  Trash2
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -24,64 +19,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   emptyCommerceState,
   requestAiCommerce,
-  synchronizeAiCommerce,
-  type AICommerceCartEntry,
   type AICommerceItem,
   type AICommerceState
 } from "@/lib/ai-client";
 
-const initialExamples = [
-  "Ich brauche 500 A5 Flyer, beidseitig und matt.",
-  "Visitenkarten für mein neues Unternehmen.",
-  "Bachelorarbeit drucken und binden.",
-  "Autobeschriftung für einen Firmenwagen."
-];
-
-const followUpExamples = [
-  "Mach daraus 1000 Stück.",
-  "Füge 200 Visitenkarten dazu.",
-  "Was kostet alles zusammen?",
-  "Leg alles in den Warenkorb."
-];
-
 function formatEuro(value: number) {
   return value.toLocaleString("de-AT", { style: "currency", currency: "EUR" });
-}
-
-function mergeIntoCart(entries: AICommerceCartEntry[]) {
-  if (!entries.length) return;
-  let existing: AICommerceCartEntry[] = [];
-  try {
-    const parsed = JSON.parse(localStorage.getItem("dud_cart") || "[]") as unknown;
-    if (Array.isArray(parsed)) existing = parsed as AICommerceCartEntry[];
-  } catch {
-    existing = [];
-  }
-
-  const merged = [...existing];
-  for (const entry of entries) {
-    const found = merged.find((item) => (
-      item.slug === entry.slug
-      && JSON.stringify(item.pricingConfig ?? {}) === JSON.stringify(entry.pricingConfig ?? {})
-    ));
-    if (found) found.quantity += entry.quantity;
-    else merged.push(entry);
-  }
-  localStorage.setItem("dud_cart", JSON.stringify(merged));
-  window.dispatchEvent(new Event("dud-cart-updated"));
-}
-
-function nextQuantity(item: AICommerceItem, direction: -1 | 1) {
-  const choices = item.quantityRules.choices;
-  if (choices.length) {
-    const ordered = direction > 0 ? choices : [...choices].reverse();
-    const next = ordered.find((choice) => direction > 0 ? choice > item.quantity : choice < item.quantity);
-    if (next !== undefined) return next;
-  }
-  return Math.min(
-    item.quantityRules.max,
-    Math.max(item.quantityRules.min, item.quantity + direction * item.quantityRules.step)
-  );
 }
 
 export function AiPrintAdvisor() {
@@ -89,74 +32,25 @@ export function AiPrintAdvisor() {
   const [commerce, setCommerce] = useState<AICommerceState>(emptyCommerceState);
   const [advisorReply, setAdvisorReply] = useState("");
   const [error, setError] = useState("");
-  const [cartMessage, setCartMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const busy = isLoading || isSyncing;
-  const examples = commerce.items.length ? followUpExamples : initialExamples;
+  const busy = isLoading;
 
   async function submit() {
     const trimmedMessage = message.trim();
     if (!trimmedMessage || busy) return;
     setIsLoading(true);
     setError("");
-    setCartMessage("");
 
     try {
       const response = await requestAiCommerce(trimmedMessage, commerce);
       setCommerce(response.state);
       setAdvisorReply(response.reply);
-      if (response.cartItems?.length) {
-        mergeIntoCart(response.cartItems);
-        setCartMessage(`${response.cartItems.length} ${response.cartItems.length === 1 ? "Position wurde" : "Positionen wurden"} in den Warenkorb gelegt.`);
-      }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Der Produktberater ist derzeit nicht erreichbar.");
     } finally {
       setIsLoading(false);
     }
-  }
-
-  async function syncCommerce(next: AICommerceState) {
-    if (busy) return;
-    const previous = commerce;
-    setCommerce(next);
-    setIsSyncing(true);
-    setError("");
-    setCartMessage("");
-    try {
-      const response = await synchronizeAiCommerce(next);
-      setCommerce(response.state);
-    } catch (requestError) {
-      setCommerce(previous);
-      setError(requestError instanceof Error ? requestError.message : "Die Konfiguration konnte nicht aktualisiert werden.");
-    } finally {
-      setIsSyncing(false);
-    }
-  }
-
-  function updateItem(itemId: string, update: (item: AICommerceItem) => AICommerceItem) {
-    const next = {
-      ...commerce,
-      activeItemId: itemId,
-      items: commerce.items.map((item) => item.id === itemId ? update(item) : item)
-    };
-    void syncCommerce(next);
-  }
-
-  function removeItem(itemId: string) {
-    const items = commerce.items.filter((item) => item.id !== itemId);
-    void syncCommerce({
-      ...commerce,
-      items,
-      activeItemId: commerce.activeItemId === itemId ? items.at(-1)?.id ?? null : commerce.activeItemId
-    });
-  }
-
-  function addCartItems(entries: AICommerceCartEntry[]) {
-    mergeIntoCart(entries);
-    setCartMessage(`${entries.length} ${entries.length === 1 ? "Position wurde" : "Positionen wurden"} in den Warenkorb gelegt.`);
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -171,51 +65,34 @@ export function AiPrintAdvisor() {
     }
   }
 
-  function selectExample(example: string) {
-    setMessage(example);
-    setError("");
-    inputRef.current?.focus();
-  }
-
-  const allCartEntries = commerce.items.flatMap((item) => item.cartEntry ? [item.cartEntry] : []);
-
   return (
     <section className="border-y border-slate-200 bg-white py-16 md:py-20" aria-labelledby="ai-print-advisor-title">
       <div className="container-page">
-        <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:items-start lg:gap-16">
-          <div className="lg:pt-3">
+        <div className="mx-auto max-w-4xl">
+          <div>
             <div id="ai-print-advisor-title">
               <SectionHeading
                 eyebrow="Digitale Produktberatung"
-                title="Was möchten Sie drucken?"
-                description="Beschreiben Sie Ihr Vorhaben oder ändern Sie Ihre Zusammenstellung später einfach mit einem weiteren Satz."
+                title="Nicht sicher, welches Produkt passt?"
+                description="Beschreiben Sie kurz, was Sie brauchen."
               />
-            </div>
-            <div className="mt-7 grid gap-3 text-sm font-bold text-slate-700 sm:grid-cols-3 lg:grid-cols-1">
-              {["Echte Katalogprodukte", "Gültige Konfigurationen", "Preise aus dem Shopsystem"].map((item) => (
-                <div key={item} className="flex items-center gap-3">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-blue" aria-hidden="true" />
-                  <span>{item}</span>
-                </div>
-              ))}
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="rounded-lg border border-slate-200 bg-white p-4 shadow-premium sm:p-6" aria-busy={isLoading}>
-            <label htmlFor="print-inquiry" className="text-sm font-black text-brand-ink">Ihr Druckvorhaben</label>
-            <div className="mt-3 rounded-lg border border-slate-300 bg-slate-50/70 p-2 transition focus-within:border-brand-blue focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-blue/10">
+          <form onSubmit={handleSubmit} className="mt-7 rounded-lg border border-slate-200 bg-white p-4 shadow-premium sm:p-6" aria-busy={isLoading}>
+            <label htmlFor="print-inquiry" className="sr-only">Ihr Druckvorhaben</label>
+            <div className="rounded-lg border border-slate-300 bg-slate-50/70 p-2 transition focus-within:border-brand-blue focus-within:bg-white focus-within:ring-4 focus-within:ring-brand-blue/10">
               <textarea
                 ref={inputRef}
                 id="print-inquiry"
                 value={message}
                 maxLength={2000}
-                rows={4}
+                rows={3}
                 disabled={busy}
                 onChange={(event) => setMessage(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Beschreiben Sie kurz, was Sie benötigen …"
-                className="min-h-28 w-full resize-y bg-transparent px-3 py-2 text-base leading-7 text-brand-ink outline-none placeholder:text-slate-400 disabled:cursor-wait sm:text-lg"
-                aria-describedby="print-inquiry-examples"
+                placeholder="z. B. 500 Flyer für eine Eröffnung ..."
+                className="min-h-24 w-full resize-y bg-transparent px-3 py-2 text-base leading-7 text-brand-ink outline-none placeholder:text-slate-400 disabled:cursor-wait sm:text-lg"
               />
               <div className="flex flex-col gap-3 border-t border-slate-200 px-2 pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-xs text-slate-400" aria-hidden="true">{message.length.toLocaleString("de-AT")} / 2.000</span>
@@ -223,28 +100,12 @@ export function AiPrintAdvisor() {
                   {isLoading ? (
                     <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> Anfrage wird verstanden</>
                   ) : (
-                    <>Shop konfigurieren <ArrowRight className="h-4 w-4" aria-hidden="true" /></>
+                    <>Produkt finden <ArrowRight className="h-4 w-4" aria-hidden="true" /></>
                   )}
                 </Button>
               </div>
             </div>
 
-            <div id="print-inquiry-examples" className="mt-5">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Beispiele</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {examples.map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => selectExample(example)}
-                    className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-bold leading-5 text-slate-700 transition hover:border-brand-blue/40 hover:bg-brand-mist hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-50"
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
-            </div>
           </form>
         </div>
 
@@ -272,192 +133,38 @@ export function AiPrintAdvisor() {
 
           {commerce.items.length ? (
             <div aria-busy={busy}>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <Badge variant="outline" className="border-brand-blue/20 bg-white text-brand-blue">
-                    <SlidersHorizontal className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> Live-Konfiguration
-                  </Badge>
-                  <h3 className="mt-3 text-2xl font-black text-brand-ink md:text-3xl">Ihre Zusammenstellung</h3>
-                </div>
-                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => {
-                  setCommerce(emptyCommerceState);
-                  setAdvisorReply("");
-                  setCartMessage("");
-                }}>
-                  <RotateCcw className="h-4 w-4" aria-hidden="true" /> Zurücksetzen
-                </Button>
-              </div>
-
+              <h3 className="text-2xl font-black text-brand-ink md:text-3xl">Passende Produkte</h3>
               <div className="mt-6 grid gap-5 lg:grid-cols-2">
-                {commerce.items.map((item) => (
-                  <CommerceItemCard
-                    key={item.id}
-                    item={item}
-                    active={commerce.activeItemId === item.id}
-                    disabled={busy}
-                    onActivate={() => setCommerce((current) => ({ ...current, activeItemId: item.id }))}
-                    onRemove={() => removeItem(item.id)}
-                    onQuantity={(quantity) => updateItem(item.id, (current) => ({ ...current, quantity }))}
-                    onConfiguration={(key, value) => updateItem(item.id, (current) => ({
-                      ...current,
-                      configuration: { ...current.configuration, [key]: value },
-                      unresolved: current.unresolved.filter((entry) => entry.key !== key)
-                    }))}
-                    onAddToCart={() => item.cartEntry && addCartItems([item.cartEntry])}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-6 border-y border-slate-200 bg-slate-50 px-4 py-5 sm:px-6">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Gesamtsumme</p>
-                    <p className="mt-1 text-2xl font-black text-brand-ink">
-                      {commerce.total.status === "available" && commerce.total.amount !== undefined
-                        ? formatEuro(commerce.total.amount)
-                        : commerce.total.status === "login_required"
-                          ? "Nach Anmeldung"
-                          : "Preis auf Anfrage"}
-                    </p>
-                    {isSyncing ? <p className="mt-1 text-xs font-semibold text-brand-blue">Preis wird neu berechnet …</p> : null}
-                  </div>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                    {allCartEntries.length === commerce.items.length ? (
-                      <Button type="button" disabled={busy} onClick={() => addCartItems(allCartEntries)}>
-                        <ShoppingCart className="h-4 w-4" aria-hidden="true" /> Alles in den Warenkorb
-                      </Button>
-                    ) : commerce.total.status === "login_required" ? (
-                      <Button asChild><Link href="/login">Anmelden und Preise sehen</Link></Button>
-                    ) : null}
-                    <Button asChild variant="outline"><Link href="/kontakt">Angebot anfragen</Link></Button>
-                    <Button asChild variant="ghost"><Link href="/kontakt"><Send className="h-4 w-4" aria-hidden="true" /> Anfrage senden</Link></Button>
-                  </div>
-                </div>
+                {commerce.items.map((item) => <CommerceItemCard key={item.id} item={item} />)}
               </div>
             </div>
           ) : null}
 
-          {cartMessage ? (
-            <div className="mt-5 flex flex-col gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
-              <span>{cartMessage}</span>
-              <Button asChild variant="outline" size="sm"><Link href="/warenkorb">Zum Warenkorb <ArrowRight className="h-4 w-4" /></Link></Button>
-            </div>
-          ) : null}
         </div>
       </div>
     </section>
   );
 }
 
-function CommerceItemCard({
-  item,
-  active,
-  disabled,
-  onActivate,
-  onRemove,
-  onQuantity,
-  onConfiguration,
-  onAddToCart
-}: {
-  item: AICommerceItem;
-  active: boolean;
-  disabled: boolean;
-  onActivate: () => void;
-  onRemove: () => void;
-  onQuantity: (quantity: number) => void;
-  onConfiguration: (key: string, value: string) => void;
-  onAddToCart: () => void;
-}) {
+function CommerceItemCard({ item }: { item: AICommerceItem }) {
+  const configuration = item.options
+    .map((option) => {
+      const selected = item.configuration[option.key];
+      const label = option.values?.find((value) => value.value === selected)?.label ?? selected;
+      return label ? `${option.label}: ${label}` : null;
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+
   return (
-    <Card className={active ? "border-brand-blue bg-white shadow-[0_18px_45px_rgba(17,85,204,.12)] ring-2 ring-brand-blue/10" : "border-slate-200 bg-white shadow-[0_14px_35px_rgba(17,34,68,.07)]"}>
+    <Card className="border-slate-200 bg-white shadow-[0_14px_35px_rgba(17,34,68,.07)]">
       <CardContent className="p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-xl font-black text-brand-ink">{item.product.name}</h4>
-              {active ? <Badge>Aktiv</Badge> : null}
-            </div>
-            <Link href={item.product.href} className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-brand-blue hover:text-brand-ink">
-              Produkt ansehen <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </Link>
-          </div>
-          <div className="flex shrink-0 gap-1">
-            {!active ? (
-              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onActivate}>Bearbeiten</Button>
-            ) : null}
-            <Button type="button" variant="ghost" size="icon" disabled={disabled} onClick={onRemove} title={`${item.product.name} entfernen`} aria-label={`${item.product.name} entfernen`}>
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+        <h4 className="text-xl font-black text-brand-ink">{item.product.name}</h4>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="text-sm font-bold text-slate-700" htmlFor={`quantity-${item.id}`}>Menge</label>
-            <div className="mt-2 grid grid-cols-[44px_minmax(0,1fr)_44px] overflow-hidden rounded-md border border-slate-300 bg-white">
-              <button type="button" disabled={disabled || item.quantity <= item.quantityRules.min} onClick={() => onQuantity(nextQuantity(item, -1))} className="grid h-11 place-items-center border-r text-slate-600 transition hover:bg-brand-mist hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue disabled:opacity-40" aria-label="Menge verringern">
-                <Minus className="h-4 w-4" aria-hidden="true" />
-              </button>
-              <input
-                key={`${item.id}-${item.quantity}`}
-                id={`quantity-${item.id}`}
-                type="number"
-                min={item.quantityRules.min}
-                max={item.quantityRules.max}
-                step={item.quantityRules.step}
-                defaultValue={item.quantity}
-                disabled={disabled}
-                onBlur={(event) => {
-                  const value = Number(event.currentTarget.value);
-                  if (Number.isFinite(value) && value !== item.quantity) onQuantity(value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") event.currentTarget.blur();
-                }}
-                className="h-11 min-w-0 bg-white px-2 text-center text-sm font-black outline-none focus:ring-2 focus:ring-inset focus:ring-brand-blue"
-              />
-              <button type="button" disabled={disabled || item.quantity >= item.quantityRules.max} onClick={() => onQuantity(nextQuantity(item, 1))} className="grid h-11 place-items-center border-l text-slate-600 transition hover:bg-brand-mist hover:text-brand-blue focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue disabled:opacity-40" aria-label="Menge erhöhen">
-                <Plus className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-          </div>
+        <CommerceProductMedia item={item} />
 
-          {item.options.map((option) => (
-            <label key={option.key} className="grid gap-2 text-sm font-bold text-slate-700">
-              {option.label}
-              {option.kind === "select" ? (
-                <select
-                  value={item.configuration[option.key] ?? ""}
-                  disabled={disabled}
-                  onChange={(event) => onConfiguration(option.key, event.target.value)}
-                  className="h-11 min-w-0 rounded-md border border-slate-300 bg-white px-3 text-sm text-brand-ink outline-none focus:ring-2 focus:ring-brand-blue disabled:opacity-60"
-                >
-                  {option.values?.map((value) => <option key={value.value} value={value.value}>{value.label}</option>)}
-                </select>
-              ) : (
-                <input
-                  type="number"
-                  value={item.configuration[option.key] ?? ""}
-                  min={option.min}
-                  max={option.max}
-                  step={option.step}
-                  disabled={disabled}
-                  onChange={(event) => onConfiguration(option.key, event.target.value)}
-                  className="h-11 min-w-0 rounded-md border border-slate-300 bg-white px-3 text-sm text-brand-ink outline-none focus:ring-2 focus:ring-brand-blue disabled:opacity-60"
-                />
-              )}
-            </label>
-          ))}
-        </div>
-
-        {item.unresolved.length ? (
-          <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-            <p className="font-black">Nicht im aktuellen Produkt hinterlegt</p>
-            <ul className="mt-2 grid gap-1">
-              {item.unresolved.map((entry, index) => <li key={`${entry.key}-${index}`}>{entry.key}: {entry.value}</li>)}
-            </ul>
-          </div>
-        ) : null}
+        <p className="mt-4 text-sm font-bold text-slate-600">Menge: {item.quantity.toLocaleString("de-AT")}</p>
+        {configuration.length ? <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">{configuration.join(" · ")}</p> : null}
 
         <div className="mt-6 flex flex-col gap-4 border-t border-slate-200 pt-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -470,18 +177,103 @@ function CommerceItemCard({
                   : "Preis auf Anfrage"}
             </p>
           </div>
-          {item.cartEntry ? (
-            <Button type="button" disabled={disabled} onClick={onAddToCart}>
-              <ShoppingCart className="h-4 w-4" aria-hidden="true" /> In den Warenkorb
-            </Button>
-          ) : item.price.status === "login_required" ? (
-            <Button asChild><Link href="/login">Anmelden</Link></Button>
-          ) : (
-            <Button asChild variant="outline"><Link href="/kontakt">Anfrage starten</Link></Button>
-          )}
+          <Button asChild>
+            <Link href={item.product.href}>Produkt konfigurieren <ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>
+          </Button>
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function CommerceProductMedia({ item }: { item: AICommerceItem }) {
+  const fallbackProductImage = "/uploads/products/abschlussarbeiten.webp";
+  const images = Array.from(new Set([item.product.heroImage, ...item.product.gallery].filter(Boolean)));
+  const productImages = images.length ? images : [fallbackProductImage];
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const selectedImage = productImages[Math.min(selectedIndex, productImages.length - 1)];
+  const unoptimized = selectedImage.startsWith("/uploads/");
+
+  function selectRelative(direction: -1 | 1) {
+    setSelectedIndex((current) => (current + direction + productImages.length) % productImages.length);
+  }
+
+  return (
+    <div className="mt-5 grid gap-2.5">
+      <div className="group relative aspect-[16/9] overflow-hidden rounded-md border border-slate-200 bg-brand-mist">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={selectedImage}
+            initial={{ opacity: 0.35, scale: 1.01 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0.2 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="absolute inset-0"
+          >
+            <Image
+              src={selectedImage}
+              alt={`${item.product.name} – Ansicht ${selectedIndex + 1}`}
+              fill
+              unoptimized={unoptimized}
+              className="object-contain p-2 transition-transform duration-500 group-hover:scale-[1.025]"
+              sizes="(min-width: 1024px) 44vw, (min-width: 640px) 88vw, 100vw"
+            />
+          </motion.div>
+        </AnimatePresence>
+
+        {productImages.length > 1 ? (
+          <>
+            <button
+              type="button"
+              onClick={() => selectRelative(-1)}
+              className="absolute left-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/90 text-brand-ink shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
+              aria-label={`Vorheriges Bild von ${item.product.name}`}
+              title="Vorheriges Bild"
+            >
+              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => selectRelative(1)}
+              className="absolute right-2 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-white/70 bg-white/90 text-brand-ink shadow-sm transition hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2"
+              aria-label={`Nächstes Bild von ${item.product.name}`}
+              title="Nächstes Bild"
+            >
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <span className="absolute bottom-2 right-2 rounded-full border border-white/70 bg-white/90 px-2 py-1 text-xs font-bold text-brand-ink shadow-sm">
+              {selectedIndex + 1} / {productImages.length}
+            </span>
+          </>
+        ) : null}
+      </div>
+
+      {productImages.length > 1 ? (
+        <div className="flex gap-2 overflow-x-auto pb-1" aria-label={`Bilder von ${item.product.name}`}>
+          {productImages.map((image, index) => (
+            <button
+              key={`${image}-${index}`}
+              type="button"
+              onClick={() => setSelectedIndex(index)}
+              className={`relative h-12 w-16 shrink-0 overflow-hidden rounded border bg-slate-50 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue focus-visible:ring-offset-2 ${
+                selectedIndex === index ? "border-brand-blue ring-1 ring-brand-blue" : "border-slate-200 hover:border-slate-400"
+              }`}
+              aria-label={`${item.product.name}, Bild ${index + 1} anzeigen`}
+              aria-pressed={selectedIndex === index}
+            >
+              <Image
+                src={image}
+                alt=""
+                fill
+                unoptimized={image.startsWith("/uploads/")}
+                className="object-contain p-0.5"
+                sizes="64px"
+              />
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

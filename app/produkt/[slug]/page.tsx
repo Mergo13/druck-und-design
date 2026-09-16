@@ -1,16 +1,13 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { Star } from "lucide-react";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductConfigurator } from "@/features/configurator/product-configurator";
 import { getGlobalProperties, getPublicProductBySlug, getUserByEmail } from "@/lib/catalog-repository";
-import { CheckCircle2 } from "lucide-react";
 import { getSessionUser } from "@/lib/auth";
-import { formatProductDeliveryText } from "@/lib/product-delivery";
 import { withoutPrices } from "@/lib/product-price-visibility";
 import { prisma } from "@/lib/prisma";
 import { resolveGlobalPropertyPricing } from "@/lib/product-property-pricing";
-import { getStudentDiscountPercent, isStudentDiscountEligibleProduct, isVerifiedStudent } from "@/lib/student-discount";
+import { getStudentDiscountPercent, isVerifiedStudent } from "@/lib/student-discount";
 import { studentProductHref } from "@/lib/student-products";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +53,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   ]);
   const studentVerified = isVerifiedStudent(accountProfile);
   const studentDiscountPercent = getStudentDiscountPercent(storeControl?.studentDiscountPercent);
-  const studentDiscountEligible = isStudentDiscountEligibleProduct(rawProduct);
   const pricedProduct = resolveGlobalPropertyPricing(rawProduct, globalProperties);
   const product = authenticated ? pricedProduct : withoutPrices(pricedProduct);
   const reviewCount = approvedReviews.length;
@@ -86,46 +82,34 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   return (
     <section className="container-page py-8 md:py-12">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
-        <div className="grid gap-6">
-          <div className="grid gap-5 rounded-lg border border-slate-200 bg-white p-5 shadow-sm md:p-7">
-            <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-amber-600">
-              {reviewCount > 0 ? (
-                <>
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                  {averageRating.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} · {reviewCount} {reviewCount === 1 ? "Kundenbewertung" : "Kundenbewertungen"}
-                </>
-              ) : null}
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{formatProductDeliveryText(product.deliveryText)}</span>
-              {authenticated && studentVerified && studentDiscountEligible ? (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">✓ Studentenstatus verifiziert · {studentDiscountPercent} % Studentenrabatt</span>
-              ) : null}
-            </div>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-slate-950 md:text-5xl">{product.name}</h1>
-              <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600 md:text-lg">{product.description}</p>
-            </div>
-          </div>
+      <header className="max-w-3xl border-b border-slate-200 pb-7">
+        <p className="text-sm font-bold text-brand-blue">Produkt konfigurieren</p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 md:text-5xl">{product.name}</h1>
+        <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">{product.short}</p>
+      </header>
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
+        <div className="order-2 lg:order-1">
           <ProductGallery images={productImages} name={product.name} />
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              { title: "Profi-Datencheck", desc: "Automatischer Check Ihrer Vorlagen auf Druckfähigkeit" },
-              { title: "Fachberatung", desc: "Beratung zu Material und Veredelung durch Experten" },
-              { title: "Individualität", desc: "Sonderformate und Wünsche auf Anfrage möglich" }
-            ].map((feature) => (
-              <div className="motion-elevate flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={feature.title}>
-                <div className="flex items-center gap-2 font-black text-slate-950">
-                  <CheckCircle2 className="h-5 w-5" />
-                  {feature.title}
-                </div>
-                <div className="text-sm leading-relaxed text-slate-600">{feature.desc}</div>
-              </div>
-            ))}
-          </div>
         </div>
-        <div className="lg:sticky lg:top-24">
+        <div className="order-1 lg:order-2 lg:sticky lg:top-24">
           <ProductConfigurator product={product} authenticated={authenticated} studentVerified={studentVerified} studentDiscountPercent={studentDiscountPercent} globalProperties={globalProperties} />
         </div>
+      </div>
+
+      <div className="mt-10 max-w-3xl border-t border-slate-200 pt-3">
+        <details className="border-b border-slate-200 py-4">
+          <summary className="cursor-pointer font-black text-brand-ink">Mehr Details</summary>
+          <p className="mt-3 text-sm leading-6 text-slate-600">{product.description}</p>
+        </details>
+        <details className="border-b border-slate-200 py-4">
+          <summary className="cursor-pointer font-black text-brand-ink">Druckdaten</summary>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Druckdaten können direkt in der Konfiguration hochgeladen und geprüft werden.</p>
+        </details>
+        <details className="border-b border-slate-200 py-4">
+          <summary className="cursor-pointer font-black text-brand-ink">Materialinformationen</summary>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Verfügbare Materialien und Veredelungen werden passend zum Produkt in der Konfiguration angezeigt.</p>
+        </details>
       </div>
     </section>
   );

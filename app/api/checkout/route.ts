@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getUserByEmail } from "@/lib/catalog-repository";
 import { priceCartItems } from "@/lib/cart-pricing";
 import { canApplyCouponWithStudentDiscount } from "@/lib/student-discount";
+import { configurationErrorPayload } from "@/lib/product-configuration";
 
 const printCheckFee = Number(process.env.PRINT_CHECK_FEE_EUR?.trim() || "9.99");
 const checkoutItemsDir = path.join(process.cwd(), "data", "stripe-checkout-items");
@@ -21,6 +22,7 @@ type CheckoutItem = {
   normalUnitPrice?: number;
   config?: Record<string, string>;
   pricingConfig?: Record<string, string>;
+  selectedOptionIds?: Record<string, string>;
   studentDiscountEligible?: boolean;
   printCheckRequested?: boolean;
   printCheckFee?: number;
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
       studentDiscountPercent: storeControl?.studentDiscountPercent
     });
   } catch (error) {
-    return NextResponse.json({ message: error instanceof Error ? error.message : "Warenkorb konnte nicht berechnet werden." }, { status: 400 });
+    return NextResponse.json(configurationErrorPayload(error) ?? { message: error instanceof Error ? error.message : "Warenkorb konnte nicht berechnet werden." }, { status: 400 });
   }
   const itemsSubtotal = pricedCart.subtotalAfterDiscount;
   const normalizedCouponCode = body?.couponCode?.trim().toUpperCase() || "";
@@ -237,6 +239,7 @@ export async function POST(request: Request) {
       embossingDesign: item.embossingDesign,
       config: item.config ?? {},
       pricingConfig: item.pricingConfig ?? {},
+      selectedOptionIds: item.selectedOptionIds,
       printCheckRequested: item.printCheckRequested ?? false,
       printCheckFee: item.printCheckRequested ? (item.printCheckFee || printCheckFee) : 0,
       printCheckFileName: item.printCheckFileName,

@@ -37,6 +37,12 @@ export type CartItem = {
   quantity: number;
   price: number;
   config: Record<string, string>;
+  pricingConfig?: Record<string, string>;
+  selectedOptionIds?: Record<string, string>;
+  printCheckFileName?: string;
+  printCheckFileUrl?: string;
+  printCheckRequested?: boolean;
+  printCheckFee?: number;
   mockupUrl?: string;
   preflightPassed?: boolean;
 };

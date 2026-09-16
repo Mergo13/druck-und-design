@@ -61,6 +61,8 @@ export type AICommerceItem = {
     name: string;
     href: string;
     category: string;
+    heroImage: string;
+    gallery: string[];
   };
   quantity: number;
   quantityRules: {

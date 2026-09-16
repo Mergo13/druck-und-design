@@ -5,9 +5,6 @@ import { getPublicCategories, getPublicProducts } from "@/lib/catalog-repository
 import { getSessionUser } from "@/lib/auth";
 import { withoutPrices } from "@/lib/product-price-visibility";
 import { shopCategoriesForProducts, shopProductsFromCatalog } from "@/lib/shop-products";
-import { ShowroomSection } from "@/components/showroom/showroom-section";
-import { getCategoryShowroom } from "@/lib/showroom-content";
-import { getSiteImageMap } from "@/lib/site-images";
 
 export const dynamic = "force-dynamic";
 
@@ -30,27 +27,21 @@ export async function generateMetadata({ params }: { params: Promise<{ kategorie
 
 export default async function CategoryPage({ params }: { params: Promise<{ kategorie: string }> }) {
   const { kategorie } = await params;
-  const [categories, rawProducts, session, siteImages] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser(), getSiteImageMap()]);
+  const [categories, rawProducts, session] = await Promise.all([getPublicCategories(), getPublicProducts(), getSessionUser()]);
   const authenticated = Boolean(session);
   const shopProducts = shopProductsFromCatalog(rawProducts);
   const shopCategories = shopCategoriesForProducts(categories, rawProducts);
   const products = authenticated ? shopProducts : shopProducts.map(withoutPrices);
   const category = shopCategories.find((item) => item.slug === kategorie);
   if (!category || ["druckservice", "werbetechnik", "werbeagentur", "kleidung-textilien", "leistungen"].includes(kategorie)) notFound();
-  const showroomImages = getCategoryShowroom(category, siteImages);
 
   return (
     <section className="container-page py-10">
-      <div className="mb-8 rounded-lg bg-slate-50 p-8">
-        <p className="font-bold text-primary">Kategorie</p>
-        <h1 className="mt-2 text-4xl font-black">{category.name}</h1>
-        <p className="mt-3 max-w-3xl text-muted-foreground">{category.description} Konfigurieren Sie Format, Papier, Auflage und Lieferzeit mit transparenten Preisen und professionellem Druckdatencheck.</p>
+      <div className="mb-8 border-b border-slate-200 pb-8">
+        <p className="text-sm font-bold text-primary">Kategorie</p>
+        <h1 className="mt-2 text-4xl font-black text-brand-ink">{category.name}</h1>
+        <p className="mt-3 max-w-2xl text-muted-foreground">{category.description}</p>
       </div>
-      <ShowroomSection
-        title={`${category.name} Showroom`}
-        description="Typische Anwendungen und Umsetzungen für diese Produktgruppe."
-        images={showroomImages}
-      />
       <ShopBrowser initialCategory={category.slug} categories={shopCategories} products={products} authenticated={authenticated} />
     </section>
   );

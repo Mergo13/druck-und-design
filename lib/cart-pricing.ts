@@ -13,6 +13,7 @@ import { applyStudentDiscount, getStudentDiscountPercent, isVerifiedStudent } fr
 import type { UserAccount } from "@/types";
 import type { ProductCatalogItem, ProductCategoryProperty } from "@/types/print-platform";
 import { prisma } from "@/lib/prisma";
+import { ProductConfigurationError, resolveSelectedOptionIds, validateProductConfiguration } from "@/lib/product-configuration";
 
 type CartPricingInput = {
   slug: string;
@@ -22,6 +23,7 @@ type CartPricingInput = {
   unitPrice?: number;
   config?: Record<string, string>;
   pricingConfig?: Record<string, string>;
+  selectedOptionIds?: Record<string, string>;
   printCheckRequested?: boolean;
   printCheckFee?: number;
   printCheckFileName?: string;
@@ -39,6 +41,7 @@ export type PricedCartItem = {
   lineFinalPrice: number;
   config: Record<string, string>;
   pricingConfig: Record<string, string>;
+  selectedOptionIds: Record<string, string>;
   printCheckRequested: boolean;
   printCheckFee: number;
   printCheckFileName?: string;
@@ -149,6 +152,7 @@ export async function priceCartItems(params: {
   for (const item of params.items) {
     const rawProduct = await getPublicProductBySlug(item.slug);
     if (!rawProduct) throw new Error(`Produkt ${item.slug} ist nicht verfügbar.`);
+    if (rawProduct.purchaseMode === "disabled") throw new Error(`Produkt ${item.slug} kann aktuell nicht bestellt werden.`);
     const product = resolveGlobalPropertyPricing(rawProduct, globalProperties);
     const pricingConfig = selectedOptionsFromItem(item);
     const verifiedPdfPageCount = await verifiedUploadedPdfPageCount(item, product);
@@ -184,6 +188,26 @@ export async function priceCartItems(params: {
     const productQuantity = configuredQuantity(pricingConfig);
     const lineQuantity = safeLineQuantity(item.quantity);
     const categoryProperties = categoriesBySlug.get(product.category)?.properties ?? [];
+    const configurationValidation = validateProductConfiguration({
+      product,
+      quantity: productQuantity,
+      configuration: pricingConfig,
+      categoryProperties
+    });
+    if (!configurationValidation.valid) {
+      throw new ProductConfigurationError(product.name, configurationValidation);
+    }
+    Object.assign(pricingConfig, configurationValidation.configuration);
+    const selectedOptionIds = resolveSelectedOptionIds(product, pricingConfig);
+    const staleOptionId = Object.entries(item.selectedOptionIds ?? {}).find(([key, value]) => selectedOptionIds[key] !== value);
+    if (staleOptionId) {
+      throw new ProductConfigurationError(product.name, {
+        valid: false,
+        configuration: pricingConfig,
+        fieldErrors: { [staleOptionId[0]]: "Diese Auswahl wurde im Produkt inzwischen geändert." },
+        errors: [{ field: staleOptionId[0], code: "invalid_option", message: "Diese Auswahl wurde im Produkt inzwischen geändert." }]
+      });
+    }
     const documentProduction = deriveProductDocumentProduction(product, categoryProperties, pricingConfig, productQuantity);
     if (isBrochureProduct(product) && "validation" in documentProduction) {
       if (!documentProduction.validation.valid) {
@@ -229,6 +253,7 @@ export async function priceCartItems(params: {
       lineFinalPrice,
       config: item.config ?? {},
       pricingConfig,
+      selectedOptionIds,
       printCheckRequested: Boolean(item.printCheckRequested),
       printCheckFee: money(Number(item.printCheckFee ?? 0) || 0),
       printCheckFileName: item.printCheckFileName,

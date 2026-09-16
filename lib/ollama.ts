@@ -4,7 +4,7 @@ import { aiCommerceDebug } from "@/lib/ai-commerce-debug";
 import type { AICommerceCommand, AICommerceScalar, AICommerceStateInput } from "@/lib/ai-commerce-types";
 
 const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434";
-const DEFAULT_OLLAMA_MODEL = "qwen2.5-coder:7b";
+const DEFAULT_OLLAMA_MODEL = "qwen3:8b";
 const OLLAMA_TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT = [

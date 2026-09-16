@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { CalendarCheck, CheckCircle2, FileCheck, FileImage, UploadCloud, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AnimatedPrice, MotionSelection } from "@/components/ui/motion-primitives";
+import { AnimatedPrice } from "@/components/ui/motion-primitives";
 import { BindingConfigurationSummary } from "@/features/configurator/binding-configuration-summary";
 import { PdfPageThumbnail } from "@/features/configurator/pdf/pdf-page-thumbnail";
 import { PdfPreviewPanel } from "@/features/configurator/pdf/pdf-preview-panel";
@@ -14,13 +14,13 @@ import { defaultBrochureCoverMapping, deriveProductDocumentProduction, pricingQu
 import { usePdfSession } from "@/lib/pdf/pdf-session";
 import { isBrochureProduct, resolvePdfAnalysisMode, resolveProductPdfConfig } from "@/lib/product-configurator-profile";
 import { formatProductDeliveryText } from "@/lib/product-delivery";
-import { calculateConfiguredProductPrice, calculateSelectedCategoryPropertiesPrice, calculateTierPrice, calculateVariantPrice } from "@/lib/print-workflow";
-import { calculateProductPricingResult } from "@/lib/universal-pricing";
-import { applyStudentDiscount } from "@/lib/student-discount";
+import { calculateConfiguredProductPrice } from "@/lib/print-workflow";
 import type { PdfAnalysis } from "@/lib/student-print-config";
 import { formatEuro } from "@/lib/utils";
-import type { GlobalProperty, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty, ProductPropertyValue } from "@/types/print-platform";
+import type { GlobalProperty, ProductCatalogItem, ProductCategoryProperty, ProductPricingProperty } from "@/types/print-platform";
 import { EmbossingConfigurator } from "@/features/embossing/embossing-configurator";
+import { ConfigurationFieldRenderer, type ConfigurationFieldDefinition } from "@/features/configurator/configuration-field-renderer";
+import { availabilityRulesMatch, availablePricingPropertyValues, configurationPropertyKey, pricingPropertyIsVisible, resolveSelectedOptionIds } from "@/lib/product-configuration";
 
 const acceptedExtensions = [".pdf", ".ai", ".psd", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".svg", ".eps"];
 const maxFileSize = 50 * 1024 * 1024;
@@ -127,41 +127,36 @@ function withBrochureDefaults(config: Record<string, string>, analysis: PdfAnaly
   };
 }
 
-function propertyVisibleInProduct(property: ProductPricingProperty, properties: ProductPricingProperty[], config: Record<string, string>) {
-  if (!property.visibility?.propertyId) return true;
-  const dependencyId = slugify(property.visibility.propertyId);
-  const dependency = properties.find((entry) => {
-    const ids = [entry.propertyId, entry.name].filter(Boolean).map((value) => slugify(String(value)));
-    return ids.includes(dependencyId);
-  });
-  const dependencyValues = (dependency?.values ?? []).filter((value) => value.enabled !== false);
-  const dependencyValue = dependency
-    ? config[`eigenschaft:${dependency.name}`] ?? dependencyValues.find((value) => value.defaultSelected)?.value ?? dependencyValues[0]?.value ?? ""
-    : undefined;
-  const actual = dependencyValue ?? config[`eigenschaft:${property.visibility.propertyId}`] ?? config[property.visibility.propertyId] ?? "";
-  return property.visibility.operator === "not_equals"
-    ? actual !== property.visibility.value
-    : actual === property.visibility.value;
-}
-
 function sortedPricingProperties(product: ProductCatalogItem) {
   return (product.pricingProperties ?? []).slice().sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 }
 
-export function ProductConfigurator({ product, authenticated, studentVerified = false, studentDiscountPercent = 20, globalProperties = [] }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number; globalProperties?: GlobalProperty[] }) {
-  const router = useRouter();
+type ProductConfiguratorInitialState = {
+  quantity?: number;
+  configuration?: Record<string, string>;
+};
+
+type LivePriceQuote = {
+  net: number;
+  vat: number;
+  gross: number;
+  vatPercent: number;
+  normalNet: number;
+  discount: number;
+  unitNet: number;
+};
+
+export function ProductConfigurator({ product, authenticated, globalProperties = [], initialState }: { product: ProductCatalogItem; authenticated: boolean; studentVerified?: boolean; studentDiscountPercent?: number; globalProperties?: GlobalProperty[]; initialState?: ProductConfiguratorInitialState }) {
   const searchParams = useSearchParams();
   const firstVariant = product.variants[0];
   const productOptions = useMemo(() => {
     if (!firstVariant) return [];
-    return firstVariant.attributes
-      .filter((attribute) => attribute.type === "select")
-      .map((attribute) => ({ label: attribute.label, key: attribute.key, options: attribute.options ?? [] }));
+    return firstVariant.attributes;
   }, [firstVariant]);
 
   const quantityOptions = useMemo(() => {
     const steps = product.pricingType === "tiered" && product.priceTiers?.length
-      ? product.priceTiers.flatMap((tier) => [Number(tier.fromQuantity ?? tier.quantity), Number(tier.toQuantity)]).filter(Boolean)
+      ? product.priceTiers.map((tier) => Number(tier.fromQuantity ?? tier.quantity)).filter(Boolean)
       : product.quantitySteps?.length
         ? product.quantitySteps
         : fixedQuantitySteps;
@@ -176,12 +171,11 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     const initial: Record<string, string> = {};
     if (firstVariant) {
       for (const attribute of firstVariant.attributes) {
-        if (attribute.type !== "select") continue;
         const selected = attribute.options?.find((option) => option.value === attribute.defaultValue);
-        initial[attribute.key] = selected?.value ?? attribute.options?.[0]?.value ?? "";
+        initial[attribute.key] = selected?.value ?? String(attribute.defaultValue ?? attribute.options?.[0]?.value ?? "");
       }
     }
-    initial.auflage = quantityOptions[0]?.value ?? String(fixedQuantitySteps[0]);
+    initial.auflage = String(initialState?.quantity ?? quantityOptions[0]?.value ?? fixedQuantitySteps[0]);
     if (product.pricingType === "area") {
       initial.areaWidthCm = String(product.areaPricing?.defaultWidthCm ?? 100);
       initial.areaHeightCm = String(product.areaPricing?.defaultHeightCm ?? 100);
@@ -190,7 +184,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
       initial[`eigenschaft:${property.name}`] = enabledValues.find((value) => value.defaultSelected)?.value ?? enabledValues[0]?.value ?? "";
     }
-    return initial;
+    return { ...initial, ...(initialState?.configuration ?? {}) };
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedFileUrl, setUploadedFileUrl] = useState<string | undefined>();
@@ -202,7 +196,14 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const uploadBusyRef = useRef(false);
   const uploadRunRef = useRef(0);
   const [cartMessage, setCartMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [livePrice, setLivePrice] = useState<LivePriceQuote | null>(null);
+  const [pricePending, setPricePending] = useState(false);
+  const [priceMessage, setPriceMessage] = useState("");
+  const priceRequestRef = useRef(0);
+  const previousPriceConfigRef = useRef<Record<string, string> | null>(null);
   const [categoryProperties, setCategoryProperties] = useState<ProductCategoryProperty[]>([]);
+  const [categoryPropertiesLoaded, setCategoryPropertiesLoaded] = useState(false);
   const [bindingConfig, setBindingConfig] = useState<{ bindingSystems: BindingSystem[]; bindingVariants: BindingVariant[] } | null>(null);
   const [finalizedEmbossing, setFinalizedEmbossing] = useState<{
     id: string;
@@ -271,9 +272,24 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         if (!res.ok) return;
         const categories = await res.json() as Array<{ slug: string; properties?: ProductCategoryProperty[] }>;
         const category = categories.find((entry) => entry.slug === product.category);
-        setCategoryProperties(category?.properties ?? []);
+        const properties = category?.properties ?? [];
+        setCategoryProperties(properties);
+        if (!product.pricingProperties?.length) {
+          const enabled = new Set(product.enabledCategoryProperties ?? []);
+          setConfig((current) => {
+            const next = { ...current };
+            for (const property of properties.filter((entry) => enabled.has(entry.name))) {
+              const key = `eigenschaft:${property.name}`;
+              const first = property.values[0];
+              if (!next[key] && first) next[key] = typeof first === "string" ? first : first.value;
+            }
+            return next;
+          });
+        }
       } catch {
         setCategoryProperties([]);
+      } finally {
+        setCategoryPropertiesLoaded(true);
       }
     })();
   }, [product.category]);
@@ -298,6 +314,30 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     if (!enabled.size) return [];
     return categoryProperties.filter((property) => enabled.has(property.name) && property.values.length > 0);
   }, [categoryProperties, product.enabledCategoryProperties]);
+  useEffect(() => {
+    setConfig((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const property of pricingProperties) {
+        if (!pricingPropertyIsVisible(property, product, next)) continue;
+        const values = availablePricingPropertyValues(property, product, next);
+        const key = configurationPropertyKey(property);
+        if (values.length && !values.some((value) => value.value === next[key])) {
+          next[key] = values.find((value) => value.defaultSelected)?.value ?? values[0].value;
+          changed = true;
+        }
+      }
+      for (const attribute of firstVariant?.attributes ?? []) {
+        if (attribute.type !== "select" && attribute.type !== "choice") continue;
+        const options = (attribute.options ?? []).filter((option) => availabilityRulesMatch(option.availability, product, next));
+        if (options.length && !options.some((option) => option.value === next[attribute.key])) {
+          next[attribute.key] = options[0].value;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [firstVariant, pricingProperties, product]);
   const hasConfiguredPrintColorProperty = useMemo(() => {
     if (isBrochure) return true;
     const names = [
@@ -307,23 +347,6 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     ].join(" ");
     return /druckart|farbmodus|farbe.*sw|schwarz.*weiß|schwarz.*weiss|color/i.test(names);
   }, [enabledProperties, isBrochure, pricingProperties, productOptions]);
-  const currentPrice = useMemo(() => {
-    const quantity = Number.isFinite(currentQuantity) ? currentQuantity : 1;
-    if (product.pricingType === "tiered" || product.pricingType === "area" || product.pricingProperties?.length) {
-      const productionContext = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, normalizedConfig, quantity) : undefined;
-      return calculateProductPricingResult({
-        product,
-        quantity,
-        configuration: normalizedConfig,
-        productionContext,
-        globalProperties
-      }).total;
-    }
-    const productPrice = firstVariant
-      ? calculateVariantPrice(product, firstVariant.id, quantity, config)
-      : product.basePrice;
-    return Math.round((productPrice + calculateSelectedCategoryPropertiesPrice(enabledProperties, quantity, config)) * 100) / 100;
-  }, [categoryProperties, config, currentQuantity, enabledProperties, firstVariant, globalProperties, normalizedConfig, pdfAnalysisEnabled, product]);
   const priceSnapshot = useMemo(() => calculateConfiguredProductPrice(product, currentQuantity, {
     ...normalizedConfig,
     ...(finalizedEmbossing?.cartConfig ?? {}),
@@ -370,22 +393,75 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const handleEmbossingFinalized = useCallback((design: typeof finalizedEmbossing) => {
     setFinalizedEmbossing(design);
   }, []);
-  const tierBreakdown = useMemo(() => {
-    if (product.pricingType !== "tiered") return null;
-    try {
-      return calculateTierPrice(pricingQuantities?.baseQuantity ?? currentQuantity, product.priceTiers);
-    } catch {
-      return null;
-    }
-  }, [currentQuantity, pricingQuantities, product.priceTiers, product.pricingType]);
-  const studentDiscount = useMemo(() => applyStudentDiscount({
-    subtotal: currentPrice,
-    product,
-    user: studentVerified ? { studentVerification: { status: "approved" } } : null,
-    percent: studentDiscountPercent
-  }), [currentPrice, product, studentDiscountPercent, studentVerified]);
-  const studentDiscountAmount = studentDiscount.discounts[0]?.amount ?? 0;
-  const displayedTotal = studentDiscount.total;
+  const displayedTotal = livePrice?.net;
+  const displayedNormalTotal = livePrice?.normalNet;
+  const displayedDiscountAmount = livePrice?.discount ?? 0;
+  const priceRequestConfiguration = useMemo<Record<string, string>>(() => ({
+    ...normalizedConfig,
+    ...(finalizedEmbossing?.cartConfig ?? {}),
+    resolvedEmbossingLineCount: finalizedEmbossing ? String(finalizedEmbossing.lineCount) : normalizedConfig.resolvedEmbossingLineCount
+  }), [finalizedEmbossing, normalizedConfig]);
+
+  const requestAuthoritativePrice = useCallback(async (configuration: Record<string, string>, quantity: number, signal?: AbortSignal) => {
+    const response = await fetch(`/api/products/${encodeURIComponent(product.slug)}/price`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ quantity, configuration }),
+      signal
+    });
+    const payload = await response.json().catch(() => ({ valid: false, message: "Preis konnte nicht berechnet werden." })) as {
+      valid: boolean;
+      message?: string;
+      fieldErrors?: Record<string, string>;
+      price?: LivePriceQuote;
+    };
+    return { response, payload };
+  }, [product.slug]);
+
+  useEffect(() => {
+    if (!authenticated || !categoryPropertiesLoaded) return;
+    const controller = new AbortController();
+    const requestId = priceRequestRef.current + 1;
+    priceRequestRef.current = requestId;
+    const previous = previousPriceConfigRef.current;
+    previousPriceConfigRef.current = priceRequestConfiguration;
+    const changedKeys = previous
+      ? Object.keys({ ...previous, ...priceRequestConfiguration }).filter((key) => previous[key] !== priceRequestConfiguration[key])
+      : [];
+    const numericKeys = new Set([
+      "areaWidthCm",
+      "areaHeightCm",
+      "seitenanzahl",
+      ...((firstVariant?.attributes ?? []).filter((attribute) => attribute.type === "number" || attribute.type === "text").map((attribute) => attribute.key))
+    ]);
+    const delay = changedKeys.some((key) => numericKeys.has(key)) ? 350 : 0;
+    setPricePending(true);
+    setPriceMessage("");
+    const timer = window.setTimeout(() => {
+      void requestAuthoritativePrice(priceRequestConfiguration, currentQuantity, controller.signal)
+        .then(({ response, payload }) => {
+          if (priceRequestRef.current !== requestId) return;
+          if (!response.ok || !payload.valid || !payload.price) {
+            setFieldErrors(payload.fieldErrors ?? {});
+            setPriceMessage(payload.message ?? "Bitte prüfen Sie die Konfiguration.");
+            return;
+          }
+          setLivePrice(payload.price);
+          setFieldErrors({});
+        })
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          if (priceRequestRef.current === requestId) setPriceMessage("Preis konnte gerade nicht aktualisiert werden.");
+        })
+        .finally(() => {
+          if (priceRequestRef.current === requestId) setPricePending(false);
+        });
+    }, delay);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [authenticated, categoryPropertiesLoaded, currentQuantity, firstVariant, priceRequestConfiguration, requestAuthoritativePrice]);
 
   function applyPdfAnalysis(analysis: PdfAnalysis) {
     setPdfAnalysis(analysis);
@@ -404,18 +480,6 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       pdfAnalysisBwPages: analysis.bwPages.join(","),
       printColorMode: current.printColorMode ?? (analysis.colorPages.length > 0 ? "auto" : "black_white")
     }));
-  }
-
-  function commitAreaDimension(field: "areaWidthCm" | "areaHeightCm") {
-    if (product.pricingType !== "area") return;
-    const isWidth = field === "areaWidthCm";
-    const value = clampAreaDimension(
-      config[field],
-      isWidth ? product.areaPricing?.defaultWidthCm ?? 100 : product.areaPricing?.defaultHeightCm ?? 100,
-      isWidth ? product.areaPricing?.minWidthCm : product.areaPricing?.minHeightCm,
-      isWidth ? product.areaPricing?.maxWidthCm : product.areaPricing?.maxHeightCm
-    );
-    setConfig((current) => ({ ...current, [field]: String(value) }));
   }
 
   async function readFilePreview(file: File) {
@@ -530,6 +594,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
       unitPrice?: number;
       normalUnitPrice?: number;
       pricingConfig?: Record<string, string>;
+      selectedOptionIds?: Record<string, string>;
       studentDiscountEligible?: boolean;
       printCheckRequested?: boolean;
       printCheckFee?: number;
@@ -598,32 +663,19 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         authoritativeConfig[`brochureResolved${slot}`] = brochureCoverMapping[slot];
       }
     }
+    const quote = await requestAuthoritativePrice(authoritativeConfig, currentQuantity);
+    if (!quote.response.ok || !quote.payload.valid || !quote.payload.price) {
+      setFieldErrors(quote.payload.fieldErrors ?? {});
+      setCartMessage(quote.payload.message ?? "Bitte prüfen Sie die Konfiguration.");
+      return false;
+    }
+    setLivePrice(quote.payload.price);
+    setFieldErrors({});
     const authoritativePricingQuantities = pdfAnalysisEnabled ? pricingQuantitiesForProductDocument(product, categoryProperties, authoritativeConfig, currentQuantity) : undefined;
     const priceSnapshot = calculateConfiguredProductPrice(product, currentQuantity, authoritativeConfig, authoritativePricingQuantities);
-    const authoritativePricing = calculateProductPricingResult({
-      product,
-      quantity: currentQuantity,
-      configuration: authoritativeConfig,
-      productionContext: authoritativePricingQuantities,
-      globalProperties
-    });
-    const authoritativeDiscount = applyStudentDiscount({
-      subtotal: authoritativePricing.total,
-      product,
-      user: studentVerified ? { studentVerification: { status: "approved" } } : null,
-      percent: studentDiscountPercent
-    });
-    const authoritativeDisplayedTotal = authoritativeDiscount.total;
-    const baseBreakdown = product.pricingType === "tiered"
-      ? (() => {
-        try {
-          const tier = calculateTierPrice(authoritativePricingQuantities?.baseQuantity ?? currentQuantity, product.priceTiers);
-          return `${tier.quantity} Stück × ${formatEuro(tier.unitPrice)} / Stück = ${formatEuro(tier.totalPrice)}`;
-        } catch {
-          return formatEuro(priceSnapshot.basePrice);
-        }
-      })()
-      : formatEuro(priceSnapshot.basePrice);
+    const authoritativeDisplayedTotal = quote.payload.price.net;
+    const authoritativeNormalTotal = quote.payload.price.normalNet;
+    const baseBreakdown = `${currentQuantity.toLocaleString("de-DE")} Stück × ${formatEuro(quote.payload.price.unitNet)} netto = ${formatEuro(authoritativeDisplayedTotal)}`;
     const selectedConfig = Object.fromEntries([
       ["Menge", String(currentQuantity)],
       ...(isBrochure ? [
@@ -665,9 +717,10 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
     if (found) {
       found.quantity += 1;
       found.unitPrice = authoritativeDisplayedTotal;
-      found.normalUnitPrice = authoritativePricing.total;
+      found.normalUnitPrice = authoritativeNormalTotal;
       found.config = selectedConfig;
       found.pricingConfig = authoritativeConfig;
+      found.selectedOptionIds = resolveSelectedOptionIds(product, authoritativeConfig);
       found.studentDiscountEligible = product.studentDiscountEligible !== false;
       if (uploadedFile) {
         found.printCheckFileName = uploadedFile.name;
@@ -680,8 +733,9 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         quantity: 1,
         category: product.category,
         unitPrice: authoritativeDisplayedTotal,
-        normalUnitPrice: authoritativePricing.total,
+        normalUnitPrice: authoritativeNormalTotal,
         pricingConfig: authoritativeConfig,
+        selectedOptionIds: resolveSelectedOptionIds(product, authoritativeConfig),
         studentDiscountEligible: product.studentDiscountEligible !== false,
         printCheckRequested: false,
         printCheckFee: 0,
@@ -728,71 +782,33 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   }
 
   function renderPropertyControl(property: ProductPricingProperty) {
-    if (!propertyVisibleInProduct(property, pricingProperties, config)) return null;
+    if (!pricingPropertyIsVisible(property, product, config)) return null;
     const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
     if (!enabledValues.length) return null;
-    const key = `eigenschaft:${property.name}`;
+    const key = configurationPropertyKey(property);
     const value = config[key] ?? enabledValues.find((entry) => entry.defaultSelected)?.value ?? enabledValues[0]?.value ?? "";
     const setValue = (nextValue: string) => setConfig({ ...config, [key]: nextValue });
     const control = property.display?.control ?? "select";
-    const labelFor = (option: ProductPropertyValue) => option.labelOverride || option.label || option.value;
-    const shortChoices = enabledValues.length <= 8 && enabledValues.every((option) => labelFor(option).length <= 28);
-    const choiceButton = (option: ProductPropertyValue, card = false) => {
-      const selected = value === option.value;
-      return (
-        <button
-          key={option.value}
-          type="button"
-          onClick={() => setValue(option.value)}
-          className={selected
-            ? card
-              ? "relative grid gap-2 overflow-hidden rounded-md border border-brand-blue bg-brand-mist p-3 text-left text-sm font-bold text-brand-blue"
-              : "relative overflow-hidden rounded-md border border-brand-blue bg-brand-mist px-3 py-2 text-sm font-bold text-brand-blue"
-            : card
-              ? "relative grid gap-2 overflow-hidden rounded-md border border-slate-200 bg-white p-3 text-left text-sm font-bold text-slate-700 transition-colors hover:border-brand-blue"
-              : "relative overflow-hidden rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition-colors hover:border-brand-blue"}
-        >
-          <MotionSelection selected={selected} />
-          {card && option.image ? (
-            <span className="block overflow-hidden rounded border border-slate-200 bg-slate-50">
-              <img src={option.image} alt="" className="aspect-[4/3] w-full object-cover" />
-            </span>
-          ) : null}
-          <span>{labelFor(option)}</span>
-          {card && option.description ? <span className="text-xs font-semibold text-slate-500">{option.description}</span> : null}
-        </button>
-      );
+    const visualControl = control === "cards" || control === "buttons" || control === "radio" || control === "swatches";
+    const field: ConfigurationFieldDefinition = {
+      key,
+      label: property.name,
+      type: visualControl ? "choice" : "select",
+      required: property.required,
+      helpText: property.display?.helpText,
+      control,
+      options: enabledValues.map((option) => ({
+        value: option.value,
+        label: option.labelOverride || option.label || option.value,
+        description: option.description,
+        image: option.image,
+        disabled: !availabilityRulesMatch(option.availability, product, config)
+      }))
     };
 
     return (
-      <div className="grid gap-2" key={`product-property-${property.name}`}>
-        <span className="text-sm font-bold">{property.name}</span>
-        {property.display?.helpText ? <span className="text-xs font-semibold text-slate-500">{property.display.helpText}</span> : null}
-        {control === "buttons" && shortChoices ? (
-          <div className="flex flex-wrap gap-2">{enabledValues.map((option) => choiceButton(option))}</div>
-        ) : control === "cards" ? (
-          <div className="grid gap-2 sm:grid-cols-2">{enabledValues.map((option) => choiceButton(option, true))}</div>
-        ) : control === "radio" && shortChoices ? (
-          <div className="grid gap-2">{enabledValues.map((option) => (
-            <label key={option.value} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700">
-              <input type="radio" checked={value === option.value} onChange={() => setValue(option.value)} />
-              {labelFor(option)}
-            </label>
-          ))}</div>
-        ) : (
-          <select
-            suppressHydrationWarning
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          >
-            {enabledValues.map((option) => (
-              <option key={option.value} value={option.value}>
-                {labelFor(option)}
-              </option>
-            ))}
-          </select>
-        )}
+      <div className="border-b border-slate-100 pb-5 last:border-0" key={`product-property-${property.name}`}>
+        <ConfigurationFieldRenderer field={field} value={value} error={fieldErrors[key]} onChange={setValue} />
       </div>
     );
   }
@@ -800,7 +816,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   const visibleStandardProperties = isBrochure ? [] : pricingProperties.filter((property) => !property.display?.advanced);
   const visibleAdvancedProperties = isBrochure ? [] : pricingProperties.filter((property) => property.display?.advanced);
   const selectedSummary = [
-    ...pricingProperties.filter((property) => propertyVisibleInProduct(property, pricingProperties, config)).map((property) => {
+    ...pricingProperties.filter((property) => pricingPropertyIsVisible(property, product, config)).map((property) => {
       const enabledValues = (property.values ?? []).filter((value) => value.enabled !== false);
       const selected = config[`eigenschaft:${property.name}`] || enabledValues.find((value) => value.defaultSelected)?.value || enabledValues[0]?.value || "";
       const match = enabledValues.find((value) => value.value === selected);
@@ -810,20 +826,23 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
   ];
 
   return (
-    <aside className="sticky top-24 rounded-lg border bg-white p-5 shadow-premium lg:block">
+    <aside className="rounded-lg border bg-white p-5 pb-24 shadow-premium lg:pb-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold text-primary">Ihr Produkt</p>
-          <h2 className="text-2xl font-black">{authenticated ? <AnimatedPrice value={displayedTotal} /> : "Preis nach Anmeldung"}</h2>
-          <p className="text-sm text-muted-foreground">Konfiguration mit optionalem Datei-Upload</p>
-          {authenticated && studentDiscountAmount > 0 ? (
+          <p className="text-sm font-semibold text-primary">Ihre Konfiguration</p>
+          <p className="mt-1 text-sm font-bold text-slate-700">{currentQuantity.toLocaleString("de-DE")} × {product.name}</p>
+          <h2 className="text-2xl font-black">{authenticated ? displayedTotal === undefined ? "Preis wird geladen…" : <AnimatedPrice value={displayedTotal} /> : "Preis nach Anmeldung"}</h2>
+          {authenticated ? <p className="text-xs font-semibold text-slate-500">netto · {livePrice ? `${formatEuro(livePrice.gross)} inkl. ${livePrice.vatPercent.toLocaleString("de-DE")} % USt.` : "USt. wird im Warenkorb ausgewiesen"}</p> : null}
+          {pricePending ? <p className="mt-1 text-xs font-semibold text-brand-blue" aria-live="polite">Preis wird aktualisiert…</p> : null}
+          {priceMessage ? <p className="mt-1 text-xs font-semibold text-red-700" role="alert">{priceMessage}</p> : null}
+          {authenticated && displayedDiscountAmount > 0 && displayedTotal !== undefined && displayedNormalTotal !== undefined ? (
             <div className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs font-semibold text-emerald-800">
               <p>✓ Studentenstatus verifiziert</p>
-              <p>Normalpreis: {formatEuro(currentPrice)}</p>
+              <p>Normalpreis: {formatEuro(displayedNormalTotal)}</p>
               <p>Studentenpreis: {formatEuro(displayedTotal)}</p>
             </div>
           ) : null}
-          {authenticated && tierBreakdown ? <p className="text-xs font-semibold text-muted-foreground">{tierBreakdown.quantity} Stück × {formatEuro(tierBreakdown.unitPrice)} / Stück = {formatEuro(tierBreakdown.totalPrice)}</p> : null}
+          {authenticated && livePrice ? <p className="text-xs font-semibold text-muted-foreground">{currentQuantity.toLocaleString("de-DE")} Stück × {formatEuro(livePrice.unitNet)} netto</p> : null}
 
         </div>
         <div className="rounded-md bg-muted px-3 py-2 text-right text-xs font-semibold">
@@ -832,7 +851,7 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         </div>
       </div>
       {selectedSummary.length ? (
-        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+        <div className="mt-4 border-t border-slate-200 pt-4">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Zusammenfassung</p>
           <div className="mt-2 grid gap-1 text-sm">
             {selectedSummary.slice(0, 7).map((entry) => (
@@ -845,23 +864,46 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
         </div>
       ) : null}
       <div className="mt-6 grid gap-4">
-        {productOptions.map(({ label, key, options }) => (
-          <label className="grid gap-2" key={label}>
-            <span className="text-sm font-bold">{label}</span>
-            <select
-              suppressHydrationWarning
-              value={config[key]}
-              onChange={(event) => setConfig({ ...config, [key]: event.target.value })}
-              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-            </select>
-          </label>
-        ))}
+        {productOptions.map((attribute) => {
+          const visual = attribute.type === "choice" || ((attribute.options?.length ?? 0) <= 6 && attribute.type === "select");
+          const field: ConfigurationFieldDefinition = {
+            key: attribute.key,
+            label: attribute.label,
+            type: visual ? "choice" : attribute.type,
+            required: attribute.required,
+            helpText: attribute.helpText,
+            min: attribute.min,
+            max: attribute.max,
+            step: attribute.step,
+            control: visual ? "buttons" : "select",
+            options: (attribute.options ?? []).map((option) => ({
+              value: option.value,
+              label: option.label,
+              disabled: !availabilityRulesMatch(option.availability, product, config)
+            }))
+          };
+          return (
+            <div className="border-b border-slate-100 pb-5" key={attribute.key}>
+              <ConfigurationFieldRenderer
+                field={field}
+                value={config[attribute.key] ?? ""}
+                secondaryValue={config[`${attribute.key}Height`] ?? ""}
+                error={fieldErrors[attribute.key]}
+                onChange={(value) => setConfig({ ...config, [attribute.key]: value })}
+                onSecondaryChange={(value) => setConfig({ ...config, [`${attribute.key}Height`]: value })}
+                onFileChange={(file) => void validateAndSetFile(file)}
+              />
+            </div>
+          );
+        })}
+        <div className="border-b border-slate-100 pb-5">
+          <ConfigurationFieldRenderer
+            field={{ key: "auflage", label: "Menge", type: "quantity", required: true, options: quantityOptions }}
+            value={config.auflage ?? "1"}
+            error={fieldErrors.auflage}
+            onChange={(value) => setConfig({ ...config, auflage: value })}
+          />
+        </div>
         {pdfAnalysisEnabled ? (
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Dokument</p>
@@ -939,33 +981,6 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </div>
           </div>
         ) : null}
-        <label className="grid gap-2">
-          <span className="text-sm font-bold">Auflage</span>
-          {product.pricingType === "tiered" ? (
-            <input
-              suppressHydrationWarning
-              type="number"
-              min="1"
-              step="1"
-              value={config.auflage ?? "1"}
-              onChange={(event) => setConfig({ ...config, auflage: event.target.value })}
-              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            />
-          ) : (
-            <select
-              suppressHydrationWarning
-              value={config.auflage}
-              onChange={(event) => setConfig({ ...config, auflage: event.target.value })}
-              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            >
-              {quantityOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-        </label>
         {isBrochure ? (
           <div className="grid gap-4 rounded-md border border-slate-200 bg-white p-3">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Broschüre</p>
@@ -1150,37 +1165,28 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           </div>
         ) : null}
         {product.pricingType === "area" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-2">
-              <span className="text-sm font-bold">Breite (cm)</span>
-              <input
-                suppressHydrationWarning
-                type="number"
-                min={minAreaWidthCm}
-                max={product.areaPricing?.maxWidthCm && product.areaPricing.maxWidthCm > 0 ? product.areaPricing.maxWidthCm : undefined}
-                step="0.1"
-                value={config.areaWidthCm ?? ""}
-                onChange={(event) => setConfig({ ...config, areaWidthCm: event.target.value })}
-                onBlur={() => commitAreaDimension("areaWidthCm")}
-                className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-              />
-            </label>
-            <label className="grid gap-2">
-              <span className="text-sm font-bold">Höhe (cm)</span>
-              <input
-                suppressHydrationWarning
-                type="number"
-                min={minAreaHeightCm}
-                max={product.areaPricing?.maxHeightCm && product.areaPricing.maxHeightCm > 0 ? product.areaPricing.maxHeightCm : undefined}
-                step="0.1"
-                value={config.areaHeightCm ?? ""}
-                onChange={(event) => setConfig({ ...config, areaHeightCm: event.target.value })}
-                onBlur={() => commitAreaDimension("areaHeightCm")}
-                className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-              />
-            </label>
+          <div className="border-b border-slate-100 pb-5">
+            <ConfigurationFieldRenderer
+              field={{
+                key: "areaWidthCm",
+                label: "Format nach Maß (cm)",
+                type: "dimensions",
+                required: true,
+                min: minAreaWidthCm,
+                max: product.areaPricing?.maxWidthCm && product.areaPricing.maxWidthCm > 0 ? product.areaPricing.maxWidthCm : undefined,
+                step: 0.1,
+                secondaryMin: minAreaHeightCm,
+                secondaryMax: product.areaPricing?.maxHeightCm && product.areaPricing.maxHeightCm > 0 ? product.areaPricing.maxHeightCm : undefined,
+                helpText: "Breite × Höhe"
+              }}
+              value={config.areaWidthCm ?? ""}
+              secondaryValue={config.areaHeightCm ?? ""}
+              error={fieldErrors.areaWidthCm ?? fieldErrors.areaHeightCm}
+              onChange={(value) => setConfig({ ...config, areaWidthCm: value })}
+              onSecondaryChange={(value) => setConfig({ ...config, areaHeightCm: value })}
+            />
             {areaBelowMinimum ? (
-              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900 sm:col-span-2">
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
                 Die Mindestgröße für dieses Produkt beträgt {formatCm(minAreaWidthCm)} cm Breite × {formatCm(minAreaHeightCm)} cm Höhe. Kleinere Werte werden automatisch auf diese Mindestgröße korrigiert.
               </div>
             ) : null}
@@ -1195,26 +1201,20 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
             </div>
           </details>
         ) : null}
-        {enabledProperties.map((property) => (
-          <label className="grid gap-2" key={`category-property-${property.name}`}>
-            <span className="text-sm font-bold">{property.name}</span>
-            <select
-              suppressHydrationWarning
-              value={config[`eigenschaft:${property.name}`] ?? normalizePropertyValue(property.values[0]).value}
-              onChange={(event) => setConfig({ ...config, [`eigenschaft:${property.name}`]: event.target.value })}
-              className="h-11 rounded-md border bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            >
-              {property.values.map((entry) => {
-                const option = normalizePropertyValue(entry);
-                return (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-                );
-              })}
-            </select>
-          </label>
-        ))}
+        {enabledProperties.map((property) => {
+          const key = `eigenschaft:${property.name}`;
+          const options = property.values.map(normalizePropertyValue);
+          return (
+            <div className="border-b border-slate-100 pb-5" key={`category-property-${property.name}`}>
+              <ConfigurationFieldRenderer
+                field={{ key, label: property.name, type: options.length <= 6 ? "choice" : "select", required: true, options }}
+                value={config[key] ?? options[0]?.value ?? ""}
+                error={fieldErrors[key]}
+                onChange={(value) => setConfig({ ...config, [key]: value })}
+              />
+            </div>
+          );
+        })}
         <BindingConfigurationSummary result={bindingResolution} />
         {embossingActive ? (
           authenticated ? (
@@ -1377,26 +1377,23 @@ export function ProductConfigurator({ product, authenticated, studentVerified = 
           Bitte laden Sie eine Broschüren-PDF mit gültiger Seitenanzahl hoch.
         </p>
       ) : null}
-      {authenticated ? <Button className="mt-6 w-full bg-brand-blue hover:bg-[#2c70b8]" size="lg" type="button" onClick={addToCart} disabled={configuratorBlocking || isAnalyzingPdf}>
+      {authenticated ? <Button className="mt-6 hidden w-full bg-brand-blue hover:bg-[#2c70b8] lg:inline-flex" size="lg" type="button" onClick={addToCart} disabled={configuratorBlocking || isAnalyzingPdf}>
         In den Warenkorb
-      </Button> : <Button asChild className="mt-6 w-full" size="lg"><a href="/login">Anmelden und Preise sehen</a></Button>}
-      {authenticated ? <Button
-        className="mt-3 w-full"
-        size="lg"
-        variant="outline"
-        type="button"
-        disabled={configuratorBlocking || isAnalyzingPdf}
-        onClick={() => {
-          void (async () => {
-            const ok = await addToCart();
-            if (ok) router.push("/warenkorb");
-          })();
-        }}
-      >
-        Jetzt kaufen
-      </Button> : null}
+      </Button> : <Button asChild className="mt-6 hidden w-full lg:inline-flex" size="lg"><a href="/login">Anmelden und Preise sehen</a></Button>}
       {cartMessage ? <p className="mt-3 text-center text-xs text-fuchsia-700">{cartMessage}</p> : null}
-      <p className="mt-3 text-center text-xs text-muted-foreground">Wir beraten Sie gerne zu Materialien und Veredelungen.</p>
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,.12)] backdrop-blur lg:hidden">
+        <div className="mx-auto flex max-w-lg items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-slate-500">{currentQuantity.toLocaleString("de-DE")} × {product.name}</p>
+            <p className="text-lg font-black tabular-nums text-slate-950">{authenticated ? displayedTotal === undefined ? "Preis wird geladen…" : formatEuro(displayedTotal) : "Preis nach Anmeldung"}</p>
+          </div>
+          {authenticated ? (
+            <Button type="button" onClick={addToCart} disabled={configuratorBlocking || isAnalyzingPdf}>In den Warenkorb</Button>
+          ) : (
+            <Button asChild><a href="/login">Anmelden</a></Button>
+          )}
+        </div>
+      </div>
     </aside>
   );
 }

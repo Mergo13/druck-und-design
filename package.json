@@ -14,6 +14,7 @@
     "student-print-config:test": "tsx scripts/student-print-config.test.ts",
     "student-discount:test": "tsx scripts/student-discount.test.ts",
     "global-property-pricing:test": "tsx scripts/global-property-pricing.test.ts",
+    "product-configuration:test": "tsx scripts/product-configuration.test.ts",
     "universal-pricing:test": "tsx scripts/universal-pricing.test.ts",
     "document-production:test": "tsx scripts/document-production.test.ts",
     "embossing:test": "tsx scripts/embossing.test.ts",

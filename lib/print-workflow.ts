@@ -408,6 +408,26 @@ export function validateProductPricing(product: ProductCatalogItem) {
     }
   }
 
+  const dependencySources = [
+    ...(product.pricingProperties ?? []).map((property) => ({
+      ids: [property.propertyId, property.name].filter(Boolean).map((value) => normalizePropertyKey(String(value))),
+      values: new Set(property.values.filter((value) => value.enabled !== false).map((value) => value.value))
+    })),
+    ...product.variants.flatMap((variant) => variant.attributes).map((attribute) => ({
+      ids: [attribute.key, attribute.label].map(normalizePropertyKey),
+      values: new Set((attribute.options ?? []).map((option) => option.value))
+    }))
+  ];
+  for (const property of product.pricingProperties ?? []) {
+    for (const value of property.values ?? []) {
+      for (const rule of value.availability ?? []) {
+        const source = dependencySources.find((entry) => entry.ids.includes(normalizePropertyKey(rule.propertyId)));
+        if (!source) errors.push(`${property.name} / ${value.value}: Abhängigkeit ${rule.propertyId} wurde nicht gefunden.`);
+        else if (!source.values.has(rule.value)) errors.push(`${property.name} / ${value.value}: Abhängigkeitswert ${rule.value} wurde nicht gefunden.`);
+      }
+    }
+  }
+
   return Array.from(new Set(errors));
 }
 

@@ -1,12 +1,19 @@
 export type MainCategory = string;
 
-export type ProductAttributeType = "select" | "number" | "boolean" | "text";
+export type ProductAttributeType = "choice" | "select" | "quantity" | "number" | "dimensions" | "boolean" | "text" | "upload";
+
+export type PropertyAvailabilityRule = {
+  propertyId: string;
+  operator: "equals" | "not_equals";
+  value: string;
+};
 
 export type ProductAttributeOption = {
   value: string;
   label: string;
   priceModifier?: number;
   productionDaysModifier?: number;
+  availability?: PropertyAvailabilityRule[];
 };
 
 export type ProductAttribute = {
@@ -16,6 +23,11 @@ export type ProductAttribute = {
   required: boolean;
   options?: ProductAttributeOption[];
   defaultValue?: string | number | boolean;
+  min?: number;
+  max?: number;
+  step?: number;
+  helpText?: string;
+  advanced?: boolean;
 };
 
 export type QuantityRule = {
@@ -122,6 +134,7 @@ export type ProductPropertyValue = {
   multiplier?: number;
   tierPrices?: ProductPropertyTierPrice[];
   production?: ProductPropertyProductionMetadata;
+  availability?: PropertyAvailabilityRule[];
 };
 
 export type ProductPropertyProductionMetadata = {
