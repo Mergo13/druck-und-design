@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ClientsMarquee } from "@/components/home/clients-marquee";
+import { AiPrintAdvisor } from "@/components/home/ai-print-advisor";
 import { HeroBackgroundSlideshow } from "@/components/home/hero-background-slideshow";
 import { ScrollZoomHero } from "@/components/home/scroll-zoom-hero";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -86,6 +87,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <AiPrintAdvisor />
 
       <ScrollZoomHero imageOverrides={{
         "/druckservice": siteImages["home.service.druckservice"],
